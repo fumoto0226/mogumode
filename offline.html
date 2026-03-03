@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#FF6ECB">
+    <title>MoguMode Offline</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #fff8fb;
+            --card: #ffffff;
+            --text: #2d3436;
+            --muted: #7f8c8d;
+            --accent: #FF6ECB;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background:
+                radial-gradient(circle at top, rgba(255, 110, 203, 0.18), transparent 32%),
+                linear-gradient(180deg, #fffdfd 0%, var(--bg) 100%);
+            font-family: "Noto Sans JP", sans-serif;
+            color: var(--text);
+        }
+
+        .offline-card {
+            width: min(100%, 420px);
+            background: var(--card);
+            border: 2px solid rgba(255, 110, 203, 0.35);
+            border-radius: 28px;
+            padding: 28px 24px;
+            text-align: center;
+            box-shadow: 0 20px 50px rgba(255, 110, 203, 0.12);
+        }
+
+        .offline-card img {
+            width: 88px;
+            height: 88px;
+            border-radius: 22px;
+            object-fit: cover;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            font-size: 28px;
+        }
+
+        p {
+            margin: 0;
+            line-height: 1.7;
+            color: var(--muted);
+        }
+    </style>
+</head>
+<body>
+    <main class="offline-card">
+        <img src="./images/applogo.jpg" alt="MoguMode">
+        <h1>当前离线</h1>
+        <p>App 外壳已经安装好了，但地图、登录和云端数据仍然需要网络。连上网络后再试一次。</p>
+    </main>
+</body>
+</html>
