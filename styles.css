@@ -23,6 +23,14 @@
     outline: none;
 }
 
+button,
+[role="button"],
+[onclick] {
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
 body {
     font-family: 'PingFang SC', 'Noto Sans JP', sans-serif;
     background-color: #d9d9d9;

@@ -1874,33 +1874,17 @@ window.submitNew = async () => {
             }
 
             await updateDoc(storeRef, updates);
-
-            const nextStore = {
-                ...existingStoreData,
-                revs: [...(Array.isArray(existingStoreData?.revs) ? existingStoreData.revs : []), {
+            const predictedRevs = [
+                ...(Array.isArray(existingStoreData?.revs) ? existingStoreData.revs : []),
+                {
                     ...newReview,
                     rating: Number(newReview.rating || existingStoreData?.rating || 3.8)
-                }],
-                images: urls.length
-                    ? Array.from(new Set([...(Array.isArray(existingStoreData?.images) ? existingStoreData.images : []), ...urls]))
-                    : (Array.isArray(existingStoreData?.images) ? existingStoreData.images : []),
-                googlePlaceId: existingStoreData.googlePlaceId || selectedStorePlaceId || null,
-                openingHours: existingStoreData.openingHours || selectedStoreOpeningHours || null,
-                distance: existingStoreData.distance || selectedStoreDistance || null,
-                address: existingStoreData.address || selectedStoreAddress || null,
-                cuisineLabel: existingStoreData.cuisineLabel || selectedStoreCuisineLabel || null,
-                primaryType: existingStoreData.primaryType || selectedStorePrimaryType || null,
-                types: (Array.isArray(existingStoreData.types) && existingStoreData.types.length)
-                    ? existingStoreData.types
-                    : (Array.isArray(selectedStoreTypes) ? selectedStoreTypes : [])
-            };
-            localStores = localStores.map(store => store.id === existingStoreId ? nextStore : store);
-            window.localStores = localStores;
-
-            const myVisitCount = nextStore.revs.filter(rev => isReviewMine(rev, getCurrentUserAliases())).length || 1;
+                }
+            ];
+            const myVisitCount = predictedRevs.filter(rev => isReviewMine(rev, getCurrentUserAliases())).length || 1;
             postSuccessPayload = {
                 rating: addRating,
-                storeName: nextStore.name || document.getElementById('newName').value,
+                storeName: existingStoreData?.name || document.getElementById('newName').value,
                 visitCount: myVisitCount,
                 isNewStore: false
             };
@@ -1939,13 +1923,10 @@ window.submitNew = async () => {
                 createdAt: Date.now(),                                    // 创建时间戳
                 revs: [newReview]
             };
-            const createdRef = await addDoc(collection(db, "stores"), createdStore);
-            const nextStore = { id: createdRef.id, ...createdStore };
-            localStores = [nextStore, ...localStores];
-            window.localStores = localStores;
+            await addDoc(collection(db, "stores"), createdStore);
             postSuccessPayload = {
                 rating: addRating,
-                storeName: nextStore.name,
+                storeName: createdStore.name,
                 visitCount: 1,
                 isNewStore: true
             };

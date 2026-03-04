@@ -1441,8 +1441,14 @@ function initSheetDrag() {
         return best;
     };
 
+    const shouldIgnoreDragStart = (target) => {
+        if (!target || target === handle || handle.contains(target)) return false;
+        return !!target.closest('button, a, input, textarea, select, label, [onclick], [role="button"]');
+    };
+
     const onStart = (e) => {
         if (!sheet.classList.contains('active')) return;
+        if (shouldIgnoreDragStart(e.target)) return;
         isDragging = true;
         moved = false;
         sheet.dataset.dragging = '1';
