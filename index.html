@@ -202,8 +202,8 @@
                                 </div>
                             </div>
                             <div class="filter-actions">
-                                <button class="action-btn btn-cancel" onclick="resetFilters()">重置</button>
-                                <button class="action-btn btn-cancel" onclick="toggleFilterPanel()">取消</button>
+                                <button class="rf-btn cancel" onclick="resetFilters()">重置</button>
+                                <button class="rf-btn cancel" onclick="toggleFilterPanel()">取消</button>
                                 <button class="action-btn btn-save" onclick="saveFilters()">保存</button>
                             </div>
                         </div>
@@ -395,12 +395,11 @@
         <section id="view-add" class="hidden page-content">
             <!-- <h2 style="font-weight:900; margin-bottom:20px; font-size:22px;">New Spot</h2> -->
 
-            <div id="add-auth-mask" class="hidden"
-                style="text-align:center; padding:40px; background:white; border-radius:24px;">
+            <div id="add-auth-mask" class="hidden auth-mask-card">
                 <i data-lucide="lock" style="color:#b2bec3; width:40px; height:40px; margin-bottom:16px;"></i>
-                <p>Login required to post</p>
+                <p>请先登录后发布</p>
                 <button onclick="switchView('profile')" class="btn-submit"
-                    style="width:auto; margin:0 auto; padding:10px 30px;">Login</button>
+                    style="width:auto; margin:0 auto; padding:10px 30px;">去登录</button>
             </div>
 
             <div id="add-form" class="add-composer">
@@ -1038,16 +1037,16 @@
         <div id="activity-image-modal" class="modal-overlay" onclick="closeActivityImageModal()">
             <div class="activity-image-modal-card" onclick="closeActivityImageModal()">
                 <button class="activity-image-close" onclick="closeActivityImageModal()">
-                    <img src="images/close.svg" width="20">
+                    <img src="images/close.svg" class="activity-close-icon" alt="close">
                 </button>
                 <div class="activity-image-tools" id="activity-image-tools" onclick="event.stopPropagation()">
                     <button class="activity-set-main-btn" id="activity-set-main-btn"
                         onclick="toggleCurrentImageAsMain()">
-                        <img id="activity-main-pin-icon" src="images/bookmark.svg" width="16" alt="main">
+                        <img id="activity-main-pin-icon" class="activity-main-icon" src="images/main.svg" alt="main">
                         <span id="activity-main-pin-label">设为今日主图</span>
                     </button>
                     <div class="activity-main-state hidden" id="activity-main-state">
-                        <img src="images/bookmark-f.svg" width="16" alt="main">
+                        <img class="activity-main-icon" src="images/main-f.svg" alt="main">
                         <span>今日主图</span>
                     </div>
                 </div>
@@ -1126,7 +1125,16 @@
         </script>
     <script>
         if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
+            window.addEventListener('load', async () => {
+                const host = window.location.hostname;
+                const isLocalDev = host === 'localhost' || host === '127.0.0.1';
+
+                if (isLocalDev) {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(regs.map((reg) => reg.unregister()));
+                    return;
+                }
+
                 navigator.serviceWorker.register('./service-worker.js').catch((err) => {
                     console.warn('Service Worker 注册失败:', err);
                 });

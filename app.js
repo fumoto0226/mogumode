@@ -238,13 +238,28 @@ function updateUIForAuth(user) {
         user: document.getElementById('user-info'),             // 用户信息区域
         addMask: document.getElementById('add-auth-mask'),      // 添加页面的登录遮罩
         addForm: document.getElementById('add-form'),           // 添加店铺表单
-        headerAvatar: document.getElementById('header-avatar')  // 顶部头像
+        headerAvatar: document.getElementById('header-avatar'), // 顶部头像
+        addView: document.getElementById('view-add'),
+        profileView: document.getElementById('view-profile')
+    };
+
+    const syncProfilePanels = (loggedIn) => {
+        if (els.profileView) {
+            els.profileView.classList.toggle('profile-guest-mode', !loggedIn);
+        }
+        if (els.user) {
+            els.user.classList.toggle('hidden', !loggedIn);
+            els.user.style.display = loggedIn ? '' : 'none';
+        }
+        if (els.guest) {
+            els.guest.classList.toggle('hidden', loggedIn);
+            els.guest.style.display = loggedIn ? 'none' : '';
+        }
     };
 
     if (user) {
         // 用户已登录：隐藏游客内容，显示用户内容
-        els.guest.classList.add('hidden');
-        els.user.classList.remove('hidden');
+        syncProfilePanels(true);
         // 显示用户名（取邮箱@前的部分）
         const username = user.displayName || user.email.split('@')[0];
         if (user.photoURL) currentUserAvatarUrl = user.photoURL;
@@ -257,15 +272,16 @@ function updateUIForAuth(user) {
         // 允许添加店铺
         els.addMask.classList.add('hidden');
         els.addForm.classList.remove('hidden');
+        if (els.addView) els.addView.classList.remove('add-guest-centered');
 
         // 加载用户头像
         loadUserAvatar(user.uid);
     } else {
         // 用户未登录：显示游客内容，隐藏用户内容
-        els.user.classList.add('hidden');
-        els.guest.classList.remove('hidden');
+        syncProfilePanels(false);
         els.addMask.classList.remove('hidden');
         els.addForm.classList.add('hidden');
+        if (els.addView) els.addView.classList.add('add-guest-centered');
         els.headerAvatar.innerText = "?";
         els.headerAvatar.style.background = "#b2bec3";
 
@@ -673,16 +689,106 @@ function getStoreById(storeId) {
     return localStores.find(s => s.id === storeId) || null;
 }
 
+function toNumber(value, fallback = 0) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function resolvePeriodDayMode(periods) {
+    const dayNums = (Array.isArray(periods) ? periods : [])
+        .flatMap(p => [p?.open?.day, p?.close?.day])
+        .map(v => Number(v))
+        .filter(v => Number.isFinite(v));
+
+    const hasZero = dayNums.includes(0);
+    const hasSeven = dayNums.includes(7);
+    // 部分数据源会把周一到周日编码为 1..7，这里做兼容
+    return (!hasZero && hasSeven) ? 'oneToSevenMonStart' : 'zeroToSixSunStart';
+}
+
+function normalizePeriodDay(dayValue, dayMode = 'zeroToSixSunStart') {
+    if (typeof dayValue === 'string') {
+        const key = dayValue.trim().toUpperCase();
+        const map = {
+            SUNDAY: 0,
+            MONDAY: 1,
+            TUESDAY: 2,
+            WEDNESDAY: 3,
+            THURSDAY: 4,
+            FRIDAY: 5,
+            SATURDAY: 6
+        };
+        if (Object.prototype.hasOwnProperty.call(map, key)) return map[key];
+        return null;
+    }
+
+    const n = Number(dayValue);
+    if (!Number.isFinite(n)) return null;
+
+    if (dayMode === 'oneToSevenMonStart' && n >= 1 && n <= 7) {
+        return n === 7 ? 0 : n;
+    }
+    if (n >= 0 && n <= 6) return n;
+    if (n >= 1 && n <= 7) return n === 7 ? 0 : n;
+    return null;
+}
+
+function normalizeOpeningPeriods(openingHours) {
+    const periods = Array.isArray(openingHours?.periods) ? openingHours.periods : [];
+    if (!periods.length) return [];
+    const dayMode = resolvePeriodDayMode(periods);
+
+    return periods.map(period => {
+        const openDay = normalizePeriodDay(period?.open?.day, dayMode);
+        const closeDayRaw = normalizePeriodDay(period?.close?.day, dayMode);
+        const openMin = toNumber(period?.open?.hour, 0) * 60 + toNumber(period?.open?.minute, 0);
+        const closeMin = period?.close
+            ? toNumber(period?.close?.hour, 0) * 60 + toNumber(period?.close?.minute, 0)
+            : (24 * 60);
+
+        return {
+            openDay,
+            closeDay: closeDayRaw ?? openDay,
+            openMin,
+            closeMin
+        };
+    }).filter(period => period.openDay !== null);
+}
+
+function getTodayDescriptionOpenTime(openingHours) {
+    const lines = Array.isArray(openingHours?.weekdayDescriptions)
+        ? openingHours.weekdayDescriptions
+        : (Array.isArray(openingHours?.weekdayText) ? openingHours.weekdayText : []);
+    if (!lines.length) return null;
+
+    // Google weekday 文本通常按周一到周日排列
+    const today = new Date().getDay();
+    const idx = (today + 6) % 7;
+    const line = String(lines[idx] || lines[today] || '').trim();
+    if (!line) return null;
+    if (/closed|休息|定休日|暂停|歇业/i.test(line)) return "今日休息";
+
+    const m = line.match(/(\d{1,2})[:：](\d{2})/);
+    if (!m) return null;
+    return `${String(m[1]).padStart(2, '0')}:${m[2]}`;
+}
+
 function getStoreOpenTimeText(store) {
     if (!store) return "暂无";
-    if (store.openingHours && store.openingHours.periods) {
+    const periods = normalizeOpeningPeriods(store.openingHours);
+    if (periods.length) {
         const today = new Date().getDay();
-        const period = store.openingHours.periods.find(p => p?.open?.day === today);
-        if (period?.open) {
-            return `下午${formatTime(period.open)}`;
+        const todayPeriods = periods
+            .filter(p => p.openDay === today)
+            .sort((a, b) => a.openMin - b.openMin);
+        if (todayPeriods.length) {
+            const firstOpen = todayPeriods[0];
+            return formatMinutes(firstOpen.openMin);
         }
         return "今日休息";
     }
+    const fallbackTime = getTodayDescriptionOpenTime(store.openingHours);
+    if (fallbackTime) return fallbackTime;
     if (store.businessStatus === 'CLOSED_TEMPORARILY') return "暂停营业";
     return "暂无";
 }
@@ -888,9 +994,16 @@ window.closeProvideInfoModal = () => {
 
 // 辅助函数：格式化时间对象 {hour: 10, minute: 0} -> "10:00"
 function formatTime(t) {
-    const h = t.hour.toString().padStart(2, '0');
-    const m = t.minute.toString().padStart(2, '0');
+    const h = toNumber(t?.hour, 0).toString().padStart(2, '0');
+    const m = toNumber(t?.minute, 0).toString().padStart(2, '0');
     return `${h}:${m}`;
+}
+
+function formatMinutes(totalMinutes) {
+    const normalized = ((toNumber(totalMinutes, 0) % (24 * 60)) + (24 * 60)) % (24 * 60);
+    const hour = Math.floor(normalized / 60);
+    const minute = normalized % 60;
+    return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 }
 
 function loadRecordMainImageMap() {
@@ -1874,17 +1987,33 @@ window.submitNew = async () => {
             }
 
             await updateDoc(storeRef, updates);
-            const predictedRevs = [
-                ...(Array.isArray(existingStoreData?.revs) ? existingStoreData.revs : []),
-                {
+
+            const nextStore = {
+                ...existingStoreData,
+                revs: [...(Array.isArray(existingStoreData?.revs) ? existingStoreData.revs : []), {
                     ...newReview,
                     rating: Number(newReview.rating || existingStoreData?.rating || 3.8)
-                }
-            ];
-            const myVisitCount = predictedRevs.filter(rev => isReviewMine(rev, getCurrentUserAliases())).length || 1;
+                }],
+                images: urls.length
+                    ? Array.from(new Set([...(Array.isArray(existingStoreData?.images) ? existingStoreData.images : []), ...urls]))
+                    : (Array.isArray(existingStoreData?.images) ? existingStoreData.images : []),
+                googlePlaceId: existingStoreData.googlePlaceId || selectedStorePlaceId || null,
+                openingHours: existingStoreData.openingHours || selectedStoreOpeningHours || null,
+                distance: existingStoreData.distance || selectedStoreDistance || null,
+                address: existingStoreData.address || selectedStoreAddress || null,
+                cuisineLabel: existingStoreData.cuisineLabel || selectedStoreCuisineLabel || null,
+                primaryType: existingStoreData.primaryType || selectedStorePrimaryType || null,
+                types: (Array.isArray(existingStoreData.types) && existingStoreData.types.length)
+                    ? existingStoreData.types
+                    : (Array.isArray(selectedStoreTypes) ? selectedStoreTypes : [])
+            };
+            localStores = localStores.map(store => store.id === existingStoreId ? nextStore : store);
+            window.localStores = localStores;
+
+            const myVisitCount = nextStore.revs.filter(rev => isReviewMine(rev, getCurrentUserAliases())).length || 1;
             postSuccessPayload = {
                 rating: addRating,
-                storeName: existingStoreData?.name || document.getElementById('newName').value,
+                storeName: nextStore.name || document.getElementById('newName').value,
                 visitCount: myVisitCount,
                 isNewStore: false
             };
@@ -1923,10 +2052,13 @@ window.submitNew = async () => {
                 createdAt: Date.now(),                                    // 创建时间戳
                 revs: [newReview]
             };
-            await addDoc(collection(db, "stores"), createdStore);
+            const createdRef = await addDoc(collection(db, "stores"), createdStore);
+            const nextStore = { id: createdRef.id, ...createdStore };
+            localStores = [nextStore, ...localStores];
+            window.localStores = localStores;
             postSuccessPayload = {
                 rating: addRating,
-                storeName: createdStore.name,
+                storeName: nextStore.name,
                 visitCount: 1,
                 isNewStore: true
             };
@@ -3331,27 +3463,27 @@ function checkOpenStatus(store, status) {
     const minutes = now.getMinutes();
     const currentMinutes = hours * 60 + minutes;
 
-    // Google API raw object structure
-    const periods = store.openingHours.periods;
-    if (!periods) return false;
+    const periods = normalizeOpeningPeriods(store.openingHours);
+    if (!periods.length) return false;
+    const nowWeekMin = day * 24 * 60 + currentMinutes;
 
-    // 找到今天的营业时间段
-    const todayPeriods = periods.filter(p => p.open.day === day);
+    const normalizedRanges = periods.map(p => {
+        const start = p.openDay * 24 * 60 + p.openMin;
+        let end = p.closeDay * 24 * 60 + p.closeMin;
+        if (end <= start) end += 7 * 24 * 60;
+        return { start, end };
+    });
 
     if (status === 'open') {
         // 检查现在是否营业
-        return todayPeriods.some(p => {
-            const openMin = p.open.hour * 60 + p.open.minute;
-            let closeMin = p.close ? (p.close.hour * 60 + p.close.minute) : (24 * 60);
-            if (p.close && p.close.day !== day) closeMin += 24 * 60; // 跨天
-
-            return currentMinutes >= openMin && currentMinutes < closeMin;
+        return normalizedRanges.some(({ start, end }) => {
+            return (nowWeekMin >= start && nowWeekMin < end)
+                || (nowWeekMin + 7 * 24 * 60 >= start && nowWeekMin + 7 * 24 * 60 < end);
         });
     } else if (status === 'soon') {
         // 检查是否在30分钟内开门
-        return todayPeriods.some(p => {
-            const openMin = p.open.hour * 60 + p.open.minute;
-            const diff = openMin - currentMinutes;
+        return normalizedRanges.some(({ start }) => {
+            const diff = ((start - nowWeekMin) + 7 * 24 * 60) % (7 * 24 * 60);
             return diff > 0 && diff <= 30;
         });
     }
@@ -3891,6 +4023,8 @@ window.switchView = (v) => {
     if (v === 'add') {
         resetAddComposerReturnContext();
         resetAddComposerFlow();
+        const addView = document.getElementById('view-add');
+        if (addView) addView.classList.toggle('add-guest-centered', !currentUser);
     }
     if (v === 'fav') {
         recordAutoFocusPending = true;
@@ -3901,19 +4035,33 @@ window.switchView = (v) => {
         // 确保回到自己的个人主页，而不是好友页
         const friendsPage = document.getElementById('friends-page');
         const userInfo = document.getElementById('user-info');
+        const guestInfo = document.getElementById('guest-info');
+        const profileView = document.getElementById('view-profile');
         if (friendsPage) friendsPage.classList.add('hidden');
-        if (userInfo) userInfo.classList.remove('hidden');
         viewingFriendUid = "";
         viewingFriendData = null;
         if (currentUser) {
+            if (profileView) profileView.classList.remove('profile-guest-mode');
+            if (userInfo) userInfo.classList.remove('hidden');
+            if (guestInfo) guestInfo.classList.add('hidden');
+            if (userInfo) userInfo.style.display = '';
+            if (guestInfo) guestInfo.style.display = 'none';
             setProfileIdentity(
                 currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : '用户'),
                 currentUser.photoURL || ''
             );
             loadUserAvatar(currentUser.uid);
+        } else {
+            if (profileView) profileView.classList.add('profile-guest-mode');
+            if (userInfo) userInfo.classList.add('hidden');
+            if (guestInfo) guestInfo.classList.remove('hidden');
+            if (userInfo) userInfo.style.display = 'none';
+            if (guestInfo) guestInfo.style.display = '';
         }
         updateProfileHeaderMode();
-        window.switchProfileTab('activity'); // 进入个人页时固定展示动态并触发渲染
+        if (currentUser) {
+            window.switchProfileTab('activity'); // 已登录进入个人页时固定展示动态并触发渲染
+        }
     }
 
     lucide.createIcons();
@@ -4779,14 +4927,30 @@ window.renderRecordCalendar = () => {
     const wrap = document.getElementById('record-calendar-wrap');
     const yearSelect = document.getElementById('record-year-select');
     const dayView = document.getElementById('record-day-view');
+    const yearRow = yearSelect ? yearSelect.closest('.record-year-row') : null;
+    const recordPage = document.querySelector('#view-fav .record-page');
     if (!wrap || !yearSelect) return;
     if (dayView) dayView.classList.add('hidden');
 
     if (!currentUser) {
-        wrap.innerHTML = `<div class="record-empty">请先登录后查看记录</div>`;
+        if (yearRow) yearRow.classList.add('hidden');
+        if (recordPage) recordPage.classList.add('record-page-guest');
+        wrap.classList.add('record-auth-wrap');
+        wrap.innerHTML = `
+            <div class="record-auth-mask auth-mask-card">
+                <i data-lucide="lock" style="color:#b2bec3; width:40px; height:40px; margin-bottom:16px;"></i>
+                <p>请先登录后查看记录</p>
+                <button onclick="switchView('profile')" class="btn-submit"
+                    style="width:auto; margin:0 auto; padding:10px 30px;">去登录</button>
+            </div>
+        `;
         yearSelect.innerHTML = "";
+        lucide.createIcons();
         return;
     }
+    if (yearRow) yearRow.classList.remove('hidden');
+    if (recordPage) recordPage.classList.remove('record-page-guest');
+    wrap.classList.remove('record-auth-wrap');
 
     const activities = buildMyActivities();
     const dayMap = getRecordActivitiesByDay(activities);
@@ -4876,10 +5040,8 @@ window.openRecordDayView = (dayKey) => {
         const d = new Date(a.createdAt);
         const hh = String(d.getHours()).padStart(2, '0');
         const mm = String(d.getMinutes()).padStart(2, '0');
-        const main = getMainImageForDay(dayKey);
         const photos = (a.images || []).slice(0, 5).map((src) => `
             <div class="record-photo-item" onclick="openActivityImageModal('${src.replace(/'/g, "\\'")}', '${dayKey}'); event.stopPropagation();">
-                ${main === src ? `<div class="record-main-badge"><img src="images/bookmark-f.svg" width="12"><span>今日主图</span></div>` : ''}
                 <img src="${src}" loading="lazy" alt="photo">
             </div>
         `).join('');
@@ -4925,18 +5087,24 @@ window.openActivityImageModal = (src, dayKey = "") => {
     const img = document.getElementById('activity-image-modal-img');
     const pinIcon = document.getElementById('activity-main-pin-icon');
     const pinLabel = document.getElementById('activity-main-pin-label');
+    const setMainBtn = document.getElementById('activity-set-main-btn');
     const state = document.getElementById('activity-main-state');
     const tools = document.getElementById('activity-image-tools');
     if (!modal || !img) return;
     currentImageModalDateKey = dayKey || currentRecordDayKey || "";
     currentImageModalSrc = src;
     img.src = src;
-    if (tools) tools.classList.toggle('hidden', !currentImageModalDateKey);
-    if (pinIcon && pinLabel && state && currentImageModalDateKey) {
+    const canSetMain = !!(currentImageModalDateKey && currentUser && !isViewingFriendProfile());
+    if (tools) tools.classList.toggle('hidden', !canSetMain);
+    if (pinIcon && pinLabel && state && canSetMain) {
         const isMain = getMainImageForDay(currentImageModalDateKey) === src;
-        pinIcon.src = isMain ? 'images/bookmark-f.svg' : 'images/bookmark.svg';
-        pinLabel.innerText = isMain ? '已是今日主图' : '设为今日主图';
+        pinIcon.src = isMain ? 'images/main-f.svg' : 'images/main.svg';
+        pinLabel.innerText = '设为今日主图';
+        if (setMainBtn) setMainBtn.classList.toggle('hidden', isMain);
         state.classList.toggle('hidden', !isMain);
+    } else if (setMainBtn && state) {
+        setMainBtn.classList.remove('hidden');
+        state.classList.add('hidden');
     }
     const alignOverlay = () => positionActivityImageOverlay();
     img.onload = alignOverlay;
@@ -4986,8 +5154,8 @@ window.toggleCurrentImageAsMain = () => {
     if (!currentImageModalDateKey || !currentImageModalSrc) return;
     setMainImageForDay(currentImageModalDateKey, currentImageModalSrc);
     openActivityImageModal(currentImageModalSrc, currentImageModalDateKey);
-    if (currentRecordDayKey === currentImageModalDateKey) openRecordDayView(currentRecordDayKey);
     renderRecordCalendar();
+    if (currentRecordDayKey === currentImageModalDateKey) openRecordDayView(currentRecordDayKey);
 };
 
 /**
