@@ -1411,6 +1411,25 @@ function initSheetDrag() {
         return e.clientY;
     };
 
+    const isInteractiveTarget = (target) => {
+        if (!target || typeof target.closest !== 'function') return false;
+        return !!target.closest([
+            'button',
+            'a',
+            'input',
+            'select',
+            'textarea',
+            '[role="button"]',
+            '[onclick]',
+            '.sheet-copy-btn',
+            '.sheet-close-btn',
+            '.mp-route-btn',
+            '.sheet-checkin-btn',
+            '.social-btn',
+            '.sheet-tab'
+        ].join(','));
+    };
+
     const getSnapHeights = () => {
         const vh = window.innerHeight;
         return {
@@ -1443,6 +1462,7 @@ function initSheetDrag() {
 
     const onStart = (e) => {
         if (!sheet.classList.contains('active')) return;
+        if (isInteractiveTarget(e.target)) return;
         isDragging = true;
         moved = false;
         sheet.dataset.dragging = '1';
