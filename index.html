@@ -1224,11 +1224,11 @@
 
     <!-- App Notice Modal -->
     <div id="modal-app-notice" class="modal-overlay" onclick="if(event.target===this) closeAppNoticeModal()">
-        <div class="delete-confirm-card" onclick="event.stopPropagation()">
-            <div class="delete-confirm-title-row">
-                <img src="images/bookmark.svg" class="delete-confirm-icon" alt="notice">
-                <div id="app-notice-title" class="delete-confirm-title">提示</div>
-            </div>
+            <div class="delete-confirm-card" onclick="event.stopPropagation()">
+                <div class="delete-confirm-title-row">
+                    <i data-lucide="alert-circle" class="delete-confirm-icon"></i>
+                    <div id="app-notice-title" class="delete-confirm-title">提示</div>
+                </div>
             <div id="app-notice-message" class="delete-review-modal-desc"></div>
             <div class="delete-confirm-actions">
                 <button class="delete-btn-confirm app-notice-btn" onclick="closeAppNoticeModal()">知道了</button>

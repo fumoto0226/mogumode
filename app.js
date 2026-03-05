@@ -1505,6 +1505,7 @@ window.showAppNoticeModal = (message, title = '提示') => {
     if (titleEl) titleEl.innerText = title;
     if (messageEl) messageEl.innerText = String(message || '');
     if (modal) modal.classList.add('open');
+    if (window.lucide?.createIcons) window.lucide.createIcons();
 };
 
 window.closeAppNoticeModal = () => {
@@ -2054,7 +2055,8 @@ window.submitNew = async () => {
             };
             const createdRef = await addDoc(collection(db, "stores"), createdStore);
             const nextStore = { id: createdRef.id, ...createdStore };
-            localStores = [nextStore, ...localStores];
+            // 避免“本地插入 + onSnapshot 本地回显”导致同一店铺临时重复
+            localStores = [nextStore, ...localStores.filter(store => store.id !== nextStore.id)];
             window.localStores = localStores;
             postSuccessPayload = {
                 rating: addRating,
@@ -3878,6 +3880,107 @@ window.addEventListener('resize', () => {
    ========================================= */
 let tempCoords = null;   // 临时坐标
 let geocoder = null;     // 地理编码器
+let miniConfirmMap = null;
+let miniConfirmMarker = null;
+
+function waitForGoogleMaps(maxWaitMs = 2500) {
+    return new Promise((resolve) => {
+        if (window.google?.maps) {
+            resolve(true);
+            return;
+        }
+        const startedAt = Date.now();
+        const timer = setInterval(() => {
+            if (window.google?.maps) {
+                clearInterval(timer);
+                resolve(true);
+                return;
+            }
+            if (Date.now() - startedAt >= maxWaitMs) {
+                clearInterval(timer);
+                resolve(false);
+            }
+        }, 120);
+    });
+}
+
+function normalizeFullWidthDigits(text) {
+    return String(text || '')
+        .replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xFEE0))
+        .replace(/[−ー－‐]/g, '-');
+}
+
+function toJapaneseAddressText(address) {
+    let text = normalizeFullWidthDigits(address || '');
+    text = text.replace(/^日本、?/, '');
+    text = text.replace(/〒\d{3}-\d{4}\s*/g, '');
+    text = text.replace(/\s+/g, '');
+    // 例: 西新宿1丁目2-3 -> 西新宿1-2-3
+    text = text.replace(/(\d+)丁目(\d+)-(\d+)/g, '$1-$2-$3');
+    return text || '当前位置';
+}
+
+function findLandmarkName(results = []) {
+    for (const result of results) {
+        const comps = Array.isArray(result?.address_components) ? result.address_components : [];
+        const landmarkComp = comps.find(comp => {
+            const types = Array.isArray(comp?.types) ? comp.types : [];
+            return types.includes('premise')
+                || types.includes('subpremise')
+                || types.includes('point_of_interest')
+                || types.includes('establishment');
+        });
+        if (landmarkComp?.long_name) return normalizeFullWidthDigits(landmarkComp.long_name);
+    }
+    return '';
+}
+
+function renderMiniConfirmMap(coords) {
+    const mapEl = document.getElementById('mini-map-confirm');
+    if (!mapEl || !coords) return;
+    const center = { lat: Number(coords.lat), lng: Number(coords.lng) };
+    if (!Number.isFinite(center.lat) || !Number.isFinite(center.lng)) return;
+
+    if (!miniConfirmMap && window.google?.maps) {
+        miniConfirmMap = new google.maps.Map(mapEl, {
+            center,
+            zoom: 16,
+            disableDefaultUI: true,
+            clickableIcons: false
+        });
+    }
+    if (!miniConfirmMap) return;
+    miniConfirmMap.setCenter(center);
+    if (!miniConfirmMarker) {
+        miniConfirmMarker = new google.maps.Marker({ position: center, map: miniConfirmMap });
+    } else {
+        miniConfirmMarker.setPosition(center);
+    }
+}
+
+function reverseGeocodeCurrentCoords(lat, lng) {
+    return new Promise(async (resolve) => {
+        const mapsReady = await waitForGoogleMaps(2500);
+        if (!mapsReady || !window.google?.maps) {
+            resolve("当前位置");
+            return;
+        }
+        if (!geocoder) geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ location: { lat: Number(lat), lng: Number(lng) } }, (results, status) => {
+            if (status === 'OK' && Array.isArray(results) && results.length) {
+                // 优先展示建筑/地标名，其次展示日式地址（丁目-番-号）
+                const landmark = findLandmarkName(results);
+                if (landmark) {
+                    resolve(landmark);
+                    return;
+                }
+                resolve(toJapaneseAddressText(results[0]?.formatted_address || ''));
+                return;
+            }
+            resolve("当前位置");
+        });
+    });
+}
 
 function syncLocationTriggerIcon() {
     const iconEl = document.getElementById('current-location-icon');
@@ -3913,21 +4016,16 @@ window.startFetchLocation = () => {
     document.getElementById('location-menu').classList.remove('active');
     document.getElementById('loc-loading-modal').style.display = 'flex';
 
-    // 模拟获取位置（实际应用中应使用 navigator.geolocation）
+    // 模拟获取位置（固定演示坐标）
     setTimeout(() => {
         document.getElementById('loc-loading-modal').style.display = 'none';
         document.getElementById('loc-confirm-modal').style.display = 'flex';
-        document.getElementById('fetched-address-input').value = "ペットホテル・トリミングサロン 赤坂ニッコロ...";
         tempCoords = { lat: 35.672, lng: 139.733 };
-
-        // 显示小地图
-        const miniMap = new google.maps.Map(document.getElementById('mini-map-confirm'), {
-            center: { lat: 35.672, lng: 139.733 },
-            zoom: 15,
-            disableDefaultUI: true
-        });
-        new google.maps.Marker({ position: { lat: 35.672, lng: 139.733 }, map: miniMap });
-    }, 2000);
+        const address = "ペットホテル・トリミングサロン 赤坂ニッコロ...";
+        const input = document.getElementById('fetched-address-input');
+        if (input) input.value = address;
+        renderMiniConfirmMap(tempCoords);
+    }, 1200);
 };
 
 /**
