@@ -1,6 +1,6 @@
 {
   "name": "MoguMode",
-  "short_name": "Mogu",
+  "short_name": "MoguMode",
   "description": "MoguMode restaurant tracker and food journal.",
   "start_url": "./",
   "scope": "./",
