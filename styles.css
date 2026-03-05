@@ -16,8 +16,9 @@
     --primary-yellow: #EDF228;
     --scrollbar-thumb-color: rgba(45, 52, 54, 0.32);
     --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --nav-bottom-extra: 10px;
     --nav-height: 70px;
-    --bottom-nav-total: calc(var(--nav-height) + var(--safe-bottom));
+    --bottom-nav-total: calc(var(--nav-height) + var(--safe-bottom) + var(--nav-bottom-extra));
     --app-height: 100vh;
 }
 
@@ -649,6 +650,20 @@ header {
     text-overflow: ellipsis;
 }
 
+.store-closed-mogu {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.store-closed-mogu img {
+    width: 12px;
+    height: 12px;
+    opacity: 0.58;
+    filter: grayscale(1);
+}
+
 .bookmark-icon-btn {
     cursor: pointer;
     display: flex;
@@ -822,7 +837,7 @@ header {
     left: 0;
     right: 0;
     height: var(--bottom-nav-total);
-    padding-bottom: var(--safe-bottom);
+    padding-bottom: calc(var(--safe-bottom) + var(--nav-bottom-extra));
     max-width: 448px;
     margin: 0 auto;
     background: white;
@@ -2173,7 +2188,9 @@ header {
 .social-icon-img {
     width: 34px;
     height: 34px;
+    display: block;
     object-fit: contain;
+    image-rendering: -webkit-optimize-contrast;
 }
 
 /* Sheet Photos */
@@ -2697,6 +2714,8 @@ header {
 .map-pin img {
     width: 30px;
     height: 30px;
+    display: block;
+    image-rendering: -webkit-optimize-contrast;
 }
 
 /* =========================================
@@ -2830,7 +2849,7 @@ header {
 .record-year-select {
     border: none;
     background: transparent;
-    font-size: 28px;
+    font-size: 26px;
     font-weight: 800;
     color: #1a1a1a;
 }
@@ -2875,12 +2894,12 @@ header {
 
 .record-month-head h3 {
     margin: 0;
-    font-size: 27px;
+    font-size: 24px;
     font-weight: 500;
 }
 
 .record-month-head div {
-    font-size: 12px;
+    font-size: 11px;
     color: #404040;
 }
 
@@ -2894,7 +2913,7 @@ header {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 6px;
-    font-size: 12px;
+    font-size: 11px;
     color: #2d2d2d;
     margin-bottom: 4px;
 }
@@ -2910,11 +2929,11 @@ header {
     background: transparent;
     padding: 0;
     text-align: left;
-    min-height: 90px;
+    min-height: 84px;
 }
 
 .record-day-cell.empty {
-    min-height: 90px;
+    min-height: 84px;
 }
 
 .record-day-cell.is-today .record-day-thumb {
@@ -2929,7 +2948,7 @@ header {
 
 .record-day-thumb {
     position: relative;
-    height: 72px;
+    height: 66px;
     background: #e9eaec;
     border-radius: 0;
     overflow: hidden;
@@ -2945,14 +2964,14 @@ header {
     position: absolute;
     top: 5px;
     right: 5px;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 4px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 3px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.92);
     color: #6e7278;
-    font-size: 10px;
-    line-height: 18px;
+    font-size: 9px;
+    line-height: 16px;
     text-align: center;
     font-weight: 500;
 }
@@ -2966,7 +2985,7 @@ header {
     display: flex;
     justify-content: space-between;
     margin-top: 2px;
-    font-size: 11px;
+    font-size: 10px;
     color: #181818;
 }
 
@@ -3028,21 +3047,21 @@ header {
 }
 
 .record-day-time {
-    font-size: 11px;
+    font-size: 10px;
     color: #b2bec3;
     font-weight: 500;
 }
 
 .record-day-store {
     margin-top: 2px;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
     color: #2d3436;
     cursor: pointer;
 }
 
 .record-day-store span {
-    font-size: 12px;
+    font-size: 11px;
     color: #b2bec3;
     font-weight: 400;
 }
@@ -3055,7 +3074,7 @@ header {
 }
 
 .record-day-rating>span {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 800;
     color: #2d3436;
 }
@@ -3064,7 +3083,7 @@ header {
     margin-left: auto;
     font-style: normal;
     color: #d9158f;
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .record-day-mogu {
@@ -3075,7 +3094,7 @@ header {
 
 .record-day-review {
     margin-top: 6px;
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.6;
     color: #636e72;
 }
@@ -4687,6 +4706,14 @@ header {
 .fd-info-content {
     flex: 1;
     line-height: 1.5;
+    white-space: pre-line;
+}
+
+.fd-info-content.permanent-closed,
+.info-content.permanent-closed,
+#mp-open-time.permanent-closed {
+    color: #d63031 !important;
+    font-weight: 700;
 }
 
 .fd-del-btn {
@@ -4956,6 +4983,11 @@ header {
     line-height: 1.5;
     font-size: 13px;
     flex: 1;
+    white-space: pre-line;
+}
+
+#mp-open-time {
+    white-space: pre-line;
 }
 
 .row-time .info-content {
@@ -5186,6 +5218,10 @@ header {
     margin-top: 14px;
 }
 
+.delete-confirm-actions.delete-confirm-actions-split {
+    justify-content: space-between;
+}
+
 .delete-btn-cancel,
 .delete-btn-confirm {
     border: none;
@@ -5194,6 +5230,18 @@ header {
     height: 30px;
     font-size: 13px;
     cursor: pointer;
+}
+
+.delete-btn-secondary {
+    border: none;
+    border-radius: 999px;
+    min-width: 102px;
+    height: 30px;
+    font-size: 13px;
+    cursor: pointer;
+    background: #f0f2f5;
+    color: #2d3436;
+    font-weight: 600;
 }
 
 .delete-btn-cancel {

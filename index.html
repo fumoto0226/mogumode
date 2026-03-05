@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MoguMode</title>
-    <meta name="theme-color" content="#FF6ECB">
+    <meta name="theme-color" content="#F4F4F4">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="MoguMode">
@@ -272,8 +272,8 @@
                         <span id="mp-rating-count" class="sheet-rating-count">(0)</span>
                         <span class="sheet-dot">•</span>
                         <img src="images/walk.svg" width="10">
-                        <span id="mp-fake-time">5 分钟</span>
-                        <button id="btn-check-route" class="mp-route-btn" onclick="showRouteOnMap()">查看路线</button>
+                        <span id="mp-fake-time">5分钟</span>
+                        <button id="btn-check-route" class="mp-route-btn" onclick="showRouteOnMap()">在谷歌地图查看</button>
                     </div>
                 </div>
 
@@ -918,8 +918,8 @@
                     <span>(356)</span>
                     <span style="margin:0 4px">•</span>
                     <img src="images/walk.svg" style="width:10px;">
-                    <span id="fd-walk-time">5 分钟</span>
-                    <button class="mp-route-btn" style="margin-left:auto;" onclick="doNavFromDetail()">查看路线</button>
+                    <span id="fd-walk-time">5分钟</span>
+                    <button class="mp-route-btn" style="margin-left:auto;" onclick="doNavFromDetail()">在谷歌地图查看</button>
                 </div>
 
                 <div class="fd-section-card">
@@ -1161,11 +1161,15 @@
         <div class="delete-confirm-card">
             <div class="delete-confirm-title-row">
                 <img src="images/trash.svg" class="delete-confirm-icon" alt="trash">
-                <div class="delete-confirm-title">确定要删除这家店铺吗？</div>
+                <div class="delete-confirm-title">这家店铺不存在了？请选择操作</div>
+            </div>
+            <div class="delete-confirm-note">“仅标记歇业”会隐藏到列表，但仍可搜索查看；“删除店铺”会彻底清理所有相关数据。</div>
+            <div class="delete-confirm-actions delete-confirm-actions-split">
+                <button class="delete-btn-secondary" onclick="confirmDeleteStore('close')">仅标记歇业</button>
+                <button class="delete-btn-confirm" onclick="confirmDeleteStore('delete')">删除店铺</button>
             </div>
             <div class="delete-confirm-actions">
                 <button class="delete-btn-cancel" onclick="closeDeleteStoreModal()">取消</button>
-                <button class="delete-btn-confirm" onclick="confirmDeleteStore()">确定删除</button>
             </div>
         </div>
     </div>

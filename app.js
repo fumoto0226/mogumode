@@ -195,6 +195,29 @@ async function compressImageForUpload(fileOrBlob, options = {}) {
     return compressed.size < source.size ? compressed : source;
 }
 
+async function copyGooglePlacePhotoToStorage(photoRef, options = {}) {
+    const {
+        maxHeightPx = 800,
+        maxWidthPx = 800
+    } = options;
+    if (!photoRef) throw new Error('缺少 Google 图片引用');
+    const googleUrl = `https://places.googleapis.com/v1/${photoRef}/media?maxHeightPx=${maxHeightPx}&maxWidthPx=${maxWidthPx}&key=${MAPS_API_KEY}`;
+    const response = await fetch(googleUrl);
+    if (!response.ok) throw new Error(`Google图片下载失败(${response.status})`);
+    const blob = await response.blob();
+    const compressedBlob = await compressImageForUpload(blob, {
+        maxWidth: 1600,
+        maxHeight: 1600,
+        quality: 0.8,
+        minQuality: 0.56,
+        maxBytes: 420 * 1024
+    });
+    const filename = `google_${Date.now()}.jpg`;
+    const storageRef = ref(storage, 'p/' + filename);
+    await uploadBytes(storageRef, compressedBlob, { contentType: 'image/jpeg' });
+    return getDownloadURL(storageRef);
+}
+
 // 暴露到全局供 map.js 使用
 window.localLikes = localLikes;
 window.localDislikes = localDislikes;
@@ -773,29 +796,225 @@ function getTodayDescriptionOpenTime(openingHours) {
     return `${String(m[1]).padStart(2, '0')}:${m[2]}`;
 }
 
+const WEEKDAY_LABELS_ZH = {
+    1: "周一",
+    2: "周二",
+    3: "周三",
+    4: "周四",
+    5: "周五",
+    6: "周六",
+    0: "周日"
+};
+
+function formatMinutesAllow24h(totalMinutes) {
+    const n = Number(totalMinutes);
+    if (!Number.isFinite(n)) return "00:00";
+    if (n >= 24 * 60) return "24:00";
+    return formatMinutes(n);
+}
+
+function mergeDailyIntervals(intervals = []) {
+    if (!intervals.length) return [];
+    const sorted = [...intervals].sort((a, b) => a.start - b.start);
+    const merged = [sorted[0]];
+    for (let i = 1; i < sorted.length; i++) {
+        const prev = merged[merged.length - 1];
+        const cur = sorted[i];
+        if (cur.start <= prev.end) {
+            prev.end = Math.max(prev.end, cur.end);
+        } else {
+            merged.push({ ...cur });
+        }
+    }
+    return merged;
+}
+
+function normalizeOpeningValueText(raw) {
+    const text = String(raw || '').trim();
+    if (!text) return '定休';
+    if (/closed|休息|定休|暂停|歇业/i.test(text)) return '定休';
+    if (/24\s*hours|24小时|24時間/i.test(text)) return '00:00-24:00';
+    return text
+        .replace(/\s*[\u2013\u2014〜～]\s*/g, '-')
+        .replace(/\s*,\s*/g, ' / ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function compressWeeklyLines(valuesByDay) {
+    const allSame = valuesByDay.every(v => v === valuesByDay[0]);
+    if (allSame) return [`每天 ${valuesByDay[0]}`];
+    return [
+        `周一 ${valuesByDay[0]}`,
+        `周二 ${valuesByDay[1]}`,
+        `周三 ${valuesByDay[2]}`,
+        `周四 ${valuesByDay[3]}`,
+        `周五 ${valuesByDay[4]}`,
+        `周六 ${valuesByDay[5]}`,
+        `周日 ${valuesByDay[6]}`
+    ];
+}
+
+function buildWeeklyLinesFromDescriptions(openingHours) {
+    const descLines = Array.isArray(openingHours?.weekdayDescriptions)
+        ? openingHours.weekdayDescriptions
+        : (Array.isArray(openingHours?.weekdayText) ? openingHours.weekdayText : []);
+    if (!descLines.length) return [];
+
+    const values = new Array(7).fill('定休'); // index 0..6 => Mon..Sun
+    const dayIndexMap = {
+        monday: 0, mon: 0, mondays: 0, 月曜日: 0, 周一: 0, 星期一: 0,
+        tuesday: 1, tue: 1, tues: 1, 火曜日: 1, 周二: 1, 星期二: 1,
+        wednesday: 2, wed: 2, 水曜日: 2, 周三: 2, 星期三: 2,
+        thursday: 3, thu: 3, thur: 3, thurs: 3, 木曜日: 3, 周四: 3, 星期四: 3,
+        friday: 4, fri: 4, 金曜日: 4, 周五: 4, 星期五: 4,
+        saturday: 5, sat: 5, 土曜日: 5, 周六: 5, 星期六: 5,
+        sunday: 6, sun: 6, 日曜日: 6, 周日: 6, 星期日: 6, 星期天: 6
+    };
+
+    descLines.forEach((line) => {
+        const rawLine = String(line || '').trim();
+        if (!rawLine) return;
+        const parts = rawLine.split(/[:：]/);
+        if (parts.length < 2) return;
+        const dayKey = String(parts.shift() || '').trim().toLowerCase();
+        const valueRaw = parts.join(':').trim();
+        const idx = dayIndexMap[dayKey];
+        if (idx === undefined) return;
+        values[idx] = normalizeOpeningValueText(valueRaw);
+    });
+
+    return compressWeeklyLines(values);
+}
+
+function buildWeeklyOpeningLines(openingHours) {
+    // 优先使用 Google 原始 weekdayDescriptions，避免时区/跨日拆分误差。
+    const fromDescriptions = buildWeeklyLinesFromDescriptions(openingHours);
+    if (fromDescriptions.length) return fromDescriptions;
+
+    const periods = normalizeOpeningPeriods(openingHours);
+    const lines = [];
+
+    if (periods.length) {
+        const byDay = new Map([[0, []], [1, []], [2, []], [3, []], [4, []], [5, []], [6, []]]);
+        const dayMinutes = 24 * 60;
+        const weekMinutes = 7 * dayMinutes;
+
+        periods.forEach((period) => {
+            const openDay = Number(period.openDay);
+            const closeDay = Number(period.closeDay);
+            if (!Number.isFinite(openDay) || !Number.isFinite(closeDay)) return;
+            const openMin = Math.max(0, Math.min(dayMinutes, Number(period.openMin) || 0));
+            const closeMinRaw = Math.max(0, Math.min(dayMinutes, Number(period.closeMin) || 0));
+
+            let start = openDay * dayMinutes + openMin;
+            let end = closeDay * dayMinutes + closeMinRaw;
+            if (end <= start) end += weekMinutes;
+
+            let cursor = start;
+            while (cursor < end) {
+                const absDay = Math.floor(cursor / dayMinutes);
+                const day = ((absDay % 7) + 7) % 7;
+                const dayEndAbs = (absDay + 1) * dayMinutes;
+                const sliceEnd = Math.min(end, dayEndAbs);
+                const startMin = cursor % dayMinutes;
+                const endMin = sliceEnd === dayEndAbs ? dayMinutes : (sliceEnd % dayMinutes);
+                byDay.get(day)?.push({ start: startMin, end: endMin });
+                cursor = sliceEnd;
+            }
+        });
+
+        const valuesMonToSun = [];
+        [1, 2, 3, 4, 5, 6, 0].forEach((day) => {
+            const intervals = mergeDailyIntervals(byDay.get(day) || []);
+            if (!intervals.length) {
+                valuesMonToSun.push('定休');
+                return;
+            }
+            const ranges = intervals.map((it) =>
+                `${formatMinutesAllow24h(it.start)}-${formatMinutesAllow24h(it.end)}`
+            );
+            valuesMonToSun.push(ranges.join(" / "));
+        });
+        return compressWeeklyLines(valuesMonToSun);
+    }
+
+    return lines;
+}
+
 function getStoreOpenTimeText(store) {
     if (!store) return "暂无";
-    const periods = normalizeOpeningPeriods(store.openingHours);
-    if (periods.length) {
-        const today = new Date().getDay();
-        const todayPeriods = periods
-            .filter(p => p.openDay === today)
-            .sort((a, b) => a.openMin - b.openMin);
-        if (todayPeriods.length) {
-            const firstOpen = todayPeriods[0];
-            return formatMinutes(firstOpen.openMin);
-        }
-        return "今日休息";
-    }
+    if (isStorePermanentlyClosed(store)) return "永久歇业";
+    const weeklyLines = buildWeeklyOpeningLines(store.openingHours);
+    if (weeklyLines.length) return weeklyLines.join("\n");
     const fallbackTime = getTodayDescriptionOpenTime(store.openingHours);
-    if (fallbackTime) return fallbackTime;
+    if (fallbackTime) return `今日 ${fallbackTime}`;
     if (store.businessStatus === 'CLOSED_TEMPORARILY') return "暂停营业";
     return "暂无";
 }
 
+function isStorePermanentlyClosed(store) {
+    if (!store || typeof store !== 'object') return false;
+    return !!store.isPermanentlyClosed || String(store.businessStatus || '').toUpperCase() === 'CLOSED_PERMANENTLY';
+}
+
+function renderStoreNameWithStatus(store) {
+    const baseName = String(store?.name || '').trim() || '未命名店铺';
+    if (!isStorePermanentlyClosed(store)) return baseName;
+    return `${baseName}<span class="store-closed-mogu" title="永久歇业"><img src="images/mogu.svg" alt="closed"></span>`;
+}
+
+window.isStorePermanentlyClosed = isStorePermanentlyClosed;
+window.renderStoreNameWithStatus = renderStoreNameWithStatus;
+window.getStoreOpenTimeText = getStoreOpenTimeText;
+
 function getStoreAddressText(store) {
     return store?.address || store?.formattedAddress || "地址未收录";
 }
+
+function haversineDistanceMeters(from, to) {
+    const lat1 = Number(from?.lat);
+    const lng1 = Number(from?.lng);
+    const lat2 = Number(to?.lat);
+    const lng2 = Number(to?.lng);
+    if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) return null;
+    const toRad = (deg) => (deg * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a = Math.sin(dLat / 2) ** 2
+        + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return Math.round(6371000 * c);
+}
+
+function getCurrentOriginCoords() {
+    const origin = window.mapOrigin || FIXED_ORIGIN;
+    const lat = Number(origin?.lat);
+    const lng = Number(origin?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return { ...FIXED_ORIGIN };
+    return { lat, lng };
+}
+
+function getStoreLinearDistanceMeters(store) {
+    const lat = Number(store?.lat);
+    const lng = Number(store?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        const fallback = Number(store?.distance);
+        return Number.isFinite(fallback) && fallback > 0 ? Math.round(fallback) : null;
+    }
+    return haversineDistanceMeters(getCurrentOriginCoords(), { lat, lng });
+}
+
+function formatStoreDistanceText(store) {
+    const meters = getStoreLinearDistanceMeters(store);
+    if (!Number.isFinite(meters) || meters < 0) return '--分钟';
+    const WALK_METERS_PER_MIN = 80;
+    const mins = Math.max(1, Math.round(meters / WALK_METERS_PER_MIN));
+    return `${mins}分钟`;
+}
+
+window.getStoreLinearDistanceMeters = getStoreLinearDistanceMeters;
+window.formatStoreDistanceText = formatStoreDistanceText;
 
 const GENERIC_PLACE_TYPES = new Set([
     'establishment',
@@ -907,7 +1126,7 @@ function normalizeStoreAdditionalInfoRows(store) {
     const baseRows = [
         {
             id: "base-open",
-            category: "开始营业时间",
+            category: "营业时间",
             content: getStoreOpenTimeText(store),
             fixed: true
         },
@@ -947,7 +1166,7 @@ window.generateInfoCardHtml = (store) => {
         ${fixedRows.map((r) => `
             <div class="info-row-item ${r.id === 'base-open' ? 'row-time' : ''}">
                 <div class="info-label">${r.category} :</div>
-                <div class="info-content">${r.content}</div>
+                <div class="info-content ${r.id === 'base-open' && isStorePermanentlyClosed(store) ? 'permanent-closed' : ''}">${r.content}</div>
             </div>
         `).join("")}
         <div class="more-info-btn" onclick="openProvideInfoModal('${store.id}')">提供更多信息</div>
@@ -955,16 +1174,17 @@ window.generateInfoCardHtml = (store) => {
     `;
 };
 
-function buildProvideInfoRowHtml(storeId, row) {
-    const deleteBtnClass = row.fixed ? 'fd-del-btn is-disabled' : 'fd-del-btn';
-    const deleteClick = row.fixed ? '' : `onclick="deleteAdditionalInfo('${storeId}', '${row.id}')"`;
+function buildProvideInfoRowHtml(storeId, row, store = null) {
+    const deleteBtnHtml = row.fixed
+        ? ''
+        : `<button class="fd-del-btn" onclick="deleteAdditionalInfo('${storeId}', '${row.id}')">
+                <img src="images/trash.svg" alt="delete">
+            </button>`;
     return `
         <div class="provide-info-row">
             <div class="fd-info-label">${row.category}：</div>
-            <div class="fd-info-content">${row.content}</div>
-            <button class="${deleteBtnClass}" ${deleteClick}>
-                <img src="images/trash.svg" alt="delete">
-            </button>
+            <div class="fd-info-content ${row.id === 'base-open' && isStorePermanentlyClosed(store) ? 'permanent-closed' : ''}">${row.content}</div>
+            ${deleteBtnHtml}
         </div>
     `;
 }
@@ -974,7 +1194,7 @@ window.renderProvideInfoModal = (storeId) => {
     const list = document.getElementById('provide-info-list');
     if (!store || !list) return;
     const rows = normalizeStoreAdditionalInfoRows(store);
-    list.innerHTML = rows.map(row => buildProvideInfoRowHtml(storeId, row)).join('');
+    list.innerHTML = rows.map(row => buildProvideInfoRowHtml(storeId, row, store)).join('');
 };
 
 window.openProvideInfoModal = (storeId) => {
@@ -1068,6 +1288,52 @@ function getStoreReactionStats(storeId) {
     return stats;
 }
 
+function getStoreAverageRating(store) {
+    const revs = Array.isArray(store?.revs) ? store.revs : [];
+    const nums = revs.map(r => Number(r?.rating)).filter(n => Number.isFinite(n) && n > 0);
+    if (nums.length) {
+        const sum = nums.reduce((a, b) => a + b, 0);
+        return sum / nums.length;
+    }
+    const fallback = Number(store?.rating);
+    return Number.isFinite(fallback) ? fallback : 0;
+}
+
+function getStoreReviewCount(store) {
+    return Array.isArray(store?.revs) ? store.revs.length : 0;
+}
+
+function getStorePreviewImages(store, maxCount = 12) {
+    const cover = String(store?.googleCoverImage || '').trim();
+    const revs = Array.isArray(store?.revs) ? [...store.revs] : [];
+    revs.sort((a, b) => Number(b?.createdAt || 0) - Number(a?.createdAt || 0));
+
+    const ordered = [];
+    if (cover) ordered.push(cover);
+
+    revs.forEach((rev) => {
+        const imgs = Array.isArray(rev?.images) ? rev.images : [];
+        imgs.filter(Boolean).forEach((src) => ordered.push(src));
+    });
+
+    const storeImgs = Array.isArray(store?.images) ? store.images : [];
+    storeImgs.filter(Boolean).forEach((src) => ordered.push(src));
+
+    const deduped = [];
+    const seen = new Set();
+    ordered.forEach((src) => {
+        if (!src || seen.has(src)) return;
+        seen.add(src);
+        deduped.push(src);
+    });
+
+    return deduped.slice(0, Math.max(1, maxCount));
+}
+
+window.getStoreAverageRating = getStoreAverageRating;
+window.getStoreReviewCount = getStoreReviewCount;
+window.getStorePreviewImages = getStorePreviewImages;
+
 function renderReactionAvatars(avatars, count) {
     if (!count || count <= 0) {
         return `<div class="action-social-row" aria-hidden="true"></div>`;
@@ -1132,9 +1398,11 @@ window.renderStores = (list) => {
         else if (isLiked) statusClass = "status-liked";
         else if (isFav) statusClass = "status-fav";
 
-        // 处理店铺图片
-        let rawImgs = (s.images && s.images.length) ? s.images : ["https://placehold.co/200?text=No+Image"];
-        const imagesHtml = rawImgs.map(src =>
+        const avgRating = getStoreAverageRating(s);
+        const reviewCount = getStoreReviewCount(s);
+        const rawImgs = getStorePreviewImages(s);
+        const displayImgs = rawImgs.length ? rawImgs : ["https://placehold.co/200?text=No+Image"];
+        const imagesHtml = displayImgs.map(src =>
             `<img src="${src}" class="store-img-item" loading="lazy">`
         ).join('');
 
@@ -1146,7 +1414,7 @@ window.renderStores = (list) => {
                 <div class="info-col">
                     <!-- 店名和收藏按钮 -->
                     <div class="store-name-row">
-                        <h3 class="store-name">${s.name}</h3>
+                        <h3 class="store-name">${renderStoreNameWithStatus(s)}</h3>
                         <div onclick="toggleFav('${s.id}'); event.stopPropagation();">
                             <img src="${isFav ? 'images/bookmark-f.svg' : 'images/bookmark.svg'}"
                                  class="bookmark-icon-btn"
@@ -1155,11 +1423,11 @@ window.renderStores = (list) => {
                     </div>
                     <!-- 评分和步行时间 -->
                     <div class="store-meta">
-                         ${s.rating} <span class="rating-star" style="display:inline-flex;align-items:center;"><img src="images/pingfen.svg" style="width:12px;"></span>
-                         <span>(3,000+)</span>
+                         ${avgRating.toFixed(1)} <span class="rating-star" style="display:inline-flex;align-items:center;"><img src="images/pingfen.svg" style="width:12px;"></span>
+                         <span>(${reviewCount})</span>
                          <span style="margin:0 4px">•</span> 
                         <img src="images/walk.svg" style="width:10px; margin-right:3px;">
-                         ${s.time}分钟
+                         ${formatStoreDistanceText(s)}
                     </div>
                 </div>
                 
@@ -1202,17 +1470,10 @@ window.openDetail = (id, opts = {}) => {
 };
 
 window.handleRouteFromDetail = () => {
-    // 1. 关闭详情页
-    closeFullDetail();
-    // 2. 切换到地图视图
-    switchView('map');
-    // 3. 触发地图的路线计算
-    // 稍微延迟一点，确保地图容器已经显示出来
-    setTimeout(() => {
-        if (window.showRouteOnMap) {
-            window.showRouteOnMap();
-        }
-    }, 300);
+    if (!currentDetailId) return;
+    if (typeof window.openStoreInGoogleMapsById === 'function') {
+        window.openStoreInGoogleMapsById(currentDetailId);
+    }
 };
 
 /**
@@ -1394,7 +1655,8 @@ function collectStoreAllImageUrls(store) {
     const storeImages = Array.isArray(store?.images) ? store.images : [];
     const reviewImages = (Array.isArray(store?.revs) ? store.revs : [])
         .flatMap(r => Array.isArray(r?.images) ? r.images : []);
-    return Array.from(new Set([...storeImages, ...reviewImages].filter(Boolean)));
+    const coverImage = store?.googleCoverImage ? [store.googleCoverImage] : [];
+    return Array.from(new Set([...coverImage, ...storeImages, ...reviewImages].filter(Boolean)));
 }
 
 function getDeleteStoreTargetId() {
@@ -1405,60 +1667,114 @@ function getDeleteStoreTargetId() {
     return "";
 }
 
-function showDeleteStoreToast() {
-    const toast = document.getElementById('toast-delete-submitted');
-    if (!toast) return;
-    toast.style.display = 'flex';
-    setTimeout(() => {
-        toast.style.display = 'none';
-    }, 3000);
+function removeStoreIdFromLocalPreferenceState(storeId) {
+    const sid = String(storeId || '');
+    if (!sid) return;
+    myFavIds = (Array.isArray(myFavIds) ? myFavIds : []).filter(id => id !== sid);
+    localLikes.delete(sid);
+    localDislikes.delete(sid);
+    window.myFavIds = myFavIds;
+    window.localLikes = localLikes;
+    window.localDislikes = localDislikes;
+
+    allUsersCache = (Array.isArray(allUsersCache) ? allUsersCache : []).map((u) => ({
+        ...u,
+        favorites: (Array.isArray(u?.favorites) ? u.favorites : []).filter(id => id !== sid),
+        likes: (Array.isArray(u?.likes) ? u.likes : []).filter(id => id !== sid),
+        dislikes: (Array.isArray(u?.dislikes) ? u.dislikes : []).filter(id => id !== sid)
+    }));
 }
 
-window.confirmDeleteStore = async () => {
+async function cleanupStoreReferencesForCurrentUser(storeId) {
+    const sid = String(storeId || '');
+    if (!sid || !currentUser?.uid) return false;
+    try {
+        await updateDoc(doc(db, "users", currentUser.uid), {
+            favorites: arrayRemove(sid),
+            likes: arrayRemove(sid),
+            dislikes: arrayRemove(sid)
+        });
+        return true;
+    } catch (err) {
+        console.warn("清理当前用户偏好失败:", err);
+        return false;
+    }
+}
+
+window.confirmDeleteStore = async (mode = 'delete') => {
     closeDeleteStoreModal();
     if (!currentUser) {
-        alert("请先登录");
+        showAppNoticeModal("请先登录");
         return;
     }
     const storeId = getDeleteStoreTargetId();
     if (!storeId) {
-        alert("未找到店铺");
+        showAppNoticeModal("未找到店铺");
         return;
     }
     const storeRef = doc(db, "stores", storeId);
     const snap = await getDoc(storeRef);
     if (!snap.exists()) {
-        alert("店铺不存在或已删除");
+        showAppNoticeModal("店铺不存在或已删除");
         return;
     }
     const store = { id: snap.id, ...snap.data() };
-    const reporters = Array.isArray(store.closedReportedBy) ? store.closedReportedBy : [];
-    if (reporters.includes(currentUser.uid)) {
-        alert("你已经反馈过这家店铺歇业");
-        return;
-    }
 
-    const currentCount = Number(store.closedReports || 0);
-    const nextCount = currentCount + 1;
-    if (nextCount < 2) {
+    if (mode === 'close') {
         await updateDoc(storeRef, {
+            isPermanentlyClosed: true,
+            businessStatus: 'CLOSED_PERMANENTLY',
+            permanentlyClosedAt: Date.now(),
+            permanentlyClosedBy: currentUser.uid,
             closedReports: increment(1),
-            closedReportedBy: arrayUnion(currentUser.uid),
-            lastClosedReportAt: Date.now()
+            closedReportedBy: arrayUnion(currentUser.uid)
         });
-        showDeleteStoreToast();
+        localStores = localStores.map((item) => item.id === storeId
+            ? {
+                ...item,
+                isPermanentlyClosed: true,
+                businessStatus: 'CLOSED_PERMANENTLY',
+                permanentlyClosedAt: Date.now(),
+                permanentlyClosedBy: currentUser.uid
+            }
+            : item
+        );
+        window.localStores = localStores;
+        if (window.renderMapCardFromDB) {
+            const nextStore = localStores.find(item => item.id === storeId);
+            if (nextStore) window.renderMapCardFromDB(nextStore, { mode: 'half', fromMap: true });
+        }
+        applyFilters();
+        renderRecordCalendar();
+        renderProfileActivity();
+        showAppNoticeModal("店铺已标记为永久歇业");
         return;
     }
 
-    // 达到 2 次反馈：彻底删除店铺与其所有评论/图片
+    // 彻底删除店铺：前端仅清理当前用户，其他用户由 Cloud Function 后台自动清理
     const allUrls = collectStoreAllImageUrls(store);
-    await deleteStorageFilesByUrls(allUrls);
-    await deleteDoc(storeRef);
+    await cleanupStoreReferencesForCurrentUser(storeId);
+
+    try {
+        await deleteDoc(storeRef);
+        await deleteStorageFilesByUrls(allUrls);
+    } catch (err) {
+        console.error("删除店铺失败:", err);
+        showAppNoticeModal("删除失败，请稍后重试");
+        return;
+    }
+
+    removeStoreIdFromLocalPreferenceState(storeId);
+    localStores = localStores.filter(item => item.id !== storeId);
+    window.localStores = localStores;
 
     if (window.closeMapCard) window.closeMapCard();
     const detailEl = document.getElementById('full-detail-page');
     if (detailEl) detailEl.classList.remove('open', 'half', 'from-map');
-    alert("该店铺已被删除，相关评论和图片已清理");
+    applyFilters();
+    renderRecordCalendar();
+    renderProfileActivity();
+    showAppNoticeModal("店铺已删除，后台正在清理所有用户的收藏/好吃/差评引用");
 };
 
 window.deleteMyStoreReview = async (storeId, reviewIndex) => {
@@ -1844,7 +2160,7 @@ window.submitNew = async () => {
     btn.classList.add('loading');  // 显示加载状态
 
     try {
-        let urls = [];  // 最终的图片URL数组
+        let reviewImageUrls = [];  // 用户评论图（不含Google封面）
         const files = document.getElementById('fileInput').files;
 
         if (files.length) {
@@ -1855,7 +2171,7 @@ window.submitNew = async () => {
                 throw new Error("只能上传图片文件");
             }
             // 用户上传了图片，上传到 Firebase Storage
-            urls = await Promise.all([...files].map(async f => {
+            reviewImageUrls = await Promise.all([...files].map(async f => {
                 const compressedFile = await compressImageForUpload(f, {
                     maxWidth: 1600,
                     maxHeight: 1600,
@@ -1867,42 +2183,6 @@ window.submitNew = async () => {
                 await uploadBytes(r, compressedFile, { contentType: 'image/jpeg' });
                 return getDownloadURL(r);
             }));
-        } else if (fetchedPhotoRef) {
-            // 用户没上传图片，但有从Google获取的图片
-            // 尝试将Google图片转存到我们的Firebase Storage
-            try {
-                const originalText = btn.innerHTML;
-                btn.innerHTML = `<div class="spinner"></div> <span>转存图片中...</span>`;
-
-                // 从Google下载图片
-                const googleUrl = `https://places.googleapis.com/v1/${fetchedPhotoRef}/media?maxHeightPx=800&maxWidthPx=800&key=${MAPS_API_KEY}`;
-                const response = await fetch(googleUrl);
-                if (!response.ok) throw new Error("Google图片下载失败");
-                const blob = await response.blob();
-                const compressedBlob = await compressImageForUpload(blob, {
-                    maxWidth: 1600,
-                    maxHeight: 1600,
-                    quality: 0.8,
-                    minQuality: 0.56,
-                    maxBytes: 420 * 1024
-                });
-
-                // 上传到我们的Firebase Storage
-                const filename = `google_${Date.now()}.jpg`;
-                const storageRef = ref(storage, 'p/' + filename);
-                await uploadBytes(storageRef, compressedBlob, { contentType: 'image/jpeg' });
-
-                const myPermanentUrl = await getDownloadURL(storageRef);
-                urls = [myPermanentUrl];
-
-                console.log("成功！图片已从Google搬运到Firebase:", myPermanentUrl);
-                btn.innerHTML = originalText;
-
-            } catch (err) {
-                // 转存失败，直接使用Google的URL（可能会过期）
-                console.error("转存失败，降级使用原链接:", err);
-                urls = [`https://places.googleapis.com/v1/${fetchedPhotoRef}/media?maxHeightPx=800&maxWidthPx=800&key=${MAPS_API_KEY}`];
-            }
         }
 
         // 保存店铺数据到 Firestore
@@ -1943,7 +2223,7 @@ window.submitNew = async () => {
             uid: currentUser.uid,
             createdAt: Date.now(),
             rating: addRating,
-            images: urls
+            images: reviewImageUrls
         };
 
         let postSuccessPayload = null;
@@ -1960,8 +2240,8 @@ window.submitNew = async () => {
             });
 
             // 合并图片
-            if (urls.length > 0) {
-                updates.images = arrayUnion(...urls);
+            if (reviewImageUrls.length > 0) {
+                updates.images = arrayUnion(...reviewImageUrls);
             }
 
             // 更新Google数据（如果原来没有）
@@ -1989,56 +2269,50 @@ window.submitNew = async () => {
 
             await updateDoc(storeRef, updates);
 
-            const nextStore = {
-                ...existingStoreData,
-                revs: [...(Array.isArray(existingStoreData?.revs) ? existingStoreData.revs : []), {
+            const predictedRevs = [
+                ...(Array.isArray(existingStoreData?.revs) ? existingStoreData.revs : []),
+                {
                     ...newReview,
                     rating: Number(newReview.rating || existingStoreData?.rating || 3.8)
-                }],
-                images: urls.length
-                    ? Array.from(new Set([...(Array.isArray(existingStoreData?.images) ? existingStoreData.images : []), ...urls]))
-                    : (Array.isArray(existingStoreData?.images) ? existingStoreData.images : []),
-                googlePlaceId: existingStoreData.googlePlaceId || selectedStorePlaceId || null,
-                openingHours: existingStoreData.openingHours || selectedStoreOpeningHours || null,
-                distance: existingStoreData.distance || selectedStoreDistance || null,
-                address: existingStoreData.address || selectedStoreAddress || null,
-                cuisineLabel: existingStoreData.cuisineLabel || selectedStoreCuisineLabel || null,
-                primaryType: existingStoreData.primaryType || selectedStorePrimaryType || null,
-                types: (Array.isArray(existingStoreData.types) && existingStoreData.types.length)
-                    ? existingStoreData.types
-                    : (Array.isArray(selectedStoreTypes) ? selectedStoreTypes : [])
-            };
-            localStores = localStores.map(store => store.id === existingStoreId ? nextStore : store);
-            window.localStores = localStores;
-
-            const myVisitCount = nextStore.revs.filter(rev => isReviewMine(rev, getCurrentUserAliases())).length || 1;
+                }
+            ];
+            const myVisitCount = predictedRevs.filter(rev => isReviewMine(rev, getCurrentUserAliases())).length || 1;
             postSuccessPayload = {
                 rating: addRating,
-                storeName: nextStore.name || document.getElementById('newName').value,
+                storeName: existingStoreData?.name || document.getElementById('newName').value,
                 visitCount: myVisitCount,
                 isNewStore: false
             };
         } else {
-            // 新店在发布时才计算步行时间和距离，并一次性入库
-            let createTime = (document.getElementById('newTime')?.value || "").trim();
-            let createDistance = selectedStoreDistance || null;
-            if (selectedStoreLocation) {
-                const routeInfo = await computeWalkRouteForAddStore(selectedStoreLocation);
-                if (routeInfo) {
-                    createTime = String(routeInfo.minutes);
-                    createDistance = routeInfo.distanceMeters ?? createDistance;
-                }
+            if (!fetchedPhotoRef) {
+                throw new Error("新建店铺需要一张Google封面图，请重新搜索并选择带图片的店铺");
             }
-            const timeInput = document.getElementById('newTime');
-            if (timeInput) timeInput.value = createTime;
+
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<div class="spinner"></div> <span>获取店铺封面中...</span>`;
+            let googleCoverUrl = "";
+            try {
+                googleCoverUrl = await copyGooglePlacePhotoToStorage(fetchedPhotoRef);
+            } catch (err) {
+                console.error("Google封面转存失败，降级使用Google直链:", err);
+                googleCoverUrl = `https://places.googleapis.com/v1/${fetchedPhotoRef}/media?maxHeightPx=800&maxWidthPx=800&key=${MAPS_API_KEY}`;
+            } finally {
+                btn.innerHTML = originalText;
+            }
+
+            // 新店仅记录直线距离（米），不再记录步行分钟
+            let createDistance = selectedStoreDistance || null;
+            if (!Number.isFinite(Number(createDistance)) && selectedStoreLocation) {
+                createDistance = getStoreLinearDistanceMeters(selectedStoreLocation);
+            }
             selectedStoreDistance = createDistance;
 
             // === 新店铺：创建 ===
+            const storeAlbumImages = Array.from(new Set([googleCoverUrl, ...reviewImageUrls].filter(Boolean)));
             const createdStore = {
                 name: document.getElementById('newName').value,           // 店名
                 budget: budgetVal,                                        // 预算
                 budgetText: budgetVal ? `¥ ${budgetVal}` : '',            // 预算文字
-                time: createTime || "",                                   // 步行时间
                 rating: String((Number.isFinite(addRating) ? addRating : 3.8).toFixed(1)),
                 lat: selectedStoreLocation ? selectedStoreLocation.lat : null,  // 纬度
                 lng: selectedStoreLocation ? selectedStoreLocation.lng : null,  // 经度
@@ -2049,18 +2323,15 @@ window.submitNew = async () => {
                 cuisineLabel: selectedStoreCuisineLabel || null,          // 料理种类
                 primaryType: selectedStorePrimaryType || null,            // Google 主类型
                 types: Array.isArray(selectedStoreTypes) ? selectedStoreTypes : [], // Google 类型
-                images: urls,                                             // 图片URL数组
+                googleCoverImage: googleCoverUrl,
+                images: storeAlbumImages,                                 // 相册图（封面图固定第一张）
                 createdAt: Date.now(),                                    // 创建时间戳
                 revs: [newReview]
             };
-            const createdRef = await addDoc(collection(db, "stores"), createdStore);
-            const nextStore = { id: createdRef.id, ...createdStore };
-            // 避免“本地插入 + onSnapshot 本地回显”导致同一店铺临时重复
-            localStores = [nextStore, ...localStores.filter(store => store.id !== nextStore.id)];
-            window.localStores = localStores;
+            await addDoc(collection(db, "stores"), createdStore);
             postSuccessPayload = {
                 rating: addRating,
-                storeName: nextStore.name,
+                storeName: createdStore.name,
                 visitCount: 1,
                 isNewStore: true
             };
@@ -2305,6 +2576,43 @@ function scoreStoreSearch(query, store) {
 
 window.scoreStoreSearch = scoreStoreSearch;
 
+function getSearchMatchFlags(query, target) {
+    const qKeys = buildStoreSearchKeys(query);
+    const tKeys = buildStoreSearchKeys(target);
+    let prefix = false;
+    let contains = false;
+
+    qKeys.forEach((qKey) => {
+        if (!qKey) return;
+        tKeys.forEach((tKey) => {
+            if (!tKey) return;
+            if (tKey.startsWith(qKey)) prefix = true;
+            if (tKey.includes(qKey)) contains = true;
+        });
+    });
+
+    return { prefix, contains };
+}
+
+function scoreLocalAddSearch(query, store) {
+    const qNorm = normalizeSearchText(query);
+    const name = String(store?.name || '');
+    const nameScore = scoreTextMatch(query, name);
+    const nameFlags = getSearchMatchFlags(query, name);
+    const isAsciiQuery = !!qNorm && /^[a-z0-9]+$/i.test(qNorm);
+
+    // 添加店铺联想里，英文字母查询优先走“店名前缀”命中，避免无关本地店铺被蘑菇标记顶上来。
+    if (isAsciiQuery && qNorm.length >= 2) {
+        const allowContains = qNorm.length >= 3;
+        if (!nameFlags.prefix && !(allowContains && nameFlags.contains)) return 0;
+        return nameScore + (nameFlags.prefix ? 26 : 0);
+    }
+
+    const addressScore = Math.floor(scoreTextMatch(query, store?.address || store?.formattedAddress || '') * 0.22);
+    const cuisineScore = Math.floor(scoreTextMatch(query, getStoreCuisineSearchTerms(store).join(' ')) * 0.35);
+    return Math.max(nameScore + (nameFlags.prefix ? 14 : 0), addressScore, cuisineScore);
+}
+
 function resetSelectedStoreState() {
     selectedStoreLocation = null;
     selectedStorePlaceId = null;
@@ -2359,13 +2667,14 @@ function renderAddPickedMapPreview(retry = 0) {
             });
             addPreviewMarker = new google.maps.Marker({
                 map: addPreviewMap,
-                position: { lat, lng }
+                position: { lat, lng },
+                optimized: false
             });
         } else {
             addPreviewMap.setCenter({ lat, lng });
             addPreviewMap.setZoom(16);
             if (!addPreviewMarker) {
-                addPreviewMarker = new google.maps.Marker({ map: addPreviewMap, position: { lat, lng } });
+                addPreviewMarker = new google.maps.Marker({ map: addPreviewMap, position: { lat, lng }, optimized: false });
             } else {
                 addPreviewMarker.setPosition({ lat, lng });
             }
@@ -2382,45 +2691,6 @@ function renderAddPickedMapPreview(retry = 0) {
 window.refreshAddMapPreview = () => {
     renderAddPickedMapPreview();
 };
-
-async function computeWalkRouteForAddStore(destination) {
-    const destLat = Number(destination?.lat);
-    const destLng = Number(destination?.lng);
-    if (!Number.isFinite(destLat) || !Number.isFinite(destLng)) return null;
-
-    const origin = FIXED_ORIGIN;
-    const originLat = Number(origin?.lat);
-    const originLng = Number(origin?.lng);
-    if (!Number.isFinite(originLat) || !Number.isFinite(originLng)) return null;
-
-    try {
-        const resp = await fetch(`https://routes.googleapis.com/directions/v2:computeRoutes`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': MAPS_API_KEY,
-                'X-Goog-FieldMask': 'routes.duration,routes.distanceMeters'
-            },
-            body: JSON.stringify({
-                origin: { location: { latLng: { latitude: originLat, longitude: originLng } } },
-                destination: { location: { latLng: { latitude: destLat, longitude: destLng } } },
-                travelMode: "WALK"
-            })
-        });
-        const data = await resp.json();
-        const route = data?.routes?.[0];
-        if (!route?.duration) return null;
-        const seconds = parseInt(String(route.duration).replace('s', ''), 10);
-        if (!Number.isFinite(seconds)) return null;
-        return {
-            minutes: Math.ceil(seconds / 60),
-            distanceMeters: Number.isFinite(route.distanceMeters) ? route.distanceMeters : null
-        };
-    } catch (err) {
-        console.error("Route API error:", err);
-        return null;
-    }
-}
 
 function buildAddRatingMushrooms() {
     const mushrooms = document.getElementById('add-rating-mushrooms');
@@ -2480,9 +2750,8 @@ function bindAddRatingGesture() {
 
 function refreshAddWalkTimeDisplay() {
     const walkEl = document.getElementById('add-walk-time-display');
-    const timeVal = (document.getElementById('newTime')?.value || "").trim();
     if (!walkEl) return;
-    walkEl.innerText = timeVal || '--';
+    walkEl.innerText = selectedStoreLocation ? formatStoreDistanceText(selectedStoreLocation) : '--分钟';
 }
 
 function refreshAddRatingMushrooms() {
@@ -2575,14 +2844,12 @@ function resetAddComposerFlow() {
         mapToggleLink.innerText = '在地图上查看';
     }
     const hiddenName = document.getElementById('newName');
-    const hiddenTime = document.getElementById('newTime');
     const budget = document.getElementById('newBudget');
     const review = document.getElementById('newReview');
     const file = document.getElementById('fileInput');
     const previewList = document.getElementById('preview-list');
     const uploadPlaceholder = document.getElementById('upload-placeholder');
     if (hiddenName) hiddenName.value = "";
-    if (hiddenTime) hiddenTime.value = "";
     if (budget) budget.value = "";
     if (review) review.value = "";
     if (file) file.value = "";
@@ -2632,7 +2899,7 @@ function openAddComposerForStore(storeId) {
     selectedExistingStoreId = store.id;
     selectedStorePlaceId = store.googlePlaceId || null;
     selectedStoreOpeningHours = store.openingHours || null;
-    selectedStoreDistance = store.distance || null;
+    selectedStoreDistance = getStoreLinearDistanceMeters(store);
     selectedStoreAddress = store.address || store.formattedAddress || null;
     selectedStoreCuisineLabel = getStoreCuisineText(store) || null;
     selectedStorePrimaryType = store.primaryType || null;
@@ -2650,11 +2917,6 @@ function openAddComposerForStore(storeId) {
     const hiddenName = document.getElementById('newName');
     if (hiddenName) hiddenName.value = store.name || "";
 
-    const hiddenTime = document.getElementById('newTime');
-    if (hiddenTime) {
-        hiddenTime.placeholder = "发布新店时计算";
-        hiddenTime.value = store.time || "";
-    }
 
     const pick = document.getElementById('add-step-pick');
     const form = document.getElementById('add-step-form');
@@ -2928,6 +3190,7 @@ function refreshAddSearchMapMarkers(items = [], opts = {}) {
             map,
             position,
             icon,
+            optimized: false,
             zIndex: item.source === 'local' ? 20 : 10
         });
         if (isSelected) {
@@ -2988,7 +3251,7 @@ function buildLocalAddSearchItem(store, listEl) {
             selectedExistingStoreId = store.id;
             selectedStorePlaceId = store.googlePlaceId || null;
             selectedStoreOpeningHours = store.openingHours || null;
-            selectedStoreDistance = store.distance || null;
+            selectedStoreDistance = getStoreLinearDistanceMeters(store);
             selectedStoreAddress = store.address || store.formattedAddress || null;
             selectedStoreCuisineLabel = getStoreCuisineText(store) || null;
             selectedStorePrimaryType = store.primaryType || null;
@@ -3000,9 +3263,6 @@ function buildLocalAddSearchItem(store, listEl) {
             const addInput = document.getElementById('add-search-input');
             if (addInput) addInput.value = store.name || "";
             document.getElementById('newName').value = store.name || "";
-            const timeInput = document.getElementById('newTime');
-            timeInput.placeholder = "发布新店时计算";
-            timeInput.value = store.time || "";
             onAddStorePicked(store.name || "", true);
             openAddSearchMap({ preserveView: true });
             syncAddSearchSelectionUI();
@@ -3011,12 +3271,24 @@ function buildLocalAddSearchItem(store, listEl) {
     };
 }
 
+function getPreferredPlaceName(place) {
+    if (!place || typeof place !== 'object') return '';
+    return String(
+        place.preferredName
+        || place.localName
+        || place.displayName?.text
+        || place.englishName
+        || ''
+    ).trim();
+}
+
 function buildGoogleAddSearchItem(place, listEl) {
-    const placeKey = `google:${place.id || normalizeStoreName(place.displayName?.text || '')}`;
+    const preferredName = getPreferredPlaceName(place);
+    const placeKey = `google:${place.id || normalizeStoreName(preferredName)}`;
     return {
         key: placeKey,
         source: 'google',
-        name: place.displayName?.text || "",
+        name: preferredName,
         address: place.formattedAddress || "",
         lat: Number(place.location?.latitude),
         lng: Number(place.location?.longitude),
@@ -3026,23 +3298,21 @@ function buildGoogleAddSearchItem(place, listEl) {
             addSelectedSearchItemKey = placeKey;
 
             const addInput = document.getElementById('add-search-input');
-            if (addInput) addInput.value = place.displayName?.text || "";
-            document.getElementById('newName').value = place.displayName?.text || "";
+            if (addInput) addInput.value = preferredName;
+            document.getElementById('newName').value = preferredName;
             if (place.photos && place.photos.length) fetchedPhotoRef = place.photos[0].name;
 
             if (place.location) {
                 selectedStoreLocation = { lat: place.location.latitude, lng: place.location.longitude };
                 selectedStorePlaceId = place.id;
-                selectedStoreOpeningHours = place.regularOpeningHours;
+                selectedStoreOpeningHours = place.regularOpeningHours || place.currentOpeningHours || null;
                 selectedStoreAddress = place.formattedAddress;
                 selectedStoreCuisineLabel = getCuisineRuleByType(place.primaryType)?.label || place.primaryTypeDisplayName?.text || null;
                 selectedStorePrimaryType = place.primaryType || null;
                 selectedStoreTypes = Array.isArray(place.types) ? [...place.types] : null;
-                const timeInput = document.getElementById('newTime');
-                timeInput.value = "";
-                timeInput.placeholder = "发布新店时计算";
+                selectedStoreDistance = getStoreLinearDistanceMeters(selectedStoreLocation);
             }
-            onAddStorePicked(place.displayName?.text || "", false);
+            onAddStorePicked(preferredName, false);
             openAddSearchMap({ preserveView: true });
             syncAddSearchSelectionUI();
             if (listEl) listEl.classList.remove('active');
@@ -3165,7 +3435,7 @@ window.searchStoreForAdd = async (queryText = null, opts = {}) => {
     const mapBounds = opts?.mapBounds || null;
     // 先从我们库里搜索，按关联度排序
     const localMatches = localStores.map(s => {
-        const score = scoreStoreSearch(q, s);
+        const score = scoreLocalAddSearch(q, s);
         return { store: s, score };
     }).filter(({ store, score }) => {
         if (score <= 0) return false;
@@ -3179,7 +3449,7 @@ window.searchStoreForAdd = async (queryText = null, opts = {}) => {
     const localItems = localMatches.map(store => buildLocalAddSearchItem(store, list));
 
     // 店铺名精确命中时直接走本地，不再请求 Google
-    const exactLocalMatch = localStores.some(s => scoreStoreSearch(q, s) >= 115);
+    const exactLocalMatch = localStores.some(s => scoreLocalAddSearch(q, s) >= 115);
     if ((exactLocalMatch || q.length < 2) && !mapBounds) {
         applyAddSearchResults(localItems, list, q);
         return;
@@ -3192,7 +3462,7 @@ window.searchStoreForAdd = async (queryText = null, opts = {}) => {
 
     const googleItems = googlePlaces.filter(p => {
         const placeId = p.id || "";
-        const normalizedGoogleName = normalizeStoreName(p.displayName?.text || "");
+        const normalizedGoogleName = normalizeStoreName(getPreferredPlaceName(p));
         return !localStores.some(s =>
             (s.googlePlaceId && s.googlePlaceId === placeId) ||
             normalizeStoreName(s.name) === normalizedGoogleName
@@ -3209,6 +3479,81 @@ async function placesSearchTextCached(q, photo = false) {
     searchCache.set(key, result);
     return result;
 }
+
+window.migrateStoreNamesToPreferredLanguage = async (opts = {}) => {
+    const {
+        dryRun = false,
+        limit = 0,
+        delayMs = 120
+    } = opts || {};
+
+    if (typeof window.fetchPreferredPlaceNameById !== 'function') {
+        throw new Error('地图模块未就绪，请先打开一次地图页后重试');
+    }
+
+    const targets = (localStores || []).filter((store) => String(store?.googlePlaceId || '').trim());
+    if (!targets.length) {
+        const result = { checked: 0, updated: 0, skipped: 0, failed: 0, dryRun: !!dryRun };
+        console.log('没有可迁移的店铺');
+        return result;
+    }
+
+    const maxCount = Number(limit) > 0 ? Number(limit) : targets.length;
+    let checked = 0;
+    let updated = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const store of targets) {
+        if (checked >= maxCount) break;
+        checked += 1;
+        try {
+            const nameInfo = await window.fetchPreferredPlaceNameById(store.googlePlaceId);
+            const preferredName = String(nameInfo?.preferredName || '').trim();
+            if (!preferredName || preferredName === String(store.name || '').trim()) {
+                skipped += 1;
+                continue;
+            }
+
+            if (!dryRun) {
+                await updateDoc(doc(db, "stores", store.id), {
+                    name: preferredName,
+                    nameJa: String(nameInfo?.localName || '').trim() || preferredName,
+                    nameEn: String(nameInfo?.englishName || '').trim()
+                });
+            }
+
+            localStores = localStores.map((item) => item.id === store.id
+                ? {
+                    ...item,
+                    name: preferredName,
+                    nameJa: String(nameInfo?.localName || '').trim() || preferredName,
+                    nameEn: String(nameInfo?.englishName || '').trim()
+                }
+                : item
+            );
+            updated += 1;
+            if (delayMs > 0) {
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
+        } catch (err) {
+            failed += 1;
+            console.error(`店名迁移失败: ${store.id}`, err);
+        }
+    }
+
+    window.localStores = localStores;
+    if (typeof applyFilters === 'function') applyFilters();
+    const favView = document.getElementById('view-fav');
+    if (favView && !favView.classList.contains('hidden') && typeof renderRecordCalendar === 'function') {
+        renderRecordCalendar();
+    }
+
+    const summary = `店名迁移完成：检查${checked}，更新${updated}，跳过${skipped}，失败${failed}${dryRun ? '（dry-run）' : ''}`;
+    console.log(summary);
+    if (typeof showAppNoticeModal === 'function') showAppNoticeModal(summary, '店名迁移');
+    return { checked, updated, skipped, failed, dryRun: !!dryRun };
+};
 
 async function searchLocationForConfirm(keyword = null) {
     const q = (keyword ?? document.getElementById('fetched-address-input').value).trim();
@@ -3232,9 +3577,10 @@ async function searchLocationForConfirm(keyword = null) {
     ps.slice(0, 5).forEach(p => {
         const d = document.createElement('div');
         d.className = "result-item";
-        d.innerHTML = `<div class="result-item-name"><b>${p.displayName.text}</b></div><small>${p.formattedAddress || ''}</small>`;
+        const preferredName = getPreferredPlaceName(p);
+        d.innerHTML = `<div class="result-item-name"><b>${preferredName}</b></div><small>${p.formattedAddress || ''}</small>`;
         d.onclick = () => {
-            document.getElementById('fetched-address-input').value = p.formattedAddress || p.displayName.text;
+            document.getElementById('fetched-address-input').value = p.formattedAddress || preferredName;
             if (p.location) {
                 tempCoords = { lat: p.location.latitude, lng: p.location.longitude };
             }
@@ -3457,6 +3803,7 @@ let filterState = defaultFilterState();
  * @returns {boolean} 是否符合
  */
 function checkOpenStatus(store, status) {
+    if (isStorePermanentlyClosed(store)) return false;
     if (!store.openingHours) return false;
 
     const now = new Date();
@@ -3741,6 +4088,8 @@ function applyFilters() {
     // 首页搜索（仅本地已收录店铺）
     if (homeSearchQuery) {
         source = source.filter(s => scoreStoreSearch(homeSearchQuery, s) > 0);
+    } else {
+        source = source.filter(s => !isStorePermanentlyClosed(s));
     }
 
     // 1. 偏好筛选
@@ -3755,28 +4104,18 @@ function applyFilters() {
     // 4. 评分筛选 (双滑块)
     source = source.filter(s => {
         let match = true;
-        const r = parseFloat(s.rating || 0);
+        const r = getStoreAverageRating(s);
         if (r < filterState.ratingMin || r > filterState.ratingMax) match = false;
 
         // 距离筛选
         if (filterState.dist !== 'custom' && filterState.dist !== 'infinite') {
             const maxDist = parseInt(filterState.dist);
-            // 优先使用精确距离 (meters)
-            if (s.distance) {
-                if (s.distance > maxDist) match = false;
-            } else {
-                // 降级使用步行时间估算 (80m/min)
-                const time = parseInt(s.time);
-                if (!isNaN(time) && time * 80 > maxDist) match = false;
-            }
+            const dist = getStoreLinearDistanceMeters(s);
+            if (!Number.isFinite(dist) || dist > maxDist) match = false;
         } else if (filterState.dist === 'custom') {
             const maxDist = parseInt(filterState.distCustom);
-            if (s.distance) {
-                if (s.distance > maxDist) match = false;
-            } else {
-                const time = parseInt(s.time);
-                if (!isNaN(time) && time * 80 > maxDist) match = false;
-            }
+            const dist = getStoreLinearDistanceMeters(s);
+            if (!Number.isFinite(dist) || dist > maxDist) match = false;
         }
 
         // 营业状态筛选
@@ -3793,11 +4132,11 @@ function applyFilters() {
         if (currentSortKey === 'price') {
             result = (parseInt(a.budget) || 0) - (parseInt(b.budget) || 0);  // 默认低价->高价
         } else if (currentSortKey === 'distance') {
-            const dA = a.distance || (parseInt(a.time) * 80) || 99999;
-            const dB = b.distance || (parseInt(b.time) * 80) || 99999;
+            const dA = getStoreLinearDistanceMeters(a) ?? 99999;
+            const dB = getStoreLinearDistanceMeters(b) ?? 99999;
             result = dA - dB;  // 默认近->远
         } else if (currentSortKey === 'rating') {
-            result = (parseFloat(b.rating) || 0) - (parseFloat(a.rating) || 0); // 默认高->低
+            result = getStoreAverageRating(b) - getStoreAverageRating(a); // 默认高->低
         } else {
             result = (b.createdAt || 0) - (a.createdAt || 0); // 综合默认新->旧
         }
@@ -3952,7 +4291,7 @@ function renderMiniConfirmMap(coords) {
     if (!miniConfirmMap) return;
     miniConfirmMap.setCenter(center);
     if (!miniConfirmMarker) {
-        miniConfirmMarker = new google.maps.Marker({ position: center, map: miniConfirmMap });
+        miniConfirmMarker = new google.maps.Marker({ position: center, map: miniConfirmMap, optimized: false });
     } else {
         miniConfirmMarker.setPosition(center);
     }
@@ -3997,6 +4336,12 @@ window.toggleLocationMenu = () => {
     document.getElementById('location-menu').classList.toggle('active');
 };
 
+function refreshDistanceDependentViews() {
+    if (typeof applyFilters === 'function') applyFilters();
+    if (typeof renderProfileFavorites === 'function') renderProfileFavorites();
+    if (typeof window.refreshOpenMapCardDistance === 'function') window.refreshOpenMapCardDistance();
+}
+
 /**
  * 选择固定位置
  */
@@ -4007,6 +4352,7 @@ window.selectFixedLocation = (name) => {
     window.mapOriginType = 'cocoon';
     syncLocationTriggerIcon();
     if (window.refreshCurrentOriginMarker) window.refreshCurrentOriginMarker();
+    refreshDistanceDependentViews();
 };
 
 /**
@@ -4040,6 +4386,7 @@ window.confirmGPSLocation = () => {
     window.mapOriginType = 'gps';
     syncLocationTriggerIcon();
     if (window.refreshCurrentOriginMarker) window.refreshCurrentOriginMarker();
+    refreshDistanceDependentViews();
     closeLocModals();
 };
 
@@ -4204,7 +4551,7 @@ window.switchFavTab = (tab) => {
     else if (tab === 'like') targetIds = Array.from(localLikes);
     else if (tab === 'dislike') targetIds = Array.from(localDislikes);
 
-    const filteredStores = localStores.filter(s => targetIds.includes(s.id));
+    const filteredStores = localStores.filter(s => targetIds.includes(s.id) && !isStorePermanentlyClosed(s));
     const container = document.getElementById('fav-list-container');
 
     // 渲染筛选后的店铺列表
@@ -4222,8 +4569,11 @@ window.switchFavTab = (tab) => {
             else if (isLiked) statusClass = "status-liked";
             else if (isFav) statusClass = "status-fav";
 
-            let rawImgs = (s.images && s.images.length) ? s.images : ["https://placehold.co/200?text=No+Image"];
-            const imagesHtml = rawImgs.map(src =>
+            const avgRating = getStoreAverageRating(s);
+            const reviewCount = getStoreReviewCount(s);
+            const rawImgs = getStorePreviewImages(s);
+            const displayImgs = rawImgs.length ? rawImgs : ["https://placehold.co/200?text=No+Image"];
+            const imagesHtml = displayImgs.map(src =>
                 `<img src="${src}" class="store-img-item" loading="lazy">`
             ).join('');
 
@@ -4232,7 +4582,7 @@ window.switchFavTab = (tab) => {
             <div class="card-header-row">
                 <div class="info-col">
                     <div class="store-name-row">
-                        <h3 class="store-name">${s.name}</h3>
+                        <h3 class="store-name">${renderStoreNameWithStatus(s)}</h3>
                         <div onclick="toggleFav('${s.id}'); event.stopPropagation();">
                             <img src="${isFav ? 'images/bookmark-f.svg' : 'images/bookmark.svg'}"
                                  class="bookmark-icon-btn"
@@ -4240,11 +4590,11 @@ window.switchFavTab = (tab) => {
                         </div>
                     </div>
                     <div class="store-meta">
-                         ${s.rating} <span class="rating-star" style="display:inline-flex;align-items:center;"><img src="images/pingfen.svg" style="width:12px;"></span>
-                         <span style="color:#b2bec3">(3,000+)</span>
+                         ${avgRating.toFixed(1)} <span class="rating-star" style="display:inline-flex;align-items:center;"><img src="images/pingfen.svg" style="width:12px;"></span>
+                         <span style="color:#b2bec3">(${reviewCount})</span>
                          <span style="margin:0 4px">•</span> 
                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-person-walking" viewBox="0 0 16 16"><path d="M9.5 1.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0M6.44 3.752A.75.75 0 0 1 7 3.5h1.445c.742 0 1.32.643 1.243 1.38l-.43 4.083a1.8 1.8 0 0 1-.088.395l-.318.906.213.242a.8.8 0 0 1 .114.175l2 4.25a.75.75 0 1 1-1.357.638l-1.956-4.154-1.68-1.921A.75.75 0 0 1 6 8.96l.138-2.613-.435.489-.464 2.786a.75.75 0 1 1-1.48-.246l.5-3a.75.75 0 0 1 .18-.375l2-2.25Z"/><path d="M6.25 11.745v-1.418l1.204 1.375.261.524a.8.8 0 0 1-.12.231l-2.5 3.25a.75.75 0 1 1-1.19-.914zm4.22-4.215-.494-.494.205-1.843.006-.067 1.124 1.124h1.44a.75.75 0 0 1 0 1.5H11a.75.75 0 0 1-.531-.22Z"/></svg>
-                         ${s.time} min ${s.distance ? '<span style="color:#b2bec3; font-size:11px; margin-left:4px;">(' + s.distance + 'm)</span>' : ''}
+                         ${formatStoreDistanceText(s)}
                     </div>
                 </div>
                 
@@ -4509,6 +4859,7 @@ window.doRandomPick = async () => {
 
     // 根据筛选条件过滤店铺
     const pool = localStores.filter(s => {
+        if (isStorePermanentlyClosed(s)) return false;
         const isFav = myAndFriendsFav.has(s.id);
         const isLike = myAndFriendsLike.has(s.id);
         const isDislike = myAndFriendsDislike.has(s.id);
@@ -4526,7 +4877,7 @@ window.doRandomPick = async () => {
         if (hasMinPrice && (!hasBudget || budgetRaw < minPrice)) return false;
         if (hasMaxPrice && (!hasBudget || budgetRaw > maxPrice)) return false;
 
-        const distRaw = Number(s.distance) || (Number.parseInt(s.time) * 80) || NaN;
+        const distRaw = Number(getStoreLinearDistanceMeters(s));
         const hasStoreDist = Number.isFinite(distRaw) && distRaw > 0;
         if (hasDistance && (!hasStoreDist || distRaw > maxDistance)) return false;
 
@@ -4580,8 +4931,11 @@ function renderRandomResult(s) {
     else if (isFav) statusClass = "status-fav";
 
     const cardIndex = Math.max(0, localStores.findIndex(x => x.id === s.id));
-    const rawImgs = (s.images && s.images.length) ? s.images : ["https://placehold.co/200?text=No+Image"];
-    const imagesHtml = rawImgs.map(src =>
+    const avgRating = getStoreAverageRating(s);
+    const reviewCount = getStoreReviewCount(s);
+    const rawImgs = getStorePreviewImages(s);
+    const displayImgs = rawImgs.length ? rawImgs : ["https://placehold.co/200?text=No+Image"];
+    const imagesHtml = displayImgs.map(src =>
         `<img src="${src}" class="store-img-item" loading="lazy">`
     ).join('');
 
@@ -4590,7 +4944,7 @@ function renderRandomResult(s) {
         <div class="card-header-row">
             <div class="info-col">
                 <div class="store-name-row">
-                    <h3 class="store-name">${s.name}</h3>
+                    <h3 class="store-name">${renderStoreNameWithStatus(s)}</h3>
                     <div onclick="toggleFav('${s.id}'); event.stopPropagation();">
                         <img src="${isFav ? 'images/bookmark-f.svg' : 'images/bookmark.svg'}"
                              class="bookmark-icon-btn"
@@ -4598,11 +4952,11 @@ function renderRandomResult(s) {
                     </div>
                 </div>
                 <div class="store-meta">
-                     ${s.rating} <span class="rating-star" style="display:inline-flex;align-items:center;"><img src="images/pingfen.svg" style="width:12px;"></span>
-                     <span>(3,000+)</span>
+                     ${avgRating.toFixed(1)} <span class="rating-star" style="display:inline-flex;align-items:center;"><img src="images/pingfen.svg" style="width:12px;"></span>
+                     <span>(${reviewCount})</span>
                      <span style="margin:0 4px">•</span> 
                     <img src="images/walk.svg" style="width:10px; margin-right:3px;">
-                     ${s.time}分钟
+                     ${formatStoreDistanceText(s)}
                 </div>
             </div>
             ${renderStoreActionGroup(s.id, isLiked, isDisliked, cardIndex)}
@@ -5175,7 +5529,7 @@ window.closeRecordDayView = () => {
 function renderSimpleRatingIcons(score) {
     const n = Math.max(0, Math.min(5, Math.round(Number(score) || 0)));
     return Array.from({ length: 5 }).map((_, i) =>
-        `<img src="images/mogu.svg" style="width:14px; opacity:${i < n ? 1 : 0.26};">`
+        `<img src="images/mogu.svg" style="width:13px; opacity:${i < n ? 1 : 0.26};">`
     ).join('');
 }
 
@@ -5309,7 +5663,7 @@ window.switchProfileFavTab = (tab) => {
     else if (tab === 'like') targetIds = Array.from(likeSet);
     else if (tab === 'dislike') targetIds = Array.from(dislikeSet);
 
-    const filteredStores = localStores.filter(s => targetIds.includes(s.id));
+    const filteredStores = localStores.filter(s => targetIds.includes(s.id) && !isStorePermanentlyClosed(s));
     const container = document.getElementById('profile-fav-list');
 
     if (filteredStores.length === 0) {
@@ -5325,8 +5679,11 @@ window.switchProfileFavTab = (tab) => {
             else if (isLiked) statusClass = 'status-liked';
             else if (isFav) statusClass = 'status-fav';
 
-            let rawImgs = (s.images && s.images.length) ? s.images : ['https://placehold.co/200?text=No+Image'];
-            const imagesHtml = rawImgs.map(src =>
+            const avgRating = getStoreAverageRating(s);
+            const reviewCount = getStoreReviewCount(s);
+            const rawImgs = getStorePreviewImages(s);
+            const displayImgs = rawImgs.length ? rawImgs : ['https://placehold.co/200?text=No+Image'];
+            const imagesHtml = displayImgs.map(src =>
                 `<img src="${src}" class="store-img-item" loading="lazy">`
             ).join('');
 
@@ -5336,9 +5693,9 @@ window.switchProfileFavTab = (tab) => {
                 <div class="card-header-row">
                     <div class="info-col">
                         <div class="store-name-row">
-                            <h3 class="store-name">${s.name}</h3>
+                            <h3 class="store-name">${renderStoreNameWithStatus(s)}</h3>
                         </div>
-                        <div class="store-meta">${s.rating} · ${s.time} min</div>
+                        <div class="store-meta">${avgRating.toFixed(1)} · ${formatStoreDistanceText(s)}</div>
                     </div>
                 </div>
                 <div class="store-img-scroll">${imagesHtml}</div>
@@ -5350,7 +5707,7 @@ window.switchProfileFavTab = (tab) => {
             <div class="card-header-row">
                 <div class="info-col">
                     <div class="store-name-row">
-                        <h3 class="store-name">${s.name}</h3>
+                        <h3 class="store-name">${renderStoreNameWithStatus(s)}</h3>
                         <div onclick="toggleFav('${s.id}'); event.stopPropagation();">
                             <img src="${isFav ? 'images/bookmark-f.svg' : 'images/bookmark.svg'}"
                                  class="bookmark-icon-btn"
@@ -5358,14 +5715,14 @@ window.switchProfileFavTab = (tab) => {
                         </div>
                     </div>
                     <div class="store-meta">
-                         ${s.rating} <span class="rating-star" style="display:inline-flex;align-items:center;"><img src="images/pingfen.svg" style="width:12px;"></span>
-                         <span style="color:#b2bec3">(3,000+)</span>
+                         ${avgRating.toFixed(1)} <span class="rating-star" style="display:inline-flex;align-items:center;"><img src="images/pingfen.svg" style="width:12px;"></span>
+                         <span style="color:#b2bec3">(${reviewCount})</span>
                          <span style="margin:0 4px">•</span> 
                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
   <path d="M9.5 1.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0M6.44 3.752A.75.75 0 0 1 7 3.5h1.445c.742 0 1.32.643 1.243 1.38l-.43 4.083a1.8 1.8 0 0 1-.088.395l-.318.906.213.242a.8.8 0 0 1 .114.175l2 4.25a.75.75 0 1 1-1.357.638l-1.956-4.154-1.68-1.921A.75.75 0 0 1 6 8.96l.138-2.613-.435.489-.464 2.786a.75.75 0 1 1-1.48-.246l.5-3a.75.75 0 0 1 .18-.375l2-2.25Z"/>
   <path d="M6.25 11.745v-1.418l1.204 1.375.261.524a.8.8 0 0 1-.12.231l-2.5 3.25a.75.75 0 1 1-1.19-.914zm4.22-4.215-.494-.494.205-1.843.006-.067 1.124 1.124h1.44a.75.75 0 0 1 0 1.5H11a.75.75 0 0 1-.531-.22Z"/>
 </svg>
-                         ${s.time} min
+                         ${formatStoreDistanceText(s)}
                     </div>
                 </div>
                 
@@ -5847,28 +6204,8 @@ window.backFromFriendProfile = () => {
 
 // === 新增：处理详情页点击"查看路线" ===
 window.doNavFromDetail = () => {
-    // 1. 获取当前详情页正在展示的店铺 ID
     if (!currentDetailId) return;
-
-    // 2. 在本地数据里找到这个店铺
-    const s = localStores.find(x => x.id === currentDetailId);
-    if (!s) return alert("未找到店铺位置信息");
-
-    // 3. 告诉 map.js 我们要去哪里 (调用第一步写的函数)
-    if (window.setMapTarget) {
-        window.setMapTarget(s.lat, s.lng);
+    if (typeof window.openStoreInGoogleMapsById === 'function') {
+        window.openStoreInGoogleMapsById(currentDetailId);
     }
-
-    // 4. 关闭详情页弹窗
-    window.closeFullDetail();
-
-    // 5. 切换到地图页面
-    switchView('map');
-
-    // 6. 稍微等一下（给地图一点加载时间），然后触发画线
-    setTimeout(() => {
-        if (window.showRouteOnMap) {
-            window.showRouteOnMap();
-        }
-    }, 300);
 };

@@ -76,29 +76,13 @@ function setSelectedStorePin(store) {
     marker = new google.maps.Marker({
         map,
         position: dest,
+        optimized: false,
         icon: {
             url: iconUrl,
-            scaledSize: new google.maps.Size(Math.round(finalW * 0.58), Math.round(finalH * 0.58)),
-            anchor: new google.maps.Point(Math.round(finalW * 0.58 / 2), Math.round(finalH * 0.58))
+            scaledSize: new google.maps.Size(finalW, finalH),
+            anchor: new google.maps.Point(Math.round(finalW / 2), finalH)
         }
     });
-    const startedAt = performance.now();
-    const duration = 220;
-    const animate = (now) => {
-        if (!marker) return;
-        const p = Math.min(1, (now - startedAt) / duration);
-        const eased = 1 - Math.pow(1 - p, 3);
-        const scale = 0.58 + (1 - 0.58) * eased;
-        const w = Math.round(finalW * scale);
-        const h = Math.round(finalH * scale);
-        marker.setIcon({
-            url: iconUrl,
-            scaledSize: new google.maps.Size(w, h),
-            anchor: new google.maps.Point(Math.round(w / 2), h)
-        });
-        if (p < 1) requestAnimationFrame(animate);
-    };
-    requestAnimationFrame(animate);
     window.renderMarkers();
 }
 
@@ -146,6 +130,79 @@ function getCurrentOriginState() {
     return { origin, type };
 }
 
+function buildGoogleMapsWebDirectionsUrl(destination, origin = null) {
+    const dLat = Number(destination?.lat);
+    const dLng = Number(destination?.lng);
+    if (!Number.isFinite(dLat) || !Number.isFinite(dLng)) return '';
+    const params = new URLSearchParams({
+        api: '1',
+        destination: `${dLat},${dLng}`,
+        travelmode: 'walking'
+    });
+    const oLat = Number(origin?.lat);
+    const oLng = Number(origin?.lng);
+    if (Number.isFinite(oLat) && Number.isFinite(oLng)) {
+        params.set('origin', `${oLat},${oLng}`);
+    }
+    return `https://www.google.com/maps/dir/?${params.toString()}`;
+}
+
+function openGoogleMapsDirections(destination, origin = null) {
+    const dLat = Number(destination?.lat);
+    const dLng = Number(destination?.lng);
+    if (!Number.isFinite(dLat) || !Number.isFinite(dLng)) {
+        alert("未找到店铺位置信息");
+        return;
+    }
+    const webUrl = buildGoogleMapsWebDirectionsUrl({ lat: dLat, lng: dLng }, origin);
+    if (!webUrl) {
+        alert("未找到店铺位置信息");
+        return;
+    }
+
+    const ua = String(navigator.userAgent || '').toLowerCase();
+    const isMobile = /iphone|ipad|ipod|android|mobile/.test(ua);
+    if (!isMobile) {
+        window.open(webUrl, '_blank', 'noopener');
+        return;
+    }
+
+    const originPart = Number.isFinite(Number(origin?.lat)) && Number.isFinite(Number(origin?.lng))
+        ? `&saddr=${encodeURIComponent(`${Number(origin.lat)},${Number(origin.lng)}`)}`
+        : '';
+
+    if (/iphone|ipad|ipod/.test(ua)) {
+        const appUrl = `comgooglemaps://?daddr=${encodeURIComponent(`${dLat},${dLng}`)}${originPart}&directionsmode=walking`;
+        window.location.href = appUrl;
+        setTimeout(() => {
+            window.open(webUrl, '_blank', 'noopener');
+        }, 650);
+        return;
+    }
+
+    if (/android/.test(ua)) {
+        const intentUrl = `intent://maps.google.com/maps?daddr=${encodeURIComponent(`${dLat},${dLng}`)}${originPart}&directionsmode=walking#Intent;scheme=https;package=com.google.android.apps.maps;end`;
+        window.location.href = intentUrl;
+        setTimeout(() => {
+            window.open(webUrl, '_blank', 'noopener');
+        }, 650);
+        return;
+    }
+
+    window.open(webUrl, '_blank', 'noopener');
+}
+
+function formatMapDistanceText(storeLike) {
+    if (typeof window.formatStoreDistanceText === 'function') {
+        return window.formatStoreDistanceText(storeLike);
+    }
+    const fallback = Number(storeLike?.distance);
+    if (!Number.isFinite(fallback) || fallback < 0) return '--分钟';
+    const WALK_METERS_PER_MIN = 80;
+    const mins = Math.max(1, Math.round(fallback / WALK_METERS_PER_MIN));
+    return `${mins}分钟`;
+}
+
 function renderCurrentOriginMarker() {
     if (!map) return;
     if (currentOriginMarker) currentOriginMarker.setMap(null);
@@ -157,6 +214,7 @@ function renderCurrentOriginMarker() {
     currentOriginMarker = new google.maps.Marker({
         map,
         position: origin,
+        optimized: false,
         zIndex: 1,
         clickable: false,
         draggable: false,
@@ -590,11 +648,12 @@ function renderMapReviewsAndAlbum(store) {
         `;
     }
 
-    const allPhotos = [
-        ...(Array.isArray(store?.images) ? store.images : []),
-        ...revs.flatMap(r => Array.isArray(r?.images) ? r.images : [])
-    ].filter(Boolean);
-    const uniqPhotos = Array.from(new Set(allPhotos));
+    const uniqPhotos = (typeof window.getStorePreviewImages === 'function')
+        ? window.getStorePreviewImages(store, 300)
+        : Array.from(new Set([
+            ...(Array.isArray(store?.images) ? store.images : []),
+            ...revs.flatMap(r => Array.isArray(r?.images) ? r.images : [])
+        ].filter(Boolean)));
     const albumGrid = document.getElementById('mp-album-grid');
     if (albumGrid) {
         const photoItems = uniqPhotos.length
@@ -614,7 +673,9 @@ function renderMapReviewsAndAlbum(store) {
     if (revCountEl) revCountEl.innerText = String(revs.length);
     if (albumCountEl) albumCountEl.innerText = String(uniqPhotos.length);
 
-    const avgRating = getMapStoreAverageRating(store);
+    const avgRating = (typeof window.getStoreAverageRating === 'function')
+        ? window.getStoreAverageRating(store)
+        : getMapStoreAverageRating(store);
     const avgEl = document.querySelector('#sheet-tab-reviews .review-avg');
     if (avgEl) avgEl.innerText = avgRating > 0 ? avgRating.toFixed(1) : '0.0';
     const avgStarsEl = document.querySelector('#sheet-tab-reviews .review-stars');
@@ -856,12 +917,18 @@ window.renderMapCardFromDB = (store, opts = {}) => {
 
     // 1. 填充基本信息
     const nameEl = document.getElementById('mp-name');
-    if (nameEl) nameEl.innerText = store.name;
+    if (nameEl) {
+        nameEl.innerHTML = (typeof window.renderStoreNameWithStatus === 'function')
+            ? window.renderStoreNameWithStatus(store)
+            : (store.name || '店铺');
+    }
 
     const subNameEl = document.getElementById('mp-sub-name');
     if (subNameEl) subNameEl.innerText = store.name;
 
-    const avgRating = getMapStoreAverageRating(store);
+    const avgRating = (typeof window.getStoreAverageRating === 'function')
+        ? window.getStoreAverageRating(store)
+        : getMapStoreAverageRating(store);
     const ratingEl = document.getElementById('mp-rating-val');
     if (ratingEl) ratingEl.innerText = avgRating > 0 ? avgRating.toFixed(1) : "0.0";
     const ratingStarsEl = document.getElementById('mp-rating-stars');
@@ -872,15 +939,21 @@ window.renderMapCardFromDB = (store, opts = {}) => {
 
     const timeEl = document.getElementById('mp-fake-time');
     if (timeEl) {
-        timeEl.innerHTML = (store.time || "?") + " 分钟" +
-            (store.distance ? ` <span style="font-size:12px;color:#999">• ${store.distance}m</span>` : "");
+        timeEl.innerText = formatMapDistanceText(store);
     }
 
     const addressEl = document.getElementById('mp-address');
     if (addressEl) addressEl.innerText = store.address || store.formattedAddress || '地址未收录';
 
     const openTimeEl = document.getElementById('mp-open-time');
-    if (openTimeEl) openTimeEl.innerText = store.openNow ? '营业中' : '未知';
+    if (openTimeEl) {
+        const isClosed = typeof window.isStorePermanentlyClosed === 'function' && window.isStorePermanentlyClosed(store);
+        const text = (typeof window.getStoreOpenTimeText === 'function')
+            ? window.getStoreOpenTimeText(store)
+            : (isClosed ? '永久歇业' : (store.openNow ? '营业中' : '未知'));
+        openTimeEl.innerText = text;
+        openTimeEl.classList.toggle('permanent-closed', !!isClosed);
+    }
 
     // 我的评分：有评分显示分数；没有评分显示“暂无评分”
     const myScoreEl = document.getElementById('mp-my-score');
@@ -910,8 +983,11 @@ window.renderMapCardFromDB = (store, opts = {}) => {
     const photoContainer = document.getElementById('mp-photos');
     if (photoContainer) {
         photoContainer.innerHTML = "";
-        if (store.images && store.images.length) {
-            store.images.forEach(src => {
+        const previewImages = (typeof window.getStorePreviewImages === 'function')
+            ? window.getStorePreviewImages(store, 80)
+            : (Array.isArray(store?.images) ? store.images : []);
+        if (previewImages.length) {
+            previewImages.forEach(src => {
                 const img = document.createElement('img');
                 img.src = src;
                 img.className = 'mp-photo-item';
@@ -960,7 +1036,7 @@ window.renderMapCardFromDB = (store, opts = {}) => {
     // 6. 重置按钮状态
     const btnRoute = document.getElementById('btn-check-route');
     if (btnRoute) {
-        btnRoute.innerHTML = "查看路线";
+        btnRoute.innerHTML = "在谷歌地图查看";
         btnRoute.disabled = false;
     }
 
@@ -976,6 +1052,102 @@ window.renderMapCardFromDB = (store, opts = {}) => {
    4. Google Places 搜索
    使用Google Places API搜索店铺
    ========================================= */
+
+function normalizePlaceDisplayName(nameLike) {
+    if (!nameLike) return '';
+    if (typeof nameLike === 'string') return nameLike.trim();
+    if (typeof nameLike?.text === 'string') return nameLike.text.trim();
+    return '';
+}
+
+function withPreferredPlaceName(basePlace = {}, localName = '', englishName = '') {
+    const next = { ...basePlace };
+    const preferredName = String(localName || englishName || normalizePlaceDisplayName(basePlace?.displayName) || '').trim();
+    next.preferredName = preferredName;
+    next.localName = String(localName || '').trim();
+    next.englishName = String(englishName || '').trim();
+    next.displayName = {
+        text: preferredName,
+        languageCode: next.localName ? 'ja' : (next.englishName ? 'en' : (basePlace?.displayName?.languageCode || ''))
+    };
+    return next;
+}
+
+async function runPlacesSearchRequest(body, fieldMask, languageCode = 'ja') {
+    const payload = {
+        ...body,
+        languageCode
+    };
+    const response = await fetch(`https://places.googleapis.com/v1/places:searchText`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': MAPS_API_KEY,
+            'X-Goog-FieldMask': fieldMask
+        },
+        body: JSON.stringify(payload)
+    });
+    return (await response.json()).places || [];
+}
+
+function mergeLocalizedPlaceResults(localizedPlaces = [], englishPlaces = []) {
+    const localMap = new Map(localizedPlaces.map((p) => [p.id || '', p]));
+    const englishMap = new Map(englishPlaces.map((p) => [p.id || '', p]));
+    const ids = new Set([...localMap.keys(), ...englishMap.keys()].filter(Boolean));
+
+    return Array.from(ids).map((id) => {
+        const localPlace = localMap.get(id);
+        const englishPlace = englishMap.get(id);
+        const base = localPlace || englishPlace || {};
+        const localName = normalizePlaceDisplayName(localPlace?.displayName);
+        const englishName = normalizePlaceDisplayName(englishPlace?.displayName);
+        return withPreferredPlaceName(base, localName, englishName);
+    });
+}
+
+window.fetchPreferredPlaceNameById = async (placeId) => {
+    const safeId = String(placeId || '').trim();
+    if (!safeId) throw new Error('缺少 placeId');
+    const encodedId = encodeURIComponent(safeId);
+
+    let localName = '';
+    let englishName = '';
+    try {
+        const rJa = await fetch(`https://places.googleapis.com/v1/places/${encodedId}?languageCode=ja`, {
+            headers: {
+                'X-Goog-Api-Key': MAPS_API_KEY,
+                'X-Goog-FieldMask': 'displayName',
+                'Content-Type': 'application/json'
+            }
+        });
+        if (rJa.ok) {
+            const ja = await rJa.json();
+            localName = normalizePlaceDisplayName(ja?.displayName);
+        }
+    } catch (err) {
+        console.warn('获取日文店名失败:', err);
+    }
+    try {
+        const rEn = await fetch(`https://places.googleapis.com/v1/places/${encodedId}?languageCode=en`, {
+            headers: {
+                'X-Goog-Api-Key': MAPS_API_KEY,
+                'X-Goog-FieldMask': 'displayName',
+                'Content-Type': 'application/json'
+            }
+        });
+        if (rEn.ok) {
+            const en = await rEn.json();
+            englishName = normalizePlaceDisplayName(en?.displayName);
+        }
+    } catch (err) {
+        console.warn('获取英文店名失败:', err);
+    }
+    return {
+        preferredName: localName || englishName || '',
+        localName,
+        englishName
+    };
+};
 
 /**
  * 搜索店铺
@@ -997,16 +1169,11 @@ window.placesSearchText = async (q, photo = false) => {
             body.includedType = cuisineIntent.type;
             body.strictTypeFiltering = true;
         }
-        const r = await fetch(`https://places.googleapis.com/v1/places:searchText`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': MAPS_API_KEY,
-                'X-Goog-FieldMask': f
-            },
-            body: JSON.stringify(body)
-        });
-        return (await r.json()).places || [];
+        const [localPlaces, englishPlaces] = await Promise.all([
+            runPlacesSearchRequest(body, f, 'ja'),
+            runPlacesSearchRequest(body, f, 'en')
+        ]);
+        return mergeLocalizedPlaceResults(localPlaces, englishPlaces);
     } catch (e) {
         console.error(e);
         return [];
@@ -1037,16 +1204,11 @@ window.placesSearchTextByBounds = async (q, bounds, photo = false) => {
             body.includedType = cuisineIntent.type;
             body.strictTypeFiltering = true;
         }
-        const r = await fetch(`https://places.googleapis.com/v1/places:searchText`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': MAPS_API_KEY,
-                'X-Goog-FieldMask': f
-            },
-            body: JSON.stringify(body)
-        });
-        return (await r.json()).places || [];
+        const [localPlaces, englishPlaces] = await Promise.all([
+            runPlacesSearchRequest(body, f, 'ja'),
+            runPlacesSearchRequest(body, f, 'en')
+        ]);
+        return mergeLocalizedPlaceResults(localPlaces, englishPlaces);
     } catch (e) {
         console.error(e);
         return [];
@@ -1092,8 +1254,11 @@ window.performMapSearch = async () => {
     stores.slice(0, 8).forEach(s => {
         const d = document.createElement('div');
         d.className = `result-item ${activeStoreId && s.id === activeStoreId ? 'active' : ''}`;
+        const nameHtml = (typeof window.renderStoreNameWithStatus === 'function')
+            ? window.renderStoreNameWithStatus(s)
+            : (s.name || "未命名店铺");
         d.innerHTML = `
-            <div class="result-item-name"><b>${s.name || "未命名店铺"}</b></div>
+            <div class="result-item-name"><b>${nameHtml}</b></div>
             <small>${s.address || s.formattedAddress || "地址未收录"}</small>
         `;
 
@@ -1125,7 +1290,8 @@ window.performMapSearch = async () => {
 function renderMapCardData(p) {
     // 先检查数据库中是否已有这个店铺
     const stores = window.localStores || [];
-    const dbStore = stores.find(s => s.name === p.displayName.text);
+    const placeName = String(p?.preferredName || p?.displayName?.text || "").trim();
+    const dbStore = stores.find(s => s.name === placeName);
     if (dbStore && dbStore.lat) {
         // 数据库中有，使用数据库数据渲染
         window.renderMapCardFromDB(dbStore, { mode: 'half', fromMap: true });
@@ -1134,13 +1300,16 @@ function renderMapCardData(p) {
 
     // 数据库中没有，显示Google搜索数据
     mountMapSheetToAppRoot();
-    document.getElementById('mp-name').innerText = p.displayName.text;
+    document.getElementById('mp-name').innerText = placeName;
     document.getElementById('mp-rating-val').innerText = "3.8";  // 假数据
-    document.getElementById('mp-fake-time').innerText = "5 分钟";  // 假数据
+    document.getElementById('mp-fake-time').innerText = formatMapDistanceText({
+        lat: p?.location?.latitude,
+        lng: p?.location?.longitude
+    });
     document.getElementById('mp-photos').innerHTML = "<div style='padding:20px; color:#999; text-align:center;'>暂无收录图片</div>";
 
     const btnRoute = document.getElementById('btn-check-route');
-    btnRoute.innerHTML = "<span>查看路线</span>";
+    btnRoute.innerHTML = "<span>在谷歌地图查看</span>";
     btnRoute.disabled = false;
 
     // 标记为"未收录"
@@ -1163,97 +1332,12 @@ function renderMapCardData(p) {
 // map.js
 
 window.showRouteOnMap = async () => {
-    // 1. 检查有没有目的地
     if (!currentMapDest) {
-        alert("请先选择一个店铺作为目的地！");
+        alert("请先选择一个店铺");
         return;
     }
-
-    const btn = document.getElementById('btn-check-route');
-    if (btn) btn.innerHTML = `<i data-lucide="loader" width="12" class="spin"></i> 计算中...`;
-
-    try {
-        const { origin } = getCurrentOriginState();
-        // === 修复重点：构建 Google 认识的坐标格式 ===
-        const requestBody = {
-            origin: {
-                location: {
-                    latLng: {
-                        latitude: origin.lat,   // 把 lat 改名为 latitude
-                        longitude: origin.lng   // 把 lng 改名为 longitude
-                    }
-                }
-            },
-            destination: {
-                location: {
-                    latLng: {
-                        latitude: currentMapDest.lat, // 同上，改名
-                        longitude: currentMapDest.lng
-                    }
-                }
-            },
-            travelMode: "WALK"
-        };
-        // ==========================================
-
-        const resp = await fetch(`https://routes.googleapis.com/directions/v2:computeRoutes`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Goog-Api-Key': MAPS_API_KEY,
-                'X-Goog-FieldMask': 'routes.duration,routes.polyline.encodedPolyline'
-            },
-            body: JSON.stringify(requestBody)
-        });
-
-        const data = await resp.json();
-
-        // 检查 API 是否返回了错误
-        if (data.error) {
-            throw new Error(`API错误: ${data.error.message}`);
-        }
-
-        if (data.routes && data.routes[0]) {
-            // 更新时间显示
-            const mins = Math.round(parseInt(data.routes[0].duration) / 60);
-            const timeEl = document.getElementById('mp-fake-time');
-            if (timeEl) timeEl.innerText = `${mins} 分钟`;
-
-            // 画线
-            if (!google.maps.geometry) {
-                throw new Error("缺少Geometry库，请在HTML script标签中添加 &libraries=geometry");
-            }
-
-            const path = google.maps.geometry.encoding.decodePath(data.routes[0].polyline.encodedPolyline);
-
-            // 清除旧线
-            if (routePolyline) routePolyline.setMap(null);
-
-            // 画新线
-            routePolyline = new google.maps.Polyline({
-                map,
-                path,
-                strokeColor: "#6c5ce7",
-                strokeWeight: 6,
-                strokeOpacity: 0.8
-            });
-
-            // 调整视野
-            const b = new google.maps.LatLngBounds();
-            path.forEach(p => b.extend(p));
-            map.fitBounds(b);
-
-            if (btn) btn.innerHTML = `<span>已显示</span>`;
-            // 看路线时自动切到“露一点点”
-            setMapSheetMode('peek');
-        } else {
-            throw new Error("Google 没算出来路线 (No routes found)");
-        }
-    } catch (err) {
-        console.error("路线规划失败:", err);
-        alert("路线失败: " + err.message);
-        if (btn) btn.innerHTML = "重试";
-    }
+    const { origin } = getCurrentOriginState();
+    openGoogleMapsDirections(currentMapDest, origin);
 };
 
 /* =========================================
@@ -1553,6 +1637,34 @@ window.initGoogleMap = () => {
     if (window.refreshAddMapPreview) window.refreshAddMapPreview();
     // 确保拖拽功能初始化
     setTimeout(initSheetDrag, 100);
+};
+
+window.refreshOpenMapCardDistance = () => {
+    const card = document.getElementById('map-detail-card');
+    if (!card || !card.classList.contains('active')) return;
+    const storeId = card.dataset?.storeId || '';
+    const store = (window.localStores || []).find(s => s.id === storeId);
+    if (!store) return;
+    const timeEl = document.getElementById('mp-fake-time');
+    if (timeEl) timeEl.innerText = formatMapDistanceText(store);
+};
+
+window.openStoreInGoogleMapsById = (storeId) => {
+    const sid = String(storeId || '').trim();
+    if (!sid) return;
+    const store = (window.localStores || []).find(s => s.id === sid);
+    if (!store) {
+        alert("未找到店铺位置信息");
+        return;
+    }
+    const dest = { lat: Number(store.lat), lng: Number(store.lng) };
+    if (!Number.isFinite(dest.lat) || !Number.isFinite(dest.lng)) {
+        alert("未找到店铺位置信息");
+        return;
+    }
+    currentMapDest = dest;
+    const { origin } = getCurrentOriginState();
+    openGoogleMapsDirections(dest, origin);
 };
 
 // 允许外部设置当前地图的目标点
