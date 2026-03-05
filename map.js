@@ -130,33 +130,38 @@ function getCurrentOriginState() {
     return { origin, type };
 }
 
-function buildGoogleMapsWebDirectionsUrl(destination, origin = null) {
-    const dLat = Number(destination?.lat);
-    const dLng = Number(destination?.lng);
-    if (!Number.isFinite(dLat) || !Number.isFinite(dLng)) return '';
+function buildGoogleMapsWebPlaceUrl(placeLike = {}) {
+    const placeId = String(placeLike?.googlePlaceId || placeLike?.placeId || '').trim();
+    const name = String(placeLike?.name || '').trim();
+    const address = String(placeLike?.address || placeLike?.formattedAddress || '').trim();
+    const lat = Number(placeLike?.lat);
+    const lng = Number(placeLike?.lng);
+
+    const queryText = name || address || (Number.isFinite(lat) && Number.isFinite(lng) ? `${lat},${lng}` : '');
+    if (!queryText) return '';
+
     const params = new URLSearchParams({
         api: '1',
-        destination: `${dLat},${dLng}`,
-        travelmode: 'walking'
+        query: queryText
     });
-    const oLat = Number(origin?.lat);
-    const oLng = Number(origin?.lng);
-    if (Number.isFinite(oLat) && Number.isFinite(oLng)) {
-        params.set('origin', `${oLat},${oLng}`);
-    }
-    return `https://www.google.com/maps/dir/?${params.toString()}`;
+    if (placeId) params.set('query_place_id', placeId);
+    return `https://www.google.com/maps/search/?${params.toString()}`;
 }
 
-function openGoogleMapsDirections(destination, origin = null) {
-    const dLat = Number(destination?.lat);
-    const dLng = Number(destination?.lng);
-    if (!Number.isFinite(dLat) || !Number.isFinite(dLng)) {
+function openGoogleMapsPlace(placeLike = {}) {
+    const webUrl = buildGoogleMapsWebPlaceUrl(placeLike);
+    if (!webUrl) {
         alert("未找到店铺位置信息");
         return;
     }
-    const webUrl = buildGoogleMapsWebDirectionsUrl({ lat: dLat, lng: dLng }, origin);
-    if (!webUrl) {
-        alert("未找到店铺位置信息");
+
+    const name = String(placeLike?.name || '').trim();
+    const address = String(placeLike?.address || placeLike?.formattedAddress || '').trim();
+    const lat = Number(placeLike?.lat);
+    const lng = Number(placeLike?.lng);
+    const queryText = name || address || (Number.isFinite(lat) && Number.isFinite(lng) ? `${lat},${lng}` : '');
+    if (!queryText) {
+        window.open(webUrl, '_blank', 'noopener');
         return;
     }
 
@@ -167,12 +172,8 @@ function openGoogleMapsDirections(destination, origin = null) {
         return;
     }
 
-    const originPart = Number.isFinite(Number(origin?.lat)) && Number.isFinite(Number(origin?.lng))
-        ? `&saddr=${encodeURIComponent(`${Number(origin.lat)},${Number(origin.lng)}`)}`
-        : '';
-
     if (/iphone|ipad|ipod/.test(ua)) {
-        const appUrl = `comgooglemaps://?daddr=${encodeURIComponent(`${dLat},${dLng}`)}${originPart}&directionsmode=walking`;
+        const appUrl = `comgooglemaps://?q=${encodeURIComponent(queryText)}`;
         window.location.href = appUrl;
         setTimeout(() => {
             window.open(webUrl, '_blank', 'noopener');
@@ -181,7 +182,7 @@ function openGoogleMapsDirections(destination, origin = null) {
     }
 
     if (/android/.test(ua)) {
-        const intentUrl = `intent://maps.google.com/maps?daddr=${encodeURIComponent(`${dLat},${dLng}`)}${originPart}&directionsmode=walking#Intent;scheme=https;package=com.google.android.apps.maps;end`;
+        const intentUrl = `intent://maps.google.com/maps?q=${encodeURIComponent(queryText)}#Intent;scheme=https;package=com.google.android.apps.maps;end`;
         window.location.href = intentUrl;
         setTimeout(() => {
             window.open(webUrl, '_blank', 'noopener');
@@ -1332,12 +1333,24 @@ function renderMapCardData(p) {
 // map.js
 
 window.showRouteOnMap = async () => {
+    const card = document.getElementById('map-detail-card');
+    const storeId = card?.dataset?.storeId || '';
+    const store = (window.localStores || []).find(s => s.id === storeId);
+    if (store) {
+        openGoogleMapsPlace(store);
+        return;
+    }
+
     if (!currentMapDest) {
         alert("请先选择一个店铺");
         return;
     }
-    const { origin } = getCurrentOriginState();
-    openGoogleMapsDirections(currentMapDest, origin);
+    const name = String(document.getElementById('mp-name')?.innerText || '').trim();
+    openGoogleMapsPlace({
+        name,
+        lat: Number(currentMapDest.lat),
+        lng: Number(currentMapDest.lng)
+    });
 };
 
 /* =========================================
@@ -1658,13 +1671,10 @@ window.openStoreInGoogleMapsById = (storeId) => {
         return;
     }
     const dest = { lat: Number(store.lat), lng: Number(store.lng) };
-    if (!Number.isFinite(dest.lat) || !Number.isFinite(dest.lng)) {
-        alert("未找到店铺位置信息");
-        return;
+    if (Number.isFinite(dest.lat) && Number.isFinite(dest.lng)) {
+        currentMapDest = dest;
     }
-    currentMapDest = dest;
-    const { origin } = getCurrentOriginState();
-    openGoogleMapsDirections(dest, origin);
+    openGoogleMapsPlace(store);
 };
 
 // 允许外部设置当前地图的目标点
