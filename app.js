@@ -33,6 +33,8 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
+const APP_BUILD_VERSION = "v2026.03.06-1";
+
 // 初始化 Firebase 服务
 const app = initializeApp(firebaseConfig);           // 初始化 Firebase 应用
 const auth = getAuth(app);                           // 获取认证服务
@@ -88,6 +90,12 @@ function getCurrentUserAvatarUrl() {
 }
 
 window.getCurrentUserAvatarUrl = getCurrentUserAvatarUrl;
+
+function renderBuildVersionTag() {
+    const tag = document.getElementById('build-version-tag');
+    if (!tag) return;
+    tag.innerText = APP_BUILD_VERSION;
+}
 
 function isGoogleAccount(user) {
     if (!user) return false;
@@ -4413,6 +4421,7 @@ document.addEventListener('click', (e) => {
 initAutoSuggestInputs();
 initHomeSearchInput();
 initScrollbarAutoFade();
+renderBuildVersionTag();
 resetAddComposerFlow();
 
 /* =========================================

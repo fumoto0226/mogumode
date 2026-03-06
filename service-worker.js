@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mogu-pwa-v2';
+const CACHE_NAME = 'mogu-pwa-v3';
 const CORE_ASSETS = [
     './',
     './index.html',
@@ -58,12 +58,32 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
+    // JS/CSS/worker 优先走网络，避免线上长期卡旧版本；离线时回退缓存
+    if (['style', 'script', 'worker'].includes(request.destination)) {
+        event.respondWith(
+            fetch(request)
+                .then((response) => {
+                    const cloned = response.clone();
+                    if (response.ok) {
+                        caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
+                    }
+                    return response;
+                })
+                .catch(async () => {
+                    const cached = await caches.match(request);
+                    if (cached) return cached;
+                    throw new Error('Network unavailable and no cached asset');
+                })
+        );
+        return;
+    }
+
     event.respondWith(
         caches.match(request).then((cached) => {
             if (cached) return cached;
             return fetch(request).then((response) => {
                 const cloned = response.clone();
-                if (response.ok && ['style', 'script', 'worker', 'image', 'font'].includes(request.destination)) {
+                if (response.ok && ['image', 'font'].includes(request.destination)) {
                     caches.open(CACHE_NAME).then((cache) => cache.put(request, cloned));
                 }
                 return response;
