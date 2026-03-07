@@ -1,0 +1,6 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]: Inspectable WebContents
+  - paragraph [ref=e4]:
+    - link "index.html" [ref=e5] [cursor=pointer]:
+      - /url: /devtools/inspector.html?ws=127.0.0.1:8000/devtools/page/9A3E965CE4DC5C35C109D900F3A48410
+      - generic [ref=e6]: index.html

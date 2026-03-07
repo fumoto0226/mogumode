@@ -33,7 +33,8 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v2026.03.06-1";
+const APP_BUILD_VERSION = "v16";
+const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 
 // 初始化 Firebase 服务
 const app = initializeApp(firebaseConfig);           // 初始化 Firebase 应用
@@ -82,14 +83,178 @@ let currentImageModalSrc = "";
 let recordMainImageByDay = loadRecordMainImageMap();
 let recordAutoFocusPending = false;
 let currentUserAvatarUrl = "";
+let hasLoadedStoresSnapshot = false;
+let isRepairingCurrentUserPreferences = false;
+let expandableReviewSeed = 0;
+let friendsFilterKeyword = "";
+let friendProfileOverlayActive = false;
+let friendProfileOverlayHideTimer = null;
+let friendsPageHideTimer = null;
+let recordDayViewHideTimer = null;
+let locationLoadingShowTimer = null;
+let isFetchingCurrentLocation = false;
 
 window.myFriends = myFriends;
 
 function getCurrentUserAvatarUrl() {
-    return currentUserAvatarUrl || currentUser?.photoURL || 'images/tx.jpg';
+    return currentUserAvatarUrl || currentUser?.photoURL || DEFAULT_AVATAR_URL;
 }
 
 window.getCurrentUserAvatarUrl = getCurrentUserAvatarUrl;
+
+function escapeHtml(raw) {
+    return String(raw || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getFilledRatingIconCount(score) {
+    const val = Math.max(0, Math.min(5, Number(score) || 0));
+    return Math.floor(val);
+}
+
+window.getFilledRatingIconCount = getFilledRatingIconCount;
+
+function shouldCollapseReviewText(text, maxChars = 110) {
+    const normalized = String(text || '').trim();
+    if (!normalized) return false;
+    if (normalized.length > maxChars) return true;
+    return normalized.split(/\r?\n/).length > 3;
+}
+
+function renderExpandableReviewText(text, opts = {}) {
+    const raw = String(text || '').trim();
+    if (!raw) return '';
+
+    const {
+        textClassName = '',
+        wrapperClassName = '',
+        buttonClassName = '',
+        lines = 3,
+        maxChars = 110
+    } = opts;
+
+    const safeText = escapeHtml(raw);
+    const shouldCollapse = shouldCollapseReviewText(raw, maxChars);
+    const reviewId = `review-${Date.now()}-${expandableReviewSeed++}`;
+    const wrapperClasses = ['expandable-review', wrapperClassName].filter(Boolean).join(' ');
+    const textClasses = [textClassName, 'expandable-review-text', shouldCollapse ? 'is-collapsed' : ''].filter(Boolean).join(' ');
+    const buttonClasses = ['expandable-review-toggle', buttonClassName].filter(Boolean).join(' ');
+
+    return `
+        <div class="${wrapperClasses}" data-review-id="${reviewId}">
+            <div class="${textClasses}" style="--review-lines:${Math.max(1, Number(lines) || 3)};">${safeText}</div>
+            ${shouldCollapse ? `<button class="${buttonClasses}" type="button" onclick="toggleExpandableReview('${reviewId}'); event.stopPropagation();">显示全部</button>` : ''}
+        </div>
+    `;
+}
+
+window.renderExpandableReviewText = renderExpandableReviewText;
+
+window.toggleExpandableReview = (reviewId) => {
+    const root = document.querySelector(`.expandable-review[data-review-id="${reviewId}"]`);
+    if (!root) return;
+    const textEl = root.querySelector('.expandable-review-text');
+    const btn = root.querySelector('.expandable-review-toggle');
+    if (!textEl || !btn) return;
+    const expanded = textEl.classList.toggle('is-expanded');
+    textEl.classList.toggle('is-collapsed', !expanded);
+    btn.innerText = expanded ? '收起' : '显示全部';
+};
+
+function getExistingStoreIdSet() {
+    return new Set(
+        (Array.isArray(localStores) ? localStores : [])
+            .map(store => String(store?.id || ''))
+            .filter(Boolean)
+    );
+}
+
+function sanitizePreferenceIds(ids, validStoreIds) {
+    const seen = new Set();
+    return (Array.isArray(ids) ? ids : [])
+        .map(id => String(id || ''))
+        .filter((id) => {
+            if (!id || seen.has(id) || !validStoreIds.has(id)) return false;
+            seen.add(id);
+            return true;
+        });
+}
+
+function getSanitizedPreferencePayload(data, validStoreIds = getExistingStoreIdSet()) {
+    const rawFavorites = Array.isArray(data?.favorites) ? data.favorites : [];
+    const rawLikes = Array.isArray(data?.likes) ? data.likes : [];
+    const rawDislikes = Array.isArray(data?.dislikes) ? data.dislikes : [];
+    const favorites = sanitizePreferenceIds(rawFavorites, validStoreIds);
+    const likes = sanitizePreferenceIds(rawLikes, validStoreIds);
+    const dislikes = sanitizePreferenceIds(rawDislikes, validStoreIds);
+    const changed =
+        favorites.length !== rawFavorites.length ||
+        likes.length !== rawLikes.length ||
+        dislikes.length !== rawDislikes.length;
+    const removedIds = [
+        ...rawFavorites.filter(id => !favorites.includes(String(id || ''))),
+        ...rawLikes.filter(id => !likes.includes(String(id || ''))),
+        ...rawDislikes.filter(id => !dislikes.includes(String(id || '')))
+    ].map(id => String(id || '')).filter(Boolean);
+
+    return { favorites, likes, dislikes, changed, removedIds };
+}
+
+function sanitizeAllUsersCache() {
+    if (!hasLoadedStoresSnapshot || !Array.isArray(allUsersCache) || !allUsersCache.length) return;
+    const validStoreIds = getExistingStoreIdSet();
+    allUsersCache = allUsersCache.map((u) => {
+        const sanitized = getSanitizedPreferencePayload(u, validStoreIds);
+        return {
+            ...u,
+            favorites: sanitized.favorites,
+            likes: sanitized.likes,
+            dislikes: sanitized.dislikes
+        };
+    });
+    window.allUsersCache = allUsersCache;
+}
+
+async function repairCurrentUserDanglingPreferences() {
+    if (!currentUser?.uid || !hasLoadedStoresSnapshot || isRepairingCurrentUserPreferences) return;
+    const validStoreIds = getExistingStoreIdSet();
+    const sanitized = getSanitizedPreferencePayload({
+        favorites: myFavIds,
+        likes: Array.from(localLikes),
+        dislikes: Array.from(localDislikes)
+    }, validStoreIds);
+
+    if (!sanitized.changed) return;
+
+    myFavIds = sanitized.favorites;
+    localLikes = new Set(sanitized.likes);
+    localDislikes = new Set(sanitized.dislikes);
+    window.myFavIds = myFavIds;
+    window.localLikes = localLikes;
+    window.localDislikes = localDislikes;
+
+    isRepairingCurrentUserPreferences = true;
+    try {
+        await Promise.allSettled([
+            setDoc(doc(db, "users", currentUser.uid), {
+                favorites: sanitized.favorites,
+                likes: sanitized.likes,
+                dislikes: sanitized.dislikes
+            }, { merge: true }),
+            setDoc(doc(db, "publicUsers", currentUser.uid), {
+                favorites: sanitized.favorites,
+                likes: sanitized.likes,
+                dislikes: sanitized.dislikes
+            }, { merge: true })
+        ]);
+    } finally {
+        isRepairingCurrentUserPreferences = false;
+    }
+}
 
 function renderBuildVersionTag() {
     const tag = document.getElementById('build-version-tag');
@@ -535,7 +700,12 @@ onSnapshot(query(collection(db, "stores"), orderBy("createdAt", "desc")), (snap)
     localStores = [];  // 清空本地数据
     // 遍历所有店铺文档
     snap.forEach(d => localStores.push({ id: d.id, ...d.data() }));
+    hasLoadedStoresSnapshot = true;
     window.localStores = localStores;  // 暴露到全局，供地图模块使用
+    sanitizeAllUsersCache();
+    repairCurrentUserDanglingPreferences().catch(err => {
+        console.warn("修复当前用户残留收藏失败:", err);
+    });
     applyFilters();                    // 渲染店铺列表（包含搜索/筛选/排序）
     // 如果地图模块已加载，也更新地图上的标记
     if (window.renderMarkers) {
@@ -663,11 +833,18 @@ function loadFavs() {
     onSnapshot(doc(db, "users", currentUser.uid), (d) => {
         if (d.exists()) {
             const data = d.data();
-            myFavIds = data.favorites || [];
+            const sanitized = hasLoadedStoresSnapshot
+                ? getSanitizedPreferencePayload(data)
+                : {
+                    favorites: data.favorites || [],
+                    likes: data.likes || [],
+                    dislikes: data.dislikes || []
+                };
+            myFavIds = sanitized.favorites || [];
             currentUserAvatarUrl = data.avatarUrl || currentUser?.photoURL || currentUserAvatarUrl;
 
-            localLikes = new Set(data.likes || []);
-            localDislikes = new Set(data.dislikes || []);
+            localLikes = new Set(sanitized.likes || []);
+            localDislikes = new Set(sanitized.dislikes || []);
 
             // 更新全局变量供 map.js 使用
             window.myFavIds = myFavIds;
@@ -685,6 +862,11 @@ function loadFavs() {
                 likes: Array.from(localLikes),
                 dislikes: Array.from(localDislikes)
             }, { merge: true });
+            if (hasLoadedStoresSnapshot && sanitized.changed) {
+                repairCurrentUserDanglingPreferences().catch(err => {
+                    console.warn("修复当前用户残留收藏失败:", err);
+                });
+            }
 
             applyFilters();                       // 重新渲染以更新收藏状态
             const favView = document.getElementById('view-fav');
@@ -1016,7 +1198,7 @@ function getStoreLinearDistanceMeters(store) {
 function formatStoreDistanceText(store) {
     const meters = getStoreLinearDistanceMeters(store);
     if (!Number.isFinite(meters) || meters < 0) return '--分钟';
-    const WALK_METERS_PER_MIN = 80;
+    const WALK_METERS_PER_MIN = 70;
     const mins = Math.max(1, Math.round(meters / WALK_METERS_PER_MIN));
     return `${mins}分钟`;
 }
@@ -1033,6 +1215,24 @@ const GENERIC_PLACE_TYPES = new Set([
 ]);
 
 const CUISINE_TYPE_RULES = [
+    {
+        type: 'chinese_restaurant',
+        label: '中餐',
+        searchQuery: 'chinese restaurant',
+        aliases: [
+            '中国', '中国菜', '中国料理', '中华', '中华料理', '中華', '中華料理', '中餐', '中餐厅', '中餐店',
+            'china', 'chinese', 'chinesefood', 'chineserestaurant', 'Chinese Restaurant'
+        ]
+    },
+    {
+        type: 'japanese_restaurant',
+        label: '日料',
+        searchQuery: 'japanese restaurant',
+        aliases: [
+            '日本', '日本菜', '日本料理', '日料', '和食', '和食店', '和食料理店',
+            'japan', 'japanese', 'japanesefood', 'japaneserestaurant', 'washoku', 'Japanese Restaurant'
+        ]
+    },
     {
         type: 'thai_restaurant',
         label: '泰国料理',
@@ -1059,6 +1259,18 @@ function getCuisineRuleByType(type) {
     return CUISINE_TYPE_RULES.find(rule => rule.type === typeKey) || null;
 }
 
+function inferCuisineRuleFromText(text) {
+    const source = normalizeSearchKey(text);
+    if (!source) return null;
+    return CUISINE_TYPE_RULES.find((rule) => {
+        const candidates = [rule.type, rule.label, rule.searchQuery, ...(Array.isArray(rule.aliases) ? rule.aliases : [])];
+        return candidates.some((candidate) => {
+            const key = normalizeSearchKey(candidate);
+            return key && (source === key || source.includes(key) || key.includes(source));
+        });
+    }) || null;
+}
+
 function getStoreCuisineText(store) {
     if (!store) return "";
     const displayName = typeof store?.primaryTypeDisplayName === 'string'
@@ -1081,7 +1293,15 @@ function getStoreCuisineText(store) {
 function getStoreCuisineSearchTerms(store) {
     const terms = new Set();
     const cuisineText = getStoreCuisineText(store);
-    if (cuisineText) terms.add(cuisineText);
+    if (cuisineText) {
+        terms.add(cuisineText);
+        const inferredRule = inferCuisineRuleFromText(cuisineText);
+        if (inferredRule) {
+            terms.add(inferredRule.label);
+            inferredRule.aliases.forEach(alias => terms.add(alias));
+            terms.add(inferredRule.searchQuery);
+        }
+    }
 
     const directTypes = [
         store?.primaryType,
@@ -1101,6 +1321,40 @@ function getStoreCuisineSearchTerms(store) {
     });
 
     return Array.from(terms).filter(Boolean);
+}
+
+function getStrictCuisineIntentTerms(store) {
+    const terms = new Set();
+    const cuisineText = getStoreCuisineText(store);
+    const inferredRule = inferCuisineRuleFromText(cuisineText);
+    const primaryRule = getCuisineRuleByType(store?.primaryType);
+    const rule = inferredRule || primaryRule;
+
+    if (cuisineText) terms.add(cuisineText);
+    if (rule) {
+        terms.add(rule.label);
+        terms.add(rule.searchQuery);
+        rule.aliases.forEach(alias => terms.add(alias));
+    }
+
+    return Array.from(terms).filter(Boolean);
+}
+
+function scoreCuisineIntentMatch(query, store) {
+    const qKeys = buildStoreSearchKeys(query);
+    const tKeys = getStrictCuisineIntentTerms(store).flatMap(term => buildStoreSearchKeys(term));
+    let best = 0;
+
+    qKeys.forEach((qKey) => {
+        tKeys.forEach((tKey) => {
+            if (!qKey || !tKey) return;
+            if (qKey === tKey) best = Math.max(best, 120);
+            else if (tKey.startsWith(qKey)) best = Math.max(best, 100 - Math.max(0, tKey.length - qKey.length));
+            else if (tKey.includes(qKey)) best = Math.max(best, 82 - Math.min(16, tKey.indexOf(qKey)));
+        });
+    });
+
+    return best;
 }
 
 function resolveCuisineSearchIntent(query) {
@@ -1265,7 +1519,7 @@ function getFriendReactionStats(storeId) {
     (Array.isArray(allUsersCache) ? allUsersCache : [])
         .filter(u => friendSet.has(u.id))
         .forEach(u => {
-            const avatar = u.avatarUrl || u.photoURL || 'images/tx.jpg';
+            const avatar = u.avatarUrl || u.photoURL || DEFAULT_AVATAR_URL;
             const likes = Array.isArray(u.likes) ? u.likes : [];
             const dislikes = Array.isArray(u.dislikes) ? u.dislikes : [];
             if (likes.includes(storeId)) {
@@ -1346,7 +1600,7 @@ function renderReactionAvatars(avatars, count) {
     if (!count || count <= 0) {
         return `<div class="action-social-row" aria-hidden="true"></div>`;
     }
-    const avatarList = (Array.isArray(avatars) && avatars.length) ? avatars : ['images/tx.jpg'];
+    const avatarList = (Array.isArray(avatars) && avatars.length) ? avatars : [DEFAULT_AVATAR_URL];
     const showAvatarCount = Math.min(count, 4);
     const avatarHtml = Array.from({ length: showAvatarCount }).map((_, idx) => {
         const src = avatarList[idx % avatarList.length];
@@ -1697,11 +1951,18 @@ async function cleanupStoreReferencesForCurrentUser(storeId) {
     const sid = String(storeId || '');
     if (!sid || !currentUser?.uid) return false;
     try {
-        await updateDoc(doc(db, "users", currentUser.uid), {
-            favorites: arrayRemove(sid),
-            likes: arrayRemove(sid),
-            dislikes: arrayRemove(sid)
-        });
+        await Promise.allSettled([
+            updateDoc(doc(db, "users", currentUser.uid), {
+                favorites: arrayRemove(sid),
+                likes: arrayRemove(sid),
+                dislikes: arrayRemove(sid)
+            }),
+            setDoc(doc(db, "publicUsers", currentUser.uid), {
+                favorites: myFavIds.filter(id => id !== sid),
+                likes: Array.from(localLikes).filter(id => id !== sid),
+                dislikes: Array.from(localDislikes).filter(id => id !== sid)
+            }, { merge: true })
+        ]);
         return true;
     } catch (err) {
         console.warn("清理当前用户偏好失败:", err);
@@ -1759,7 +2020,7 @@ window.confirmDeleteStore = async (mode = 'delete') => {
         return;
     }
 
-    // 彻底删除店铺：前端仅清理当前用户，其他用户由 Cloud Function 后台自动清理
+    // 彻底删除店铺：当前仓库只会清理当前用户；其他用户需要后端任务或 Cloud Function 处理
     const allUrls = collectStoreAllImageUrls(store);
     await cleanupStoreReferencesForCurrentUser(storeId);
 
@@ -1782,7 +2043,7 @@ window.confirmDeleteStore = async (mode = 'delete') => {
     applyFilters();
     renderRecordCalendar();
     renderProfileActivity();
-    showAppNoticeModal("店铺已删除，后台正在清理所有用户的收藏/好吃/差评引用");
+    showAppNoticeModal("店铺已删除");
 };
 
 window.deleteMyStoreReview = async (storeId, reviewIndex) => {
@@ -1856,7 +2117,7 @@ window.closeAppFeedbackToast = () => {
 };
 
 function renderPostSuccessRatingIcons(score) {
-    const n = Math.max(0, Math.min(5, Math.round(Number(score) || 0)));
+    const n = getFilledRatingIconCount(score);
     return Array.from({ length: 5 }).map((_, i) =>
         `<img src="images/mogu.svg" alt="rating" style="opacity:${i < n ? 1 : 0.26};">`
     ).join('');
@@ -2577,8 +2838,13 @@ function scoreTextMatch(query, target) {
 
 function scoreStoreSearch(query, store) {
     const nameScore = scoreTextMatch(query, store?.name || '');
-    const addressScore = Math.floor(scoreTextMatch(query, store?.address || store?.formattedAddress || '') * 0.35);
+    const cuisineIntent = resolveCuisineSearchIntent(query);
+    if (cuisineIntent) {
+        const cuisineScore = Math.floor(scoreCuisineIntentMatch(query, store) * 0.92);
+        return Math.max(nameScore, cuisineScore);
+    }
     const cuisineScore = Math.floor(scoreTextMatch(query, getStoreCuisineSearchTerms(store).join(' ')) * 0.92);
+    const addressScore = Math.floor(scoreTextMatch(query, store?.address || store?.formattedAddress || '') * 0.35);
     return Math.max(nameScore, addressScore, cuisineScore);
 }
 
@@ -3564,9 +3830,10 @@ window.migrateStoreNamesToPreferredLanguage = async (opts = {}) => {
 };
 
 async function searchLocationForConfirm(keyword = null) {
-    const q = (keyword ?? document.getElementById('fetched-address-input').value).trim();
+    const inputEl = document.getElementById('fetched-address-input');
+    const q = String(keyword ?? (inputEl?.value || '')).trim();
     const list = document.getElementById('loc-search-results');
-    if (!list) return;
+    if (!list || !inputEl) return;
     if (q.length < 2) {
         list.classList.remove('active');
         list.innerHTML = "";
@@ -4337,6 +4604,26 @@ function syncLocationTriggerIcon() {
         : 'images/weizhilan.svg';
 }
 
+function toggleLocationLoadingModal(visible) {
+    const modal = document.getElementById('loc-loading-modal');
+    const fabBtn = document.querySelector('.fab-dice-btn');
+    if (!modal) return;
+    modal.style.display = visible ? 'flex' : 'none';
+    if (fabBtn) {
+        fabBtn.classList.toggle('loc-modal-hidden', visible || document.getElementById('loc-confirm-modal')?.style.display === 'flex');
+    }
+}
+
+function toggleLocationConfirmModal(visible) {
+    const modal = document.getElementById('loc-confirm-modal');
+    const fabBtn = document.querySelector('.fab-dice-btn');
+    if (!modal) return;
+    modal.style.display = visible ? 'flex' : 'none';
+    if (fabBtn) {
+        fabBtn.classList.toggle('loc-modal-hidden', visible || document.getElementById('loc-loading-modal')?.style.display === 'flex');
+    }
+}
+
 /**
  * 切换位置菜单
  */
@@ -4368,25 +4655,73 @@ window.selectFixedLocation = (name) => {
  */
 window.startFetchLocation = () => {
     document.getElementById('location-menu').classList.remove('active');
-    document.getElementById('loc-loading-modal').style.display = 'flex';
+    if (isFetchingCurrentLocation) return;
+    if (!navigator.geolocation) {
+        showAppNoticeModal("当前浏览器不支持读取定位");
+        return;
+    }
 
-    // 模拟获取位置（固定演示坐标）
-    setTimeout(() => {
-        document.getElementById('loc-loading-modal').style.display = 'none';
-        document.getElementById('loc-confirm-modal').style.display = 'flex';
-        tempCoords = { lat: 35.672, lng: 139.733 };
-        const address = "ペットホテル・トリミングサロン 赤坂ニッコロ...";
-        const input = document.getElementById('fetched-address-input');
-        if (input) input.value = address;
+    isFetchingCurrentLocation = true;
+    tempCoords = null;
+    toggleLocationConfirmModal(false);
+
+    if (locationLoadingShowTimer) clearTimeout(locationLoadingShowTimer);
+    locationLoadingShowTimer = setTimeout(() => {
+        toggleLocationLoadingModal(true);
+        locationLoadingShowTimer = null;
+    }, 180);
+
+    const finalizeFetch = () => {
+        isFetchingCurrentLocation = false;
+        if (locationLoadingShowTimer) {
+            clearTimeout(locationLoadingShowTimer);
+            locationLoadingShowTimer = null;
+        }
+        toggleLocationLoadingModal(false);
+    };
+
+    navigator.geolocation.getCurrentPosition(async (position) => {
+        const lat = Number(position?.coords?.latitude);
+        const lng = Number(position?.coords?.longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+            finalizeFetch();
+            showAppNoticeModal("读取定位失败，请重试");
+            return;
+        }
+
+        tempCoords = { lat, lng };
+        finalizeFetch();
+
+        toggleLocationConfirmModal(true);
         renderMiniConfirmMap(tempCoords);
-    }, 1200);
+    }, (error) => {
+        finalizeFetch();
+        const code = Number(error?.code);
+        if (code === 1) {
+            showAppNoticeModal("你拒绝了定位权限，请在浏览器设置里允许定位");
+            return;
+        }
+        if (code === 2) {
+            showAppNoticeModal("暂时无法获取当前位置，请检查定位服务");
+            return;
+        }
+        if (code === 3) {
+            showAppNoticeModal("定位超时，请重试");
+            return;
+        }
+        showAppNoticeModal("读取定位失败，请重试");
+    }, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+    });
 };
 
 /**
  * 确认使用GPS位置
  */
 window.confirmGPSLocation = () => {
-    const newLoc = document.getElementById('fetched-address-input').value;
+    const newLoc = "当前位置";
     document.getElementById('current-location-text').innerText = newLoc;
     if (tempCoords && Number.isFinite(tempCoords.lat) && Number.isFinite(tempCoords.lng)) {
         window.mapOrigin = { lat: Number(tempCoords.lat), lng: Number(tempCoords.lng) };
@@ -4402,8 +4737,12 @@ window.confirmGPSLocation = () => {
  * 关闭位置弹窗
  */
 window.closeLocModals = () => {
-    document.getElementById('loc-loading-modal').style.display = 'none';
-    document.getElementById('loc-confirm-modal').style.display = 'none';
+    if (locationLoadingShowTimer) {
+        clearTimeout(locationLoadingShowTimer);
+        locationLoadingShowTimer = null;
+    }
+    toggleLocationLoadingModal(false);
+    toggleLocationConfirmModal(false);
     const list = document.getElementById('loc-search-results');
     if (list) {
         list.classList.remove('active');
@@ -4424,6 +4763,66 @@ initScrollbarAutoFade();
 renderBuildVersionTag();
 resetAddComposerFlow();
 
+function resetFriendProfileOverlayState() {
+    const profileView = document.getElementById('view-profile');
+    if (friendProfileOverlayHideTimer) {
+        clearTimeout(friendProfileOverlayHideTimer);
+        friendProfileOverlayHideTimer = null;
+    }
+    friendProfileOverlayActive = false;
+    if (profileView) {
+        profileView.classList.remove('friend-profile-overlay', 'is-open');
+    }
+}
+
+function closeFriendProfileOverlay() {
+    const profileView = document.getElementById('view-profile');
+    if (!profileView) return;
+    profileView.classList.remove('is-open');
+    friendProfileOverlayActive = false;
+    if (friendProfileOverlayHideTimer) clearTimeout(friendProfileOverlayHideTimer);
+    friendProfileOverlayHideTimer = setTimeout(() => {
+        profileView.classList.add('hidden');
+        profileView.classList.remove('friend-profile-overlay');
+        friendProfileOverlayHideTimer = null;
+        viewingFriendUid = "";
+        viewingFriendData = null;
+        friendProfileFavTab = 'want';
+    }, 280);
+}
+
+function resetFriendsPageState() {
+    const friendsPage = document.getElementById('friends-page');
+    const profileView = document.getElementById('view-profile');
+    if (friendsPageHideTimer) {
+        clearTimeout(friendsPageHideTimer);
+        friendsPageHideTimer = null;
+    }
+    if (friendsPage) {
+        friendsPage.classList.add('hidden');
+        friendsPage.classList.remove('is-open');
+    }
+    if (profileView) profileView.classList.remove('friends-page-active');
+    friendsFilterKeyword = "";
+    const filterInput = document.getElementById('friends-filter-input');
+    if (filterInput) filterInput.value = "";
+}
+
+function resetRecordDayViewState() {
+    const view = document.getElementById('record-day-view');
+    const favView = document.getElementById('view-fav');
+    if (recordDayViewHideTimer) {
+        clearTimeout(recordDayViewHideTimer);
+        recordDayViewHideTimer = null;
+    }
+    if (view) {
+        view.classList.add('hidden');
+        view.classList.remove('is-open');
+    }
+    if (favView) favView.classList.remove('record-day-active');
+    currentRecordDayKey = "";
+}
+
 /* =========================================
    13. 页面切换逻辑
    在首页、地图、添加、收藏、个人页面之间切换
@@ -4437,6 +4836,9 @@ window.switchView = (v) => {
     const profileMenu = document.getElementById('profile-menu');
     if (profileMenu) profileMenu.classList.remove('open');
     closeRandomPanel();
+    resetFriendProfileOverlayState();
+    if (v !== 'profile') resetFriendsPageState();
+    if (v !== 'fav') resetRecordDayViewState();
     if (typeof window.closeActivityImageModal === 'function') {
         window.closeActivityImageModal();
     }
@@ -4473,7 +4875,12 @@ window.switchView = (v) => {
     }
 
     // 页面切换后的特殊处理
-    if (v === 'map') window.initMap();        // 切换到地图时初始化地图
+    if (v === 'map') {
+        window.initMap();        // 切换到地图时初始化地图
+        if (typeof window.centerMapOnCurrentOrigin === 'function') {
+            requestAnimationFrame(() => window.centerMapOnCurrentOrigin());
+        }
+    }
     if (v === 'add') {
         resetAddComposerReturnContext();
         resetAddComposerFlow();
@@ -4491,7 +4898,7 @@ window.switchView = (v) => {
         const userInfo = document.getElementById('user-info');
         const guestInfo = document.getElementById('guest-info');
         const profileView = document.getElementById('view-profile');
-        if (friendsPage) friendsPage.classList.add('hidden');
+        if (friendsPage) resetFriendsPageState();
         viewingFriendUid = "";
         viewingFriendData = null;
         if (currentUser) {
@@ -4532,6 +4939,10 @@ window.switchView = (v) => {
  */
 window.switchFavTab = (tab) => {
     currentFavTab = tab;
+    const validStoreIds = getExistingStoreIdSet();
+    const validFavIds = sanitizePreferenceIds(myFavIds, validStoreIds);
+    const validLikeIds = sanitizePreferenceIds(Array.from(localLikes), validStoreIds);
+    const validDislikeIds = sanitizePreferenceIds(Array.from(localDislikes), validStoreIds);
 
     // 更新标签按钮样式
     document.querySelectorAll('.fav-tab-btn').forEach(b => {
@@ -4550,15 +4961,15 @@ window.switchFavTab = (tab) => {
     setFavTabIconFilled(dislikeBtn, tab === 'dislike');
 
     // 更新标签上的数字
-    document.getElementById('txt-want').innerText = `想吃(${myFavIds.length})`;
-    document.getElementById('txt-like').innerText = `好吃(${localLikes.size})`;
-    document.getElementById('txt-dislike').innerText = `难吃(${localDislikes.size})`;
+    document.getElementById('txt-want').innerText = `想吃(${validFavIds.length})`;
+    document.getElementById('txt-like').innerText = `好吃(${validLikeIds.length})`;
+    document.getElementById('txt-dislike').innerText = `难吃(${validDislikeIds.length})`;
 
     // 根据标签筛选店铺
     let targetIds = [];
-    if (tab === 'want') targetIds = myFavIds;
-    else if (tab === 'like') targetIds = Array.from(localLikes);
-    else if (tab === 'dislike') targetIds = Array.from(localDislikes);
+    if (tab === 'want') targetIds = validFavIds;
+    else if (tab === 'like') targetIds = validLikeIds;
+    else if (tab === 'dislike') targetIds = validDislikeIds;
 
     const filteredStores = localStores.filter(s => targetIds.includes(s.id) && !isStorePermanentlyClosed(s));
     const container = document.getElementById('fav-list-container');
@@ -5297,10 +5708,12 @@ function renderActivityCards(container, activities) {
         }
 
         // 评论文字
-        let reviewHtml = '';
-        if (a.review) {
-            reviewHtml = `<div class="activity-review-text">${a.review}</div>`;
-        }
+        const reviewHtml = a.review
+            ? renderExpandableReviewText(a.review, {
+                textClassName: 'activity-review-text',
+                wrapperClassName: 'activity-review-block'
+            })
+            : '';
 
         return `
         <div class="activity-card ${a.dateMeta.isToday ? 'today' : ''}">
@@ -5491,6 +5904,7 @@ window.openRecordDayView = (dayKey) => {
     const activities = buildMyActivities();
     const dayActs = activities.filter(a => a.dayKey === dayKey).sort((a, b) => a.createdAt - b.createdAt);
     const view = document.getElementById('record-day-view');
+    const favView = document.getElementById('view-fav');
     const list = document.getElementById('record-day-list');
     const title = document.getElementById('record-day-title');
     if (!view || !list || !title) return;
@@ -5521,22 +5935,43 @@ window.openRecordDayView = (dayKey) => {
                     <div class="record-day-mogu">${renderSimpleRatingIcons(Number(a.rating || 0))}</div>
                     ${(a.budget && Number(a.budget) > 0) ? `<em>花费: ${a.budget}</em>` : ''}
                 </div>
-                ${a.review ? `<div class="record-day-review">${a.review}</div>` : ''}
+                ${a.review ? renderExpandableReviewText(a.review, {
+                    textClassName: 'record-day-review',
+                    wrapperClassName: 'record-day-review-block'
+                }) : ''}
                 ${photos ? `<div class="record-day-photos">${photos}</div>` : ''}
             </div>
         `;
     }).join('') : `<div class="record-empty">当天暂无记录</div>`;
+    if (recordDayViewHideTimer) {
+        clearTimeout(recordDayViewHideTimer);
+        recordDayViewHideTimer = null;
+    }
     view.classList.remove('hidden');
+    view.classList.remove('is-open');
+    if (favView) favView.classList.remove('record-day-active');
+    requestAnimationFrame(() => {
+        if (favView) favView.classList.add('record-day-active');
+        view.classList.add('is-open');
+    });
 };
 
 window.closeRecordDayView = () => {
     const view = document.getElementById('record-day-view');
-    if (view) view.classList.add('hidden');
+    const favView = document.getElementById('view-fav');
+    if (!view) return;
+    view.classList.remove('is-open');
+    if (favView) favView.classList.remove('record-day-active');
+    if (recordDayViewHideTimer) clearTimeout(recordDayViewHideTimer);
+    recordDayViewHideTimer = setTimeout(() => {
+        view.classList.add('hidden');
+        recordDayViewHideTimer = null;
+    }, 260);
     currentRecordDayKey = "";
 };
 
 function renderSimpleRatingIcons(score) {
-    const n = Math.max(0, Math.min(5, Math.round(Number(score) || 0)));
+    const n = getFilledRatingIconCount(score);
     return Array.from({ length: 5 }).map((_, i) =>
         `<img src="images/mogu.svg" style="width:13px; opacity:${i < n ? 1 : 0.26};">`
     ).join('');
@@ -5634,15 +6069,16 @@ window.switchProfileFavTab = (tab) => {
     if (isViewingFriendProfile()) friendProfileFavTab = tab;
     else currentProfileFavTab = tab;
 
+    const validStoreIds = getExistingStoreIdSet();
     const favIds = isViewingFriendProfile()
-        ? (Array.isArray(viewingFriendData?.favorites) ? viewingFriendData.favorites : [])
-        : myFavIds;
+        ? sanitizePreferenceIds(viewingFriendData?.favorites, validStoreIds)
+        : sanitizePreferenceIds(myFavIds, validStoreIds);
     const likeSet = isViewingFriendProfile()
-        ? new Set(Array.isArray(viewingFriendData?.likes) ? viewingFriendData.likes : [])
-        : localLikes;
+        ? new Set(sanitizePreferenceIds(viewingFriendData?.likes, validStoreIds))
+        : new Set(sanitizePreferenceIds(Array.from(localLikes), validStoreIds));
     const dislikeSet = isViewingFriendProfile()
-        ? new Set(Array.isArray(viewingFriendData?.dislikes) ? viewingFriendData.dislikes : [])
-        : localDislikes;
+        ? new Set(sanitizePreferenceIds(viewingFriendData?.dislikes, validStoreIds))
+        : new Set(sanitizePreferenceIds(Array.from(localDislikes), validStoreIds));
     const readonly = isViewingFriendProfile();
 
     // 更新标签样式
@@ -5757,11 +6193,25 @@ window.openFriendsPage = async () => {
         return;
     }
     const friendsPage = document.getElementById('friends-page');
+    const profileView = document.getElementById('view-profile');
     if (friendsPage) {
         friendsPage.classList.remove('hidden');
+        friendsPage.classList.remove('is-open');
     }
+    if (friendsPageHideTimer) {
+        clearTimeout(friendsPageHideTimer);
+        friendsPageHideTimer = null;
+    }
+    const filterInput = document.getElementById('friends-filter-input');
+    friendsFilterKeyword = "";
+    if (filterInput) filterInput.value = "";
     await ensureAllUsersLoaded();
     renderFriendsList();
+    if (profileView) profileView.classList.remove('friends-page-active');
+    requestAnimationFrame(() => {
+        if (profileView) profileView.classList.add('friends-page-active');
+        friendsPage?.classList.add('is-open');
+    });
 };
 
 /**
@@ -5769,9 +6219,18 @@ window.openFriendsPage = async () => {
  */
 window.closeFriendsPage = () => {
     const friendsPage = document.getElementById('friends-page');
-    if (friendsPage) {
+    const profileView = document.getElementById('view-profile');
+    if (!friendsPage) return;
+    friendsPage.classList.remove('is-open');
+    if (profileView) profileView.classList.remove('friends-page-active');
+    if (friendsPageHideTimer) clearTimeout(friendsPageHideTimer);
+    friendsPageHideTimer = setTimeout(() => {
         friendsPage.classList.add('hidden');
-    }
+        friendsPageHideTimer = null;
+    }, 260);
+    friendsFilterKeyword = "";
+    const filterInput = document.getElementById('friends-filter-input');
+    if (filterInput) filterInput.value = "";
 };
 
 async function ensureAllUsersLoaded(forceReload = false) {
@@ -5806,7 +6265,17 @@ async function ensureAllUsersLoaded(forceReload = false) {
                     const key = emailKey ? `email:${emailKey}` : `uid:${u.id}`;
                     if (seenKeys.has(key)) return;
                     seenKeys.add(key);
-                    deduped.push(u);
+                    if (hasLoadedStoresSnapshot) {
+                        const sanitized = getSanitizedPreferencePayload(u);
+                        deduped.push({
+                            ...u,
+                            favorites: sanitized.favorites,
+                            likes: sanitized.likes,
+                            dislikes: sanitized.dislikes
+                        });
+                    } else {
+                        deduped.push(u);
+                    }
                 });
                 allUsersCache = deduped;
                 window.allUsersCache = allUsersCache;
@@ -5859,7 +6328,7 @@ function renderFriendsList() {
             pendingEl.innerHTML = incomingFriendRequests.map(req => {
                 const from = allUsersCache.find(u => u.id === req.fromUid) || {};
                 const name = from.displayName || (from.email ? from.email.split('@')[0] : (req.fromUid || '用户'));
-                const avatar = from.avatarUrl || 'images/tx.jpg';
+                const avatar = from.avatarUrl || DEFAULT_AVATAR_URL;
                 return `
                 <div class="friend-request-row">
                     <img src="${avatar}" class="friend-avatar" alt="${name}">
@@ -5882,25 +6351,32 @@ function renderFriendsList() {
         return;
     }
 
-    const friendUsers = allUsersCache.filter(u => myFriends.includes(u.id));
+    const keyword = normalizeFriendKeyword(friendsFilterKeyword);
+    const friendUsers = allUsersCache
+        .filter(u => myFriends.includes(u.id))
+        .filter((u) => {
+            if (!keyword) return true;
+            const name = getFriendSearchName(u).toLowerCase();
+            const emailLocal = getFriendSearchEmailLocal(u);
+            const emailFull = String(u?.email || '').trim().toLowerCase();
+            return name.includes(keyword) || emailLocal.includes(keyword) || emailFull.includes(keyword);
+        });
     if (!friendUsers.length) {
         listEl.innerHTML = `<div style="text-align:center; padding:40px; color:#b2bec3; font-size:13px;">
-            好友数据加载中，请稍后再试
+            ${keyword ? '没有匹配的好友' : '好友数据加载中，请稍后再试'}
         </div>`;
         return;
     }
 
     listEl.innerHTML = friendUsers.map(u => {
         const name = u.displayName || (u.email ? u.email.split('@')[0] : '好友');
-        const email = u.email || '';
-        const avatar = u.avatarUrl || 'images/tx.jpg';
+        const avatar = u.avatarUrl || DEFAULT_AVATAR_URL;
         return `
         <div class="friend-item">
-            <div class="friend-main">
+            <div class="friend-main" onclick="openFriendProfile('${u.id}')">
                 <img src="${avatar}" alt="${name}" class="friend-avatar">
                 <div class="friend-info">
                     <div class="friend-name">${name}</div>
-                    <div class="friend-email">${email}</div>
                 </div>
             </div>
             <div class="friend-actions">
@@ -5910,6 +6386,12 @@ function renderFriendsList() {
         </div>`;
     }).join('');
 }
+
+window.filterFriendsList = () => {
+    const input = document.getElementById('friends-filter-input');
+    friendsFilterKeyword = String(input?.value || '').trim();
+    renderFriendsList();
+};
 
 window.acceptFriendRequest = async (rid, fromUid) => {
     if (!currentUser) return;
@@ -6055,13 +6537,18 @@ window.doFriendSearch = (opts = {}) => {
 
     results.innerHTML = renderList.map(u => {
         const name = getFriendSearchName(u) || '好友';
-        const avatar = u.avatarUrl || 'images/tx.jpg';
+        const avatar = u.avatarUrl || DEFAULT_AVATAR_URL;
         const isFriend = Array.isArray(myFriends) && myFriends.includes(u.id);
         const isPending = Array.isArray(mySentFriendRequests) && mySentFriendRequests.includes(u.id);
-        const statusHtml = isPending
-            ? `<span class="friend-badge friend-badge-pending">已发送好友申请</span>`
-            : ``;
         const friendTagHtml = isFriend ? `<span class="friend-tag friend-tag-friend">好友</span>` : ``;
+        let actionHtml = '';
+        if (isFriend) {
+            actionHtml = `<button class="friend-btn primary" onclick="openFriendProfile('${u.id}')">查看主页</button>`;
+        } else if (isPending) {
+            actionHtml = `<button class="friend-btn secondary disabled" disabled>已发送好友申请</button>`;
+        } else {
+            actionHtml = `<button class="friend-btn primary approve" onclick="addFriend('${u.id}')">发送好友申请</button>`;
+        }
         return `
         <div class="friend-search-item">
             <div class="friend-search-main">
@@ -6071,8 +6558,7 @@ window.doFriendSearch = (opts = {}) => {
                 </div>
             </div>
             <div class="friend-actions">
-                ${statusHtml}
-                <button class="friend-btn primary" onclick="openFriendProfile('${u.id}')">查看主页</button>
+                ${actionHtml}
             </div>
         </div>`;
     }).join('') + (hasMore ? `
@@ -6159,9 +6645,10 @@ window.confirmDeleteFriend = async () => {
 /**
  * 查看好友主页（简单版：展示头像 + 好友的收藏数量）
  */
-window.openFriendProfile = async (uid) => {
+window.openFriendProfile = async (uid, opts = {}) => {
     if (!currentUser || !uid || uid === currentUser.uid) return;
-    friendProfileReturnToFriends = !!(document.getElementById('friends-page') && !document.getElementById('friends-page').classList.contains('hidden'));
+    const overlay = !!opts?.overlay;
+    friendProfileReturnToFriends = !overlay && !!(document.getElementById('friends-page') && !document.getElementById('friends-page').classList.contains('hidden'));
     closeFriendSearch();
     try {
         if (!allUsersCache.length) await ensureAllUsersLoaded(true);
@@ -6175,26 +6662,64 @@ window.openFriendProfile = async (uid) => {
             alert("该用户不存在");
             return;
         }
+        if (hasLoadedStoresSnapshot) {
+            const sanitized = getSanitizedPreferencePayload(target);
+            target = {
+                ...target,
+                favorites: sanitized.favorites,
+                likes: sanitized.likes,
+                dislikes: sanitized.dislikes
+            };
+        }
         viewingFriendUid = uid;
         viewingFriendData = target;
         friendProfileFavTab = 'want';
 
+        const profileView = document.getElementById('view-profile');
+        const userInfo = document.getElementById('user-info');
+        const guestInfo = document.getElementById('guest-info');
+        if (profileView) {
+            profileView.classList.remove('profile-guest-mode');
+            if (overlay) {
+                if (friendProfileOverlayHideTimer) {
+                    clearTimeout(friendProfileOverlayHideTimer);
+                    friendProfileOverlayHideTimer = null;
+                }
+                friendProfileOverlayActive = true;
+                profileView.classList.remove('hidden');
+                profileView.classList.add('friend-profile-overlay');
+                requestAnimationFrame(() => profileView.classList.add('is-open'));
+            } else {
+                profileView.classList.remove('friend-profile-overlay', 'is-open');
+            }
+        }
+        if (userInfo) userInfo.classList.remove('hidden');
+        if (guestInfo) guestInfo.classList.add('hidden');
+
         setProfileIdentity(
             target.displayName || (target.email ? target.email.split('@')[0] : '用户'),
-            target.avatarUrl || 'images/tx.jpg'
+            target.avatarUrl || DEFAULT_AVATAR_URL
         );
         updateProfileHeaderMode();
         updateFriendActionButton();
         switchProfileTab('activity');
-        closeFriendsPage();
+        if (!overlay) closeFriendsPage();
     } catch (err) {
         console.error("加载好友信息失败:", err);
         alert("加载好友信息失败: " + err.message);
     }
 };
 
+window.openFriendProfileFromReview = (uid) => {
+    openFriendProfile(uid, { overlay: true });
+};
+
 window.backFromFriendProfile = () => {
     if (!currentUser) return;
+    if (friendProfileOverlayActive) {
+        closeFriendProfileOverlay();
+        return;
+    }
     viewingFriendUid = "";
     viewingFriendData = null;
     friendProfileFavTab = 'want';

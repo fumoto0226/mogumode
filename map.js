@@ -26,11 +26,20 @@ let currentMapDest = null;        // 当前目的地坐标
 let storeMarkers = [];            // 店铺标记数组
 let currentOriginMarker = null;    // 当前起点标记（蓝/红定位图标）
 const MAP_REVIEW_AVATAR_CACHE = new Map();
+const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 let mapSearchDebounceTimer = null;
 let lastMapQuery = "";
 let activePinnedStoreId = "";
 let mapFocusAnimationFrame = 0;
 let mapFocusAnimationToken = 0;
+
+function getMapCenterFromOrigin() {
+    const origin = window.mapOrigin || ORIGIN;
+    const lat = Number(origin?.lat);
+    const lng = Number(origin?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return { ...SHINJUKU_CENTER };
+    return { lat, lng };
+}
 
 function updateMapSearchClearButton() {
     const input = document.getElementById('q');
@@ -50,7 +59,7 @@ function clearMapSearchInput() {
     updateMapSearchClearButton();
     closeMapCard();
     if (map) {
-        map.setCenter(SHINJUKU_CENTER);
+        map.setCenter(getMapCenterFromOrigin());
         map.setZoom(15);
     }
 }
@@ -337,7 +346,7 @@ function renderMapSocialAvatars(type, avatars = []) {
 }
 
 function getUserAvatarUrl(user) {
-    return user?.avatarUrl || user?.photoURL || 'images/tx.jpg';
+    return user?.avatarUrl || user?.photoURL || DEFAULT_AVATAR_URL;
 }
 
 function getMapFriendUsers() {
@@ -401,7 +410,7 @@ function computeMapFriendSocial(storeId) {
 
     const myAvatar = typeof window.getCurrentUserAvatarUrl === 'function'
         ? window.getCurrentUserAvatarUrl()
-        : 'images/tx.jpg';
+        : DEFAULT_AVATAR_URL;
     const myLikes = window.localLikes || new Set();
     const myDislikes = window.localDislikes || new Set();
     if (myLikes.has(storeId)) {
@@ -524,9 +533,11 @@ function formatMapReviewDate(ts) {
 }
 
 function renderMapReviewRatingIcons(score) {
-    const val = Math.max(0, Math.min(5, Number(score) || 0));
+    const filled = typeof window.getFilledRatingIconCount === 'function'
+        ? window.getFilledRatingIconCount(score)
+        : Math.floor(Math.max(0, Math.min(5, Number(score) || 0)));
     return Array.from({ length: 5 }).map((_, i) =>
-        `<img src="images/mogu.svg" style="width:13px; opacity:${(val - i) > 0 ? 1 : 0.25};">`
+        `<img src="images/mogu.svg" style="width:13px; opacity:${i < filled ? 1 : 0.25};">`
     ).join('');
 }
 
@@ -544,16 +555,19 @@ function getMapStoreAverageRating(store) {
 }
 
 function renderMapSummaryStars(score) {
-    const val = Math.max(0, Math.min(5, Number(score) || 0));
+    const filled = typeof window.getFilledRatingIconCount === 'function'
+        ? window.getFilledRatingIconCount(score)
+        : Math.floor(Math.max(0, Math.min(5, Number(score) || 0)));
     return Array.from({ length: 5 }).map((_, i) =>
-        `<img src="images/pingfen.svg" width="14" style="opacity:${(val - i) > 0 ? 1 : 0.3};">`
+        `<img src="images/pingfen.svg" width="14" style="opacity:${i < filled ? 1 : 0.3};">`
     ).join('');
 }
 
 function getMapHeaderMushroomCount(score) {
-    const val = Math.max(0, Math.min(5, Number(score) || 0));
-    if (val < 0.5) return 0;
-    return Math.min(5, Math.round(val));
+    if (typeof window.getFilledRatingIconCount === 'function') {
+        return window.getFilledRatingIconCount(score);
+    }
+    return Math.floor(Math.max(0, Math.min(5, Number(score) || 0)));
 }
 
 function renderMapHeaderMushrooms(score) {
@@ -568,7 +582,7 @@ function resolveMapReviewAvatar(rev, idx) {
     const me = window.currentUser || null;
     const profileImg = document.getElementById('profile-avatar-display');
     if (me && uid && me.uid === uid) {
-        return me.photoURL || profileImg?.src || 'images/tx.jpg';
+        return me.photoURL || profileImg?.src || DEFAULT_AVATAR_URL;
     }
     if (uid && MAP_REVIEW_AVATAR_CACHE.has(uid)) {
         return MAP_REVIEW_AVATAR_CACHE.get(uid);
@@ -580,7 +594,7 @@ function resolveMapReviewAvatar(rev, idx) {
             return friend.avatarUrl;
         }
     }
-    return `https://i.pravatar.cc/100?u=${uid || idx}`;
+    return DEFAULT_AVATAR_URL;
 }
 
 function isMyMapReview(rev) {
@@ -604,6 +618,7 @@ function isMyMapReview(rev) {
 function renderMapReviewsAndAlbum(store) {
     const revs = Array.isArray(store?.revs) ? [...store.revs] : [];
     revs.sort((a, b) => Number(b?.createdAt || 0) - Number(a?.createdAt || 0));
+    const aliasMap = buildFriendAliasMap();
 
     const reviewsList = document.getElementById('mp-reviews-list');
     if (reviewsList) {
@@ -616,6 +631,12 @@ function renderMapReviewsAndAlbum(store) {
                 const avatar = resolveMapReviewAvatar(r, i);
                 const dateStr = formatMapReviewDate(r?.createdAt);
                 const isMine = isMyMapReview(r);
+                const friendUser = resolveFriendFromReview(r, aliasMap);
+                const isFriend = !!friendUser?.id;
+                const openProfileAttr = isFriend
+                    ? `onclick="openFriendProfileFromReview('${friendUser.id}'); event.stopPropagation();"`
+                    : '';
+                const friendBadge = isFriend ? `<span class="review-friend-badge">好友</span>` : '';
                 const originalIndex = (Array.isArray(store?.revs) ? store.revs : []).findIndex(item => item === r);
                 const deleteBtn = (isMine && originalIndex >= 0)
                     ? `<button class="review-delete-btn" onclick="deleteMyStoreReview('${store.id}', ${originalIndex}); event.stopPropagation();">删除</button>`
@@ -623,18 +644,23 @@ function renderMapReviewsAndAlbum(store) {
                 return `
                     <div class="review-card">
                         <div class="review-header">
-                            <img src="${avatar}" class="review-avatar">
-                            <div class="review-user-info">
-                                <div class="review-username">${userName}</div>
+                            <img src="${avatar}" class="review-avatar ${isFriend ? 'is-clickable' : ''}" ${openProfileAttr}>
+                            <div class="review-user-info ${isFriend ? 'is-clickable' : ''}" ${openProfileAttr}>
+                                <div class="review-username">${userName}${friendBadge}</div>
                                 <div class="review-user-meta">${dateStr}</div>
                             </div>
                             ${deleteBtn}
                         </div>
-                        <div class="review-text" style="margin-bottom:${text ? '8px' : '0'};">
+                        <div class="review-rating-row" style="margin-bottom:${text ? '8px' : '0'};">
                             <b>${rating.toFixed(1)}</b>
                             <span style="display:inline-flex; align-items:center; gap:2px; margin-left:6px;">${renderMapReviewRatingIcons(rating)}</span>
                         </div>
-                        ${text ? `<div class="review-text">${text}</div>` : ''}
+                        ${text ? (typeof window.renderExpandableReviewText === 'function'
+                    ? window.renderExpandableReviewText(text, {
+                        textClassName: 'review-text',
+                        wrapperClassName: 'review-text-block'
+                    })
+                    : `<div class="review-text">${text}</div>`) : ''}
                         ${imgs.length ? `<div class="review-images">${imgs.map(src =>
                     `<img src="${src}" onclick="openActivityImageModal('${String(src).replace(/'/g, "\\'")}'); event.stopPropagation();">`
                 ).join('')}</div>` : ''}
@@ -647,6 +673,7 @@ function renderMapReviewsAndAlbum(store) {
             ${reviewCards}
             <div class="sheet-list-placeholder">${reviewPlaceholderText}</div>
         `;
+        bindReviewWheelProxy(reviewsList);
     }
 
     const uniqPhotos = (typeof window.getStorePreviewImages === 'function')
@@ -683,6 +710,28 @@ function renderMapReviewsAndAlbum(store) {
     if (avgStarsEl) avgStarsEl.innerHTML = renderMapSummaryStars(avgRating);
 }
 
+function bindReviewWheelProxy(reviewsList) {
+    if (!reviewsList || reviewsList.dataset.wheelBound === '1') return;
+    reviewsList.dataset.wheelBound = '1';
+    reviewsList.addEventListener('wheel', (event) => {
+        const isHorizontalGallery = !!event.target?.closest?.('.review-images');
+        if (isHorizontalGallery && Math.abs(event.deltaX) > Math.abs(event.deltaY)) return;
+
+        const scrollTarget = reviewsList.closest('.sheet-tab-content')
+            || reviewsList.closest('.map-sheet.full')
+            || reviewsList.closest('.map-sheet.half')
+            || reviewsList.closest('.map-sheet');
+        if (!scrollTarget) return;
+        const canScroll = scrollTarget.scrollHeight > scrollTarget.clientHeight + 2;
+        if (!canScroll) return;
+
+        scrollTarget.scrollTop += event.deltaY;
+        if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+            event.preventDefault();
+        }
+    }, { passive: false });
+}
+
 /* =========================================
    1. 初始化地图
    创建Google地图实例并添加基础标记
@@ -692,7 +741,7 @@ window.initMap = () => {
     if (!document.getElementById('google-map')) return;
 
     if (map && window.google?.maps) {
-        const center = map.getCenter ? map.getCenter() : null;
+        const center = getMapCenterFromOrigin();
         const zoom = map.getZoom ? map.getZoom() : null;
         google.maps.event.trigger(map, 'resize');
         if (center) map.setCenter(center);
@@ -765,7 +814,7 @@ window.initMap = () => {
     // 创建地图实例
     // ==========================================
     map = new google.maps.Map(document.getElementById('google-map'), {
-        center: SHINJUKU_CENTER,       // 中心点
+        center: getMapCenterFromOrigin(),
         zoom: 15,                       // 缩放级别
         disableDefaultUI: true,         // 禁用默认控件
         // 隐藏POI标签（商店、餐厅等默认标记）
@@ -1660,6 +1709,14 @@ window.refreshOpenMapCardDistance = () => {
     if (!store) return;
     const timeEl = document.getElementById('mp-fake-time');
     if (timeEl) timeEl.innerText = formatMapDistanceText(store);
+};
+
+window.centerMapOnCurrentOrigin = () => {
+    if (!map) return;
+    map.setCenter(getMapCenterFromOrigin());
+    map.setZoom(15);
+    renderCurrentOriginMarker();
+    window.renderMarkers();
 };
 
 window.openStoreInGoogleMapsById = (storeId) => {

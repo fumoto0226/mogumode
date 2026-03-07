@@ -217,8 +217,17 @@ header {
 
 .loc-actions {
     display: flex;
-    justify-content: flex-end;
+    justify-content: stretch;
     gap: 10px;
+    margin-top: 4px;
+}
+
+.loc-actions .action-btn {
+    flex: 1;
+    height: 44px;
+    padding: 0 10px;
+    font-size: 12px;
+    text-align: center;
 }
 
 /* --- User Circle --- */
@@ -894,6 +903,7 @@ header {
     justify-content: center;
     color: #ffffff;
     border: 4px solid white;
+    transform: translateY(-2px);
 }
 
 /* =========================================
@@ -927,6 +937,28 @@ header {
     height: calc(var(--app-height) - var(--bottom-nav-total));
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+}
+
+#view-profile,
+#view-fav {
+    overflow: hidden;
+}
+
+#view-profile.friend-profile-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    max-width: 448px;
+    height: var(--app-height);
+    margin: 0 auto;
+    z-index: 1200;
+    transform: translateX(100%);
+    transition: transform 0.28s ease;
+    box-shadow: -12px 0 28px rgba(0, 0, 0, 0.12);
+}
+
+#view-profile.friend-profile-overlay.is-open {
+    transform: translateX(0);
 }
 
 .auth-mask-card {
@@ -2308,10 +2340,8 @@ header {
 }
 
 .map-sheet.full .sheet-tab-content {
-    max-height: calc(100vh - 60px - 86px - 52px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
+    max-height: none;
+    overflow: visible;
 }
 
 .map-sheet.full .reviews-list {
@@ -2348,8 +2378,8 @@ header {
 
 /* Review Cards */
 .reviews-list {
-    max-height: 300px;
-    overflow-y: auto;
+    max-height: none;
+    overflow: visible;
 }
 
 .sheet-list-placeholder {
@@ -2382,13 +2412,37 @@ header {
     border-radius: 50%;
 }
 
+.review-avatar.is-clickable,
+.review-user-info.is-clickable {
+    cursor: pointer;
+}
+
 .review-user-info {
     flex: 1;
 }
 
 .review-username {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-weight: 700;
     font-size: 13px;
+}
+
+.review-friend-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 24px;
+    height: 15px;
+    padding: 0 5px;
+    border-radius: 4px;
+    background: #e5e7eb;
+    color: #727780;
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1;
+    flex-shrink: 0;
 }
 
 .review-user-meta {
@@ -2416,6 +2470,46 @@ header {
     line-height: 1.6;
     color: #2d3436;
     margin-bottom: 10px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.review-rating-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 8px;
+    font-size: 13px;
+    line-height: 1.2;
+    color: #2d3436;
+}
+
+.expandable-review {
+    margin-top: 0;
+}
+
+.expandable-review-text.is-collapsed {
+    display: -webkit-box;
+    -webkit-line-clamp: var(--review-lines, 3);
+    line-clamp: var(--review-lines, 3);
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.expandable-review-text.is-expanded {
+    display: block;
+}
+
+.expandable-review-toggle {
+    margin-top: -2px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #1f8fff;
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.2;
+    cursor: pointer;
 }
 
 .review-images {
@@ -2725,10 +2819,15 @@ header {
 }
 
 .map-pin img {
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 32px;
     display: block;
-    image-rendering: -webkit-optimize-contrast;
+    image-rendering: auto;
+    shape-rendering: geometricPrecision;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform: translateZ(0);
+    will-change: transform;
 }
 
 /* =========================================
@@ -2755,6 +2854,7 @@ header {
     align-items: center;
     justify-content: center;
     gap: 6px;
+    padding: 1px 0;
     font-size: 13px;
     cursor: pointer;
     background: #d9d9d9;
@@ -2820,10 +2920,22 @@ header {
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 1px;
     border: none;
     z-index: 90;
     cursor: pointer;
     transition: transform 0.2s;
+}
+
+.fab-dice-btn.loc-modal-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.fab-dice-icon {
+    font-size: 29px;
+    line-height: 1;
+    transform: translateY(-2px);
 }
 
 /* For mobile screens smaller than 448px */
@@ -2840,7 +2952,7 @@ header {
 .fab-dice-text {
     font-size: 10px;
     color: #2d3436;
-    margin-top: -6px;
+    margin-top: 0;
 }
 
 /* =========================================
@@ -3020,6 +3132,23 @@ header {
     z-index: 12;
     overflow-y: auto;
     padding-bottom: 90px;
+    transform: translateX(100%);
+    transition: transform 0.26s ease;
+    will-change: transform;
+}
+
+.record-day-view.is-open {
+    transform: translateX(0);
+}
+
+#view-fav .record-page {
+    transform: translateX(0);
+    transition: transform 0.26s ease;
+    will-change: transform;
+}
+
+#view-fav.record-day-active .record-page {
+    transform: translateX(-100%);
 }
 
 .record-day-header {
@@ -3110,6 +3239,8 @@ header {
     font-size: 12px;
     line-height: 1.6;
     color: #636e72;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .record-day-photos {
@@ -3247,10 +3378,11 @@ header {
 
 /* Random Filter Panel */
 .rf-panel {
-    position: absolute;
-    left: 18px;
-    right: 18px;
-    bottom: calc(10%);
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(412px, calc(100vw - 36px));
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 160px);
     background: #f3f4f6;
     border: 1px solid #9c9c9c;
     border-radius: 18px;
@@ -3258,7 +3390,7 @@ header {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
     display: none;
     z-index: 10;
-    max-height: 310px;
+    max-height: min(360px, 52vh);
     overflow-y: auto;
     overscroll-behavior: contain;
 }
@@ -3719,6 +3851,8 @@ header {
 
 .profile-friends-btn {
     position: relative;
+    gap: 3px;
+    padding: 4px 2px;
 }
 
 .profile-friends-dot {
@@ -3743,10 +3877,10 @@ header {
     color: #2d3436;
 }
 
-.profile-friends-link {
+.profile-friends-label {
     font-size: 13px;
-    color: #0984e3;
-    margin-left: 4px;
+    color: #2d3436;
+    line-height: 1;
 }
 
 .profile-menu-popover {
@@ -4038,17 +4172,8 @@ header {
     color: #636e72;
     line-height: 1.6;
     margin-top: 6px;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-}
-
-.activity-review-more {
-    color: #2d3436;
-    font-weight: 700;
-    cursor: pointer;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
 .activity-photos {
@@ -4182,10 +4307,27 @@ header {
     flex-direction: column;
     padding-bottom: 70px;
     z-index: 20;
+    transform: translateX(-100%);
+    transition: transform 0.26s ease;
+    will-change: transform;
 }
 
 .friends-page.hidden {
     display: none;
+}
+
+.friends-page.is-open {
+    transform: translateX(0);
+}
+
+#view-profile #user-info > :not(#friends-page) {
+    transform: translateX(0);
+    transition: transform 0.26s ease;
+    will-change: transform;
+}
+
+#view-profile.friends-page-active #user-info > :not(#friends-page) {
+    transform: translateX(100%);
 }
 
 .friends-header {
@@ -4194,6 +4336,30 @@ header {
     justify-content: space-between;
     padding: 16px 16px 8px;
     background: #f4f4f4;
+}
+
+.friends-toolbar {
+    padding: 0 16px 10px;
+    background: #f4f4f4;
+}
+
+.friends-filter-input {
+    width: 100%;
+    height: 40px;
+    border: 1px solid #e2e5ea;
+    border-radius: 14px;
+    background: #ffffff;
+    padding: 0 14px;
+    font-size: 14px;
+    color: #2d3436;
+}
+
+.friends-filter-input::placeholder {
+    color: #a0a7b4;
+}
+
+.friends-filter-input:focus {
+    border-color: #b8c4d6;
 }
 
 .friends-title {
@@ -4301,6 +4467,9 @@ header {
     display: flex;
     align-items: center;
     gap: 10px;
+    cursor: pointer;
+    min-width: 0;
+    flex: 1;
 }
 
 .friend-avatar {
@@ -4313,18 +4482,13 @@ header {
 .friend-info {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 0;
 }
 
 .friend-name {
     font-size: 14px;
     font-weight: 600;
     color: #2d3436;
-}
-
-.friend-email {
-    font-size: 11px;
-    color: #636e72;
 }
 
 .friend-actions {
@@ -4524,6 +4688,11 @@ header {
 
 .friend-search-item .friend-actions .friend-btn {
     padding: 4px 12px;
+}
+
+.friend-search-item .friend-actions .friend-btn.disabled {
+    cursor: default;
+    opacity: 1;
 }
 
 .friend-search-more-wrap {
