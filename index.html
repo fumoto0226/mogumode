@@ -280,7 +280,8 @@
                     <!-- 我的评价 -->
                     <div class="sheet-section">
                         <div class="sheet-section-header">
-                            <button type="button" class="sheet-section-link" onclick="openMapReviewSubpage('mine')">我的评价 &gt;</button>
+                            <button type="button" class="sheet-section-link" onclick="openMapReviewSubpage('mine')">我的评价
+                                &gt;</button>
                         </div>
                         <div class="sheet-my-rating">
                             <div class="my-rating-left">
@@ -316,7 +317,8 @@
                     <!-- 朋友评价 -->
                     <div class="sheet-section">
                         <div class="sheet-section-header">
-                            <button type="button" class="sheet-section-link" onclick="openMapReviewSubpage('friends')">朋友评价 &gt;</button>
+                            <button type="button" class="sheet-section-link"
+                                onclick="openMapReviewSubpage('friends')">朋友评价 &gt;</button>
                             <div class="sheet-friend-avatars">
                                 <img src="images/avatar-placeholder.svg" class="f-avatar">
                                 <img src="images/avatar-placeholder.svg" class="f-avatar">
@@ -412,11 +414,12 @@
                     <div class="add-search-stage">
                         <div class="add-search-pill-row">
                             <input id="add-search-input" class="add-search-pill-input" placeholder="在这里输入店铺名">
-                            <img id="add-selected-mogu-inline" src="images/mogu.svg" class="add-selected-mogu-inline hidden"
-                                alt="mogu">
+                            <img id="add-selected-mogu-inline" src="images/mogu.svg"
+                                class="add-selected-mogu-inline hidden" alt="mogu">
                             <button type="button" id="add-view-store-btn" class="add-view-store-btn hidden"
                                 onclick="openAddSelectedStoreCard()">查看店铺</button>
-                            <button type="button" id="add-search-clear-btn" class="add-search-clear-btn hidden">✕</button>
+                            <button type="button" id="add-search-clear-btn"
+                                class="add-search-clear-btn hidden">✕</button>
                         </div>
                         <div class="add-search-tools-row">
                             <button type="button" id="add-map-toggle-link" class="add-map-toggle-link hidden"
@@ -586,7 +589,8 @@
                         </button>
                     </div>
                     <div class="friends-toolbar">
-                        <input id="friends-filter-input" class="friends-filter-input" placeholder="搜索好友名字或邮箱" oninput="filterFriendsList()">
+                        <input id="friends-filter-input" class="friends-filter-input" placeholder="搜索好友名字或邮箱"
+                            oninput="filterFriendsList()">
                     </div>
                     <div id="friends-pending-list" class="friends-pending-list hidden"></div>
                     <div id="friends-list" class="friends-list"></div>
@@ -845,7 +849,8 @@
                                         onclick="toggleRfDistance(this, null)">
                                         不限
                                     </div>
-                                    <div class="rf-pill rf-dist-opt distance" id="rf-dist-50" onclick="toggleRfDistance(this, 50)">
+                                    <div class="rf-pill rf-dist-opt distance" id="rf-dist-50"
+                                        onclick="toggleRfDistance(this, 50)">
                                         50m内
                                     </div>
                                     <div class="rf-pill rf-dist-opt distance" id="rf-dist-100"
@@ -1161,19 +1166,27 @@
     </div>
 
     <!-- Delete Store Modal -->
-    <div id="modal-confirm-delete-store" class="modal-overlay">
-        <div class="delete-confirm-card">
-            <div class="delete-confirm-title-row">
-                <img src="images/trash.svg" class="delete-confirm-icon" alt="trash">
-                <div class="delete-confirm-title">这家店铺不存在了？请选择操作</div>
+    <div id="modal-confirm-delete-store" class="modal-overlay"
+        onclick="if(event.target===this) closeDeleteStoreModal()">
+        <div class="delete-review-modal-card" onclick="event.stopPropagation()">
+            <div class="delete-review-modal-head">
+                <div class="delete-review-modal-icon-wrap">
+                    <img src="images/trash-red.svg" class="delete-review-modal-icon" alt="trash">
+                </div>
+                <div class="delete-review-modal-title">删除店铺</div>
+                <div class="delete-review-modal-subtitle">这家店铺不存在了？请选择操作</div>
+                <div class="delete-review-modal-desc">“仅标记歇业”会隐藏到列表，但仍可搜索查看；
+                    <br>
+                    “删除店铺”会彻底清理所有相关数据。
+                </div>
             </div>
-            <div class="delete-confirm-note">“仅标记歇业”会隐藏到列表，但仍可搜索查看；“删除店铺”会彻底清理所有相关数据。</div>
-            <div class="delete-confirm-actions delete-confirm-actions-split">
-                <button class="delete-btn-secondary" onclick="confirmDeleteStore('close')">仅标记歇业</button>
-                <button class="delete-btn-confirm" onclick="confirmDeleteStore('delete')">删除店铺</button>
-            </div>
-            <div class="delete-confirm-actions">
-                <button class="delete-btn-cancel" onclick="closeDeleteStoreModal()">取消</button>
+            <div class="delete-review-modal-actions">
+                <button class="delete-review-action delete-review-action-danger"
+                    onclick="confirmDeleteStore('delete')">删除店铺</button>
+                <button class="delete-review-action delete-review-action-dark"
+                    onclick="confirmDeleteStore('close')">仅标记歇业</button>
+                <button class="delete-review-action delete-review-action-cancel"
+                    onclick="closeDeleteStoreModal()">取消</button>
             </div>
         </div>
     </div>
@@ -1211,21 +1224,31 @@
     <div id="modal-delete-review-record" class="modal-overlay"
         onclick="if(event.target===this) closeDeleteReviewRecordModal()">
         <div class="delete-review-modal-card" onclick="event.stopPropagation()">
+            <div class="delete-review-modal-head">
+                <div class="delete-review-modal-icon-wrap">
+                    <img src="images/trash-red.svg" class="delete-review-modal-icon" alt="trash">
+                </div>
+                <div class="delete-review-modal-title">删除评论</div>
+                <div class="delete-review-modal-subtitle">确定要删除这条评论吗？</div>
+            </div>
             <div class="delete-review-modal-actions">
-                <button class="delete-review-action delete-review-action-danger" onclick="confirmDeleteReviewRecord('full')">删除全部</button>
-                <button class="delete-review-action delete-review-action-dark" onclick="confirmDeleteReviewRecord('content-only')">只删除文字和照片</button>
-                <button class="delete-review-action delete-review-action-cancel" onclick="closeDeleteReviewRecordModal()">取消</button>
+                <button class="delete-review-action delete-review-action-danger"
+                    onclick="confirmDeleteReviewRecord('full')">删除全部</button>
+                <button class="delete-review-action delete-review-action-dark"
+                    onclick="confirmDeleteReviewRecord('content-only')">只删除文字和照片</button>
+                <button class="delete-review-action delete-review-action-cancel"
+                    onclick="closeDeleteReviewRecordModal()">取消</button>
             </div>
         </div>
     </div>
 
     <!-- App Notice Modal -->
     <div id="modal-app-notice" class="modal-overlay" onclick="if(event.target===this) closeAppNoticeModal()">
-            <div class="delete-confirm-card" onclick="event.stopPropagation()">
-                <div class="delete-confirm-title-row">
-                    <i data-lucide="alert-circle" class="delete-confirm-icon"></i>
-                    <div id="app-notice-title" class="delete-confirm-title">提示</div>
-                </div>
+        <div class="delete-confirm-card" onclick="event.stopPropagation()">
+            <div class="delete-confirm-title-row">
+                <i data-lucide="alert-circle" class="delete-confirm-icon"></i>
+                <div id="app-notice-title" class="delete-confirm-title">提示</div>
+            </div>
             <div id="app-notice-message" class="delete-review-modal-desc"></div>
             <div class="delete-confirm-actions">
                 <button class="delete-btn-confirm app-notice-btn" onclick="closeAppNoticeModal()">知道了</button>
