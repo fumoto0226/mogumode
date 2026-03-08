@@ -338,6 +338,23 @@ let mapCardState = {
         dislike: { count: 0, avatars: [] }
     }
 };
+let mapFriendPreviewTimer = null;
+
+function stopMapFriendPreviewRotation() {
+    if (mapFriendPreviewTimer) {
+        clearInterval(mapFriendPreviewTimer);
+        mapFriendPreviewTimer = null;
+    }
+}
+
+function escapeMapHtml(raw) {
+    return String(raw || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
 function renderMapSocialAvatars(type, avatars = []) {
     const wrap = document.getElementById(`avatars-map-${type}`);
@@ -425,6 +442,7 @@ function computeMapFriendSocial(storeId) {
 }
 
 function refreshMapFriendSection(store) {
+    stopMapFriendPreviewRotation();
     const aliasMap = buildFriendAliasMap();
     const revs = (Array.isArray(store?.revs) ? store.revs : [])
         .map(r => ({ rev: r, user: resolveFriendFromReview(r, aliasMap) }))
@@ -444,38 +462,46 @@ function refreshMapFriendSection(store) {
         friendAvatarsWrap.innerHTML = unique.slice(0, 3).map(src => `<img src="${src}" class="f-avatar">`).join('');
     }
 
-    const scoreEl = document.querySelector('.sheet-friend-rating .friend-score');
-    const ratingNums = revs
-        .map(item => Number(item?.rev?.rating))
-        .filter(v => Number.isFinite(v) && v > 0);
-    if (scoreEl) scoreEl.innerText = ratingNums.length ? (ratingNums.reduce((a, b) => a + b, 0) / ratingNums.length).toFixed(1) : '--';
+    const ratingWrap = document.getElementById('sheet-friend-rating');
+    if (ratingWrap) {
+        if (!revs.length) {
+            ratingWrap.innerHTML = `<div class="friend-score">--</div><div class="sheet-friend-empty">暂无好友评价</div>`;
+            return;
+        }
 
-    const previewEl = document.querySelector('.friend-comment-preview');
-    if (previewEl) {
-        const withText = revs.find(item => String(item?.rev?.text || '').trim());
-        const chosen = withText || revs[0];
-        if (!chosen) {
-            previewEl.innerHTML = `<span style="color:#9aa0a6;">暂无好友评价</span>`;
-            previewEl.removeAttribute('onclick');
-        } else {
-            const text = String(chosen.rev?.text || '').trim() || `评分 ${Number(chosen.rev?.rating || 0).toFixed(1)}`;
-            const imgSrc = Array.isArray(chosen.rev?.images) ? chosen.rev.images[0] : '';
-            const avatar = getUserAvatarUrl(chosen.user);
-            const safeImg = String(imgSrc || '');
-            previewEl.innerHTML = `
-                <img src="${avatar}" class="comment-avatar">
-                <span>${text}</span>
+        const previewItems = revs.map((item, idx) => {
+            const text = String(item.rev?.text || '').trim() || `评分 ${Number(item.rev?.rating || 0).toFixed(1)}`;
+            const rating = Number(item.rev?.rating || 0);
+            const imgSrc = Array.isArray(item.rev?.images) ? item.rev.images[0] : '';
+            const clickableAttr = imgSrc ? ` data-image="${String(imgSrc).replace(/"/g, '&quot;')}"` : '';
+            return `
+                <div class="sheet-friend-rating-frame${idx === 0 ? ' is-active' : ''}">
+                    <div class="friend-score">${Number.isFinite(rating) && rating > 0 ? rating.toFixed(1) : '--'}</div>
+                    <div class="friend-comment-carousel">
+                        <div class="friend-comment-item${imgSrc ? ' is-clickable' : ''}"${clickableAttr}>${escapeMapHtml(text)}</div>
+                    </div>
+                </div>
             `;
-            if (imgSrc) {
-                previewEl.style.cursor = 'pointer';
-                previewEl.onclick = (e) => {
-                    e.stopPropagation();
-                    if (window.openActivityImageModal) window.openActivityImageModal(safeImg);
-                };
-            } else {
-                previewEl.style.cursor = 'default';
-                previewEl.removeAttribute('onclick');
-            }
+        }).join('');
+
+        ratingWrap.innerHTML = `<div class="friend-comment-carousel-track">${previewItems}</div>`;
+
+        ratingWrap.querySelectorAll('.friend-comment-item.is-clickable').forEach((el) => {
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const src = String(el.dataset.image || '');
+                if (src && window.openActivityImageModal) window.openActivityImageModal(src);
+            });
+        });
+
+        if (revs.length > 1) {
+            const track = ratingWrap.querySelector('.friend-comment-carousel-track');
+            let currentIndex = 0;
+            mapFriendPreviewTimer = setInterval(() => {
+                if (!track) return;
+                currentIndex = (currentIndex + 1) % revs.length;
+                track.style.transform = `translateY(-${currentIndex * 34}px)`;
+            }, 2600);
         }
     }
 }
@@ -615,58 +641,90 @@ function isMyMapReview(rev) {
     return !!(user && aliases.has(user));
 }
 
-function renderMapReviewsAndAlbum(store) {
-    const revs = Array.isArray(store?.revs) ? [...store.revs] : [];
-    revs.sort((a, b) => Number(b?.createdAt || 0) - Number(a?.createdAt || 0));
+function getSortedMapStoreReviews(store) {
+    return (Array.isArray(store?.revs) ? [...store.revs] : [])
+        .sort((a, b) => Number(b?.createdAt || 0) - Number(a?.createdAt || 0));
+}
+
+function buildMapReviewItems(store, scope = 'all') {
+    const revs = getSortedMapStoreReviews(store);
     const aliasMap = buildFriendAliasMap();
+
+    return revs.map((r, i) => {
+        const userName = (typeof r === 'object' && (r.user || r.displayName)) ? (r.user || r.displayName) : 'User';
+        const rating = Number((typeof r === 'object' && r.rating) || store?.rating || 0);
+        const text = typeof r?.text === 'string' ? r.text.trim() : '';
+        const imgs = Array.isArray(r?.images) ? r.images.filter(Boolean) : [];
+        const avatar = resolveMapReviewAvatar(r, i);
+        const dateStr = formatMapReviewDate(r?.createdAt);
+        const isMine = isMyMapReview(r);
+        const friendUser = resolveFriendFromReview(r, aliasMap);
+        const isFriend = !!friendUser?.id;
+        const originalIndex = (Array.isArray(store?.revs) ? store.revs : []).findIndex(item => item === r);
+        return {
+            review: r,
+            userName,
+            rating,
+            text,
+            imgs,
+            avatar,
+            dateStr,
+            isMine,
+            friendUser,
+            isFriend,
+            originalIndex
+        };
+    }).filter((item) => {
+        if (scope === 'mine') return item.isMine;
+        if (scope === 'friends') return item.isFriend;
+        return true;
+    });
+}
+
+function renderMapReviewCardHtml(store, item) {
+    const openProfileAttr = item.isFriend
+        ? `onclick="openFriendProfileFromReview('${item.friendUser.id}'); event.stopPropagation();"`
+        : '';
+    const friendBadge = item.isFriend ? `<span class="review-friend-badge">好友</span>` : '';
+    const deleteBtn = (item.isMine && item.originalIndex >= 0)
+        ? `<button class="review-delete-btn" onclick="deleteMyStoreReview('${store.id}', ${item.originalIndex}); event.stopPropagation();">删除</button>`
+        : '';
+
+    return `
+        <div class="review-card">
+            <div class="review-header">
+                <img src="${item.avatar}" class="review-avatar ${item.isFriend ? 'is-clickable' : ''}" ${openProfileAttr}>
+                <div class="review-user-info ${item.isFriend ? 'is-clickable' : ''}" ${openProfileAttr}>
+                    <div class="review-username">${item.userName}${friendBadge}</div>
+                    <div class="review-user-meta">${item.dateStr}</div>
+                </div>
+                ${deleteBtn}
+            </div>
+            <div class="review-rating-row" style="margin-bottom:${item.text ? '8px' : '0'};">
+                <b>${item.rating.toFixed(1)}</b>
+                <span style="display:inline-flex; align-items:center; gap:2px; margin-left:6px;">${renderMapReviewRatingIcons(item.rating)}</span>
+            </div>
+            ${item.text ? (typeof window.renderExpandableReviewText === 'function'
+            ? window.renderExpandableReviewText(item.text, {
+                textClassName: 'review-text',
+                wrapperClassName: 'review-text-block'
+            })
+            : `<div class="review-text">${item.text}</div>`) : ''}
+            ${item.imgs.length ? `<div class="review-images">${item.imgs.map(src =>
+            `<img src="${src}" onclick="openActivityImageModal('${String(src).replace(/'/g, "\\'")}'); event.stopPropagation();">`
+        ).join('')}</div>` : ''}
+        </div>
+    `;
+}
+
+function renderMapReviewsAndAlbum(store) {
+    const revs = getSortedMapStoreReviews(store);
+    const reviewItems = buildMapReviewItems(store, 'all');
 
     const reviewsList = document.getElementById('mp-reviews-list');
     if (reviewsList) {
-        const reviewCards = revs.length
-            ? revs.map((r, i) => {
-                const userName = (typeof r === 'object' && (r.user || r.displayName)) ? (r.user || r.displayName) : 'User';
-                const rating = Number((typeof r === 'object' && r.rating) || store?.rating || 0);
-                const text = typeof r?.text === 'string' ? r.text.trim() : '';
-                const imgs = Array.isArray(r?.images) ? r.images.filter(Boolean) : [];
-                const avatar = resolveMapReviewAvatar(r, i);
-                const dateStr = formatMapReviewDate(r?.createdAt);
-                const isMine = isMyMapReview(r);
-                const friendUser = resolveFriendFromReview(r, aliasMap);
-                const isFriend = !!friendUser?.id;
-                const openProfileAttr = isFriend
-                    ? `onclick="openFriendProfileFromReview('${friendUser.id}'); event.stopPropagation();"`
-                    : '';
-                const friendBadge = isFriend ? `<span class="review-friend-badge">好友</span>` : '';
-                const originalIndex = (Array.isArray(store?.revs) ? store.revs : []).findIndex(item => item === r);
-                const deleteBtn = (isMine && originalIndex >= 0)
-                    ? `<button class="review-delete-btn" onclick="deleteMyStoreReview('${store.id}', ${originalIndex}); event.stopPropagation();">删除</button>`
-                    : '';
-                return `
-                    <div class="review-card">
-                        <div class="review-header">
-                            <img src="${avatar}" class="review-avatar ${isFriend ? 'is-clickable' : ''}" ${openProfileAttr}>
-                            <div class="review-user-info ${isFriend ? 'is-clickable' : ''}" ${openProfileAttr}>
-                                <div class="review-username">${userName}${friendBadge}</div>
-                                <div class="review-user-meta">${dateStr}</div>
-                            </div>
-                            ${deleteBtn}
-                        </div>
-                        <div class="review-rating-row" style="margin-bottom:${text ? '8px' : '0'};">
-                            <b>${rating.toFixed(1)}</b>
-                            <span style="display:inline-flex; align-items:center; gap:2px; margin-left:6px;">${renderMapReviewRatingIcons(rating)}</span>
-                        </div>
-                        ${text ? (typeof window.renderExpandableReviewText === 'function'
-                    ? window.renderExpandableReviewText(text, {
-                        textClassName: 'review-text',
-                        wrapperClassName: 'review-text-block'
-                    })
-                    : `<div class="review-text">${text}</div>`) : ''}
-                        ${imgs.length ? `<div class="review-images">${imgs.map(src =>
-                    `<img src="${src}" onclick="openActivityImageModal('${String(src).replace(/'/g, "\\'")}'); event.stopPropagation();">`
-                ).join('')}</div>` : ''}
-                    </div>
-                `;
-            }).join('')
+        const reviewCards = reviewItems.length
+            ? reviewItems.map(item => renderMapReviewCardHtml(store, item)).join('')
             : '';
         const reviewPlaceholderText = revs.length ? '没有更多评论了～' : '还没有评论';
         reviewsList.innerHTML = `
@@ -709,6 +767,42 @@ function renderMapReviewsAndAlbum(store) {
     const avgStarsEl = document.querySelector('#sheet-tab-reviews .review-stars');
     if (avgStarsEl) avgStarsEl.innerHTML = renderMapSummaryStars(avgRating);
 }
+
+function renderMapReviewSubpage(store, scope = 'mine') {
+    const titleEl = document.getElementById('map-review-subpage-title');
+    const listEl = document.getElementById('map-review-subpage-list');
+    if (!titleEl || !listEl) return;
+
+    const items = buildMapReviewItems(store, scope);
+    titleEl.innerText = scope === 'friends' ? '朋友评价' : '我的评价';
+
+    if (!items.length) {
+        listEl.innerHTML = `<div class="sheet-subpage-empty">${scope === 'friends' ? '这家店还没有好友评价' : '你还没有评价过这家店'}</div>`;
+        return;
+    }
+
+    listEl.innerHTML = items.map(item => renderMapReviewCardHtml(store, item)).join('');
+}
+
+window.openMapReviewSubpage = (scope = 'mine') => {
+    const card = document.getElementById('map-detail-card');
+    const storeId = card?.dataset?.storeId || '';
+    const store = (window.localStores || []).find(s => s.id === storeId);
+    const overlay = document.getElementById('map-review-overlay');
+    if (!card || !store || !overlay) return;
+    renderMapReviewSubpage(store, scope);
+    overlay.classList.remove('hidden');
+    requestAnimationFrame(() => overlay.classList.add('is-open'));
+};
+
+window.closeMapReviewSubpage = () => {
+    const overlay = document.getElementById('map-review-overlay');
+    if (!overlay) return;
+    overlay.classList.remove('is-open');
+    setTimeout(() => {
+        if (!overlay.classList.contains('is-open')) overlay.classList.add('hidden');
+    }, 280);
+};
 
 function bindReviewWheelProxy(reviewsList) {
     if (!reviewsList || reviewsList.dataset.wheelBound === '1') return;
@@ -958,6 +1052,8 @@ window.renderMarkers = () => {
 window.renderMapCardFromDB = (store, opts = {}) => {
     const { mode = 'half' } = opts || {};
     mountMapSheetToAppRoot();
+    stopMapFriendPreviewRotation();
+    if (typeof window.closeMapReviewSubpage === 'function') window.closeMapReviewSubpage();
 
     if (!store) return;
     const card = document.getElementById('map-detail-card');
@@ -1478,6 +1574,8 @@ window.copyMapStoreName = () => {
 window.closeMapCard = (opts = {}) => {
     const preserveMapView = !!opts.preserveMapView;
     stopMapFocusAnimation();
+    stopMapFriendPreviewRotation();
+    if (typeof window.closeMapReviewSubpage === 'function') window.closeMapReviewSubpage();
     const card = document.getElementById('map-detail-card');
     if (card) card.classList.remove('active', 'peek', 'half', 'full');
     setMapSheetBackdrop(false);

@@ -280,39 +280,14 @@
                     <!-- 我的评价 -->
                     <div class="sheet-section">
                         <div class="sheet-section-header">
-                            <span class="sheet-section-label">我的评价 &gt;</span>
+                            <button type="button" class="sheet-section-link" onclick="openMapReviewSubpage('mine')">我的评价 &gt;</button>
                         </div>
                         <div class="sheet-my-rating">
                             <div class="my-rating-left">
                                 <span class="my-score" id="mp-my-score">暂无评分</span>
                                 <img src="images/pingfen.svg" width="14" id="mp-my-score-icon">
                             </div>
-                            <button class="sheet-checkin-btn" onclick="toggleMapCheckIn()">
-                                <span class="checkin-count" id="txt-checkin-count">(吃过0次)</span>
-                                <i data-lucide="plus-circle" width="22"></i>
-                                <span class="checkin-label">吃了</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- 朋友评价 -->
-                    <div class="sheet-section">
-                        <div class="sheet-section-header">
-                            <span class="sheet-section-label">朋友评价 &gt;</span>
-                            <div class="sheet-friend-avatars">
-                                <img src="images/avatar-placeholder.svg" class="f-avatar">
-                                <img src="images/avatar-placeholder.svg" class="f-avatar">
-                            </div>
-                        </div>
-                        <div class="sheet-friend-rating">
-                            <div class="friend-score-left">
-                                <span class="friend-score">4.3</span>
-                                <div class="friend-comment-preview">
-                                    <img src="images/avatar-placeholder.svg" class="comment-avatar">
-                                    <span>挺好吃的，环境不错...</span>
-                                </div>
-                            </div>
-                            <div class="sheet-social-btns">
+                            <div class="sheet-social-btns sheet-social-btns-inline">
                                 <div class="social-btn" onclick="toggleMapSocial('fav')">
                                     <div class="social-avatar-row" id="avatars-map-fav"></div>
                                     <img src="images/bookmark.svg" class="social-icon-img" id="icon-map-fav" alt="fav">
@@ -330,7 +305,24 @@
                                     <span id="count-map-like">7</span>
                                 </div>
                             </div>
+                            <button class="sheet-checkin-btn" onclick="toggleMapCheckIn()">
+                                <span class="checkin-count" id="txt-checkin-count">(吃过0次)</span>
+                                <i data-lucide="plus-circle" width="22"></i>
+                                <span class="checkin-label">吃了</span>
+                            </button>
                         </div>
+                    </div>
+
+                    <!-- 朋友评价 -->
+                    <div class="sheet-section">
+                        <div class="sheet-section-header">
+                            <button type="button" class="sheet-section-link" onclick="openMapReviewSubpage('friends')">朋友评价 &gt;</button>
+                            <div class="sheet-friend-avatars">
+                                <img src="images/avatar-placeholder.svg" class="f-avatar">
+                                <img src="images/avatar-placeholder.svg" class="f-avatar">
+                            </div>
+                        </div>
+                        <div class="sheet-friend-rating" id="sheet-friend-rating"></div>
                     </div>
 
                     <!-- 图片横向滚动 -->
@@ -384,8 +376,19 @@
                         <div id="mp-album-grid" class="album-grid"></div>
                     </div>
                 </div>
+
             </div>
         </section>
+
+        <div id="map-review-overlay" class="map-review-overlay hidden">
+            <div class="map-review-overlay-header">
+                <button type="button" class="map-review-overlay-back" onclick="closeMapReviewSubpage()">
+                    <img src="images/back.svg" width="10">
+                    <span id="map-review-subpage-title">我的评价</span>
+                </button>
+            </div>
+            <div id="map-review-subpage-list" class="map-review-overlay-list"></div>
+        </div>
 
         <!-- =========================================
              ADD VIEW
@@ -1208,21 +1211,10 @@
     <div id="modal-delete-review-record" class="modal-overlay"
         onclick="if(event.target===this) closeDeleteReviewRecordModal()">
         <div class="delete-review-modal-card" onclick="event.stopPropagation()">
-            <div class="delete-confirm-title-row">
-                <img src="images/trash.svg" class="delete-confirm-icon" alt="trash">
-                <div class="delete-confirm-title">删除这条记录</div>
-            </div>
-            <div class="delete-review-modal-desc">你可以删除整条吃过记录，或者只清空照片和评论内容，保留评分、时间和吃过记录。</div>
-            <button class="delete-review-option primary" onclick="confirmDeleteReviewRecord('full')">
-                <span class="delete-review-option-title">记录全部删除</span>
-                <span class="delete-review-option-desc">会减少一次吃过记录，并删除这条记录里的照片和评论内容</span>
-            </button>
-            <button class="delete-review-option" onclick="confirmDeleteReviewRecord('content-only')">
-                <span class="delete-review-option-title">只删除照片和评论内容</span>
-                <span class="delete-review-option-desc">保留评分、时间和其他记录数据，只清空文字和图片</span>
-            </button>
-            <div class="delete-confirm-actions">
-                <button class="delete-btn-cancel" onclick="closeDeleteReviewRecordModal()">取消</button>
+            <div class="delete-review-modal-actions">
+                <button class="delete-review-action delete-review-action-danger" onclick="confirmDeleteReviewRecord('full')">删除全部</button>
+                <button class="delete-review-action delete-review-action-dark" onclick="confirmDeleteReviewRecord('content-only')">只删除文字和照片</button>
+                <button class="delete-review-action delete-review-action-cancel" onclick="closeDeleteReviewRecordModal()">取消</button>
             </div>
         </div>
     </div>

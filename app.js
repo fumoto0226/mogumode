@@ -33,7 +33,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v16";
+const APP_BUILD_VERSION = "v17";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 
 // 初始化 Firebase 服务
@@ -680,6 +680,26 @@ window.toggleProfileMenu = (event) => {
     event?.stopPropagation?.();
     const menu = document.getElementById('profile-menu');
     if (!menu) return;
+    const willOpen = !menu.classList.contains('open');
+    if (willOpen) {
+        const btn = event?.currentTarget || document.querySelector('.profile-menu-btn');
+        const appRoot = document.getElementById('app');
+        const rect = btn?.getBoundingClientRect?.();
+        const appRect = appRoot?.getBoundingClientRect?.();
+        if (rect && appRect) {
+            const menuWidth = 132;
+            const gap = 8;
+            let top = Math.round(rect.top - 2);
+            let left = Math.round(rect.right + gap);
+            const maxLeft = Math.round(appRect.right - menuWidth - 12);
+            const minLeft = Math.round(appRect.left + 12);
+            if (left > maxLeft) left = maxLeft;
+            if (left < minLeft) left = minLeft;
+            if (top < Math.round(appRect.top + 12)) top = Math.round(appRect.top + 12);
+            menu.style.top = `${top}px`;
+            menu.style.left = `${left}px`;
+        }
+    }
     menu.classList.toggle('open');
 };
 
@@ -1025,24 +1045,55 @@ function normalizeOpeningValueText(raw) {
     if (/closed|休息|定休|暂停|歇业/i.test(text)) return '定休';
     if (/24\s*hours|24小时|24時間/i.test(text)) return '00:00-24:00';
     return text
+        .replace(/(\d{1,2})\s*[时時]\s*(\d{1,2})\s*分?/g, (_, hour, minute) => `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`)
+        .replace(/(\d{1,2})\s*[时時]\s*([^\d]|$)/g, (_, hour, suffix) => `${String(hour).padStart(2, '0')}:00${suffix}`)
         .replace(/\s*[\u2013\u2014〜～]\s*/g, '-')
-        .replace(/\s*,\s*/g, ' / ')
-        .replace(/\s+/g, ' ')
+        .replace(/\s*\/\s*/g, '\n')
+        .replace(/\s*,\s*/g, '\n')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n\s*/g, '\n')
         .trim();
+}
+
+function formatDayRangeLabel(startIdx, endIdx) {
+    const labels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+    if (startIdx === endIdx) return labels[startIdx];
+    return `${labels[startIdx]}-${labels[endIdx]}`;
+}
+
+function formatOpeningSummaryLine(label, value) {
+    const normalizedValue = String(value || '').trim();
+    if (!normalizedValue) return label;
+    return `${label}\n${normalizedValue}`;
 }
 
 function compressWeeklyLines(valuesByDay) {
     const allSame = valuesByDay.every(v => v === valuesByDay[0]);
-    if (allSame) return [`每天 ${valuesByDay[0]}`];
-    return [
-        `周一 ${valuesByDay[0]}`,
-        `周二 ${valuesByDay[1]}`,
-        `周三 ${valuesByDay[2]}`,
-        `周四 ${valuesByDay[3]}`,
-        `周五 ${valuesByDay[4]}`,
-        `周六 ${valuesByDay[5]}`,
-        `周日 ${valuesByDay[6]}`
-    ];
+    if (allSame) return [formatOpeningSummaryLine('每天', valuesByDay[0])];
+
+    const weekdayValue = valuesByDay[0];
+    const weekendValue = valuesByDay[5];
+    const weekdaySame = valuesByDay.slice(0, 5).every(v => v === weekdayValue);
+    const weekendSame = valuesByDay.slice(5).every(v => v === weekendValue);
+
+    if (weekdaySame && weekendSame) {
+        return [
+            formatOpeningSummaryLine('平日', weekdayValue),
+            formatOpeningSummaryLine('周末', weekendValue)
+        ];
+    }
+
+    const lines = [];
+    let start = 0;
+    while (start < valuesByDay.length) {
+        let end = start;
+        while (end + 1 < valuesByDay.length && valuesByDay[end + 1] === valuesByDay[start]) {
+            end += 1;
+        }
+        lines.push(formatOpeningSummaryLine(formatDayRangeLabel(start, end), valuesByDay[start]));
+        start = end + 1;
+    }
+    return lines;
 }
 
 function buildWeeklyLinesFromDescriptions(openingHours) {
@@ -1141,6 +1192,44 @@ function getStoreOpenTimeText(store) {
     if (fallbackTime) return `今日 ${fallbackTime}`;
     if (store.businessStatus === 'CLOSED_TEMPORARILY') return "暂停营业";
     return "暂无";
+}
+
+function renderStoreOpenTimeHtml(store) {
+    const text = getStoreOpenTimeText(store);
+    if (!text || /^(暂无|暂停营业|永久歇业|今日 )/.test(text)) {
+        return escapeHtml(text || '暂无');
+    }
+
+    const groups = text
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
+
+    const parsed = [];
+    for (let i = 0; i < groups.length; i++) {
+        const line = groups[i];
+        if (/^(每天|平日|周末|周[一二三四五六日](?:-周[一二三四五六日])?)$/.test(line)) {
+            const times = [];
+            let j = i + 1;
+            while (j < groups.length && !/^(每天|平日|周末|周[一二三四五六日](?:-周[一二三四五六日])?)$/.test(groups[j])) {
+                times.push(groups[j]);
+                j += 1;
+            }
+            parsed.push({ label: line, times });
+            i = j - 1;
+            continue;
+        }
+        parsed.push({ label: '', times: [line] });
+    }
+
+    if (!parsed.length) return escapeHtml(text);
+
+    return `<div class="hours-list">${parsed.map(group => `
+        <div class="hours-item">
+            <div class="hours-day">${escapeHtml(group.label)}</div>
+            <div class="hours-times">${group.times.map(t => `<div>${escapeHtml(t)}</div>`).join('')}</div>
+        </div>
+    `.trim()).join('')}</div>`;
 }
 
 function isStorePermanentlyClosed(store) {
@@ -1428,7 +1517,7 @@ window.generateInfoCardHtml = (store) => {
         ${fixedRows.map((r) => `
             <div class="info-row-item ${r.id === 'base-open' ? 'row-time' : ''}">
                 <div class="info-label">${r.category} :</div>
-                <div class="info-content ${r.id === 'base-open' && isStorePermanentlyClosed(store) ? 'permanent-closed' : ''}">${r.content}</div>
+                <div class="info-content ${r.id === 'base-open' && isStorePermanentlyClosed(store) ? 'permanent-closed' : ''}">${r.id === 'base-open' ? renderStoreOpenTimeHtml(store) : r.content}</div>
             </div>
         `).join("")}
         <div class="more-info-btn" onclick="openProvideInfoModal('${store.id}')">提供更多信息</div>
@@ -1698,7 +1787,9 @@ window.renderStores = (list) => {
             <!-- 店铺图片横向滚动区域 -->
             <div class="store-img-scroll">${imagesHtml}</div>
         </div>`;
-    }).join('');
+    }).join('') + `
+        <div class="store-list-endcap" aria-hidden="true">已经到底了</div>
+    `;
 
     // 重新初始化 Lucide 图标
     lucide.createIcons();
@@ -5723,7 +5814,7 @@ function renderActivityCards(container, activities) {
             </div>
             <div class="activity-store-row">
                 <div class="activity-store-name" onclick="openDetail('${s.id}', { mode: 'full', fromMap: false }); event.stopPropagation();">
-                    ${s.name}
+                    <span class="activity-store-title">${s.name}</span>
                     <span class="activity-visit-count">（吃过${a.visits}次）</span>
                 </div>
             </div>

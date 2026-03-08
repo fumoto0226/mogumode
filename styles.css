@@ -612,6 +612,17 @@ header {
     padding-bottom: 20px;
 }
 
+.store-list-endcap {
+    min-height: calc(var(--bottom-nav-total) + 1px);
+    padding: 14px 0 calc(var(--safe-bottom) + 1px);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    color: #b2bec3;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+}
+
 .store-card {
     background: white;
     border-radius: 20px;
@@ -2062,6 +2073,15 @@ header {
     color: #b2bec3;
 }
 
+.sheet-section-link {
+    border: none;
+    background: transparent;
+    padding: 0;
+    font-size: 11px;
+    color: #b2bec3;
+    cursor: pointer;
+}
+
 .sheet-friend-avatars {
     display: flex;
 }
@@ -2151,41 +2171,54 @@ header {
     font-weight: 700;
 }
 
-/* Friend Rating Section */
-.sheet-friend-rating {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+.sheet-social-btns-inline {
+    margin-left: auto;
+    margin-right: 4px;
+    gap: 8px;
 }
 
-.friend-score-left {
-    display: flex;
+/* Friend Rating Section */
+.sheet-friend-rating {
+    overflow: hidden;
+    min-height: 34px;
+}
+
+.sheet-friend-rating-frame {
+    height: 34px;
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
     align-items: center;
-    gap: 10px;
+    column-gap: 12px;
 }
 
 .friend-score {
     font-size: 22px;
-    /* font-weight: 900; */
+    line-height: 1;
 }
 
-.friend-comment-preview {
+.friend-comment-carousel-track {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    flex-direction: column;
+    transform: translateY(0);
+    transition: transform 0.34s ease;
+}
+
+.friend-comment-item {
+    min-width: 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
     font-size: 11px;
     color: #636e72;
-    max-width: 150px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.55;
+    word-break: break-word;
     cursor: default;
 }
 
-.comment-avatar {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
+.friend-comment-item.is-clickable {
+    cursor: pointer;
 }
 
 .sheet-social-btns {
@@ -2208,6 +2241,11 @@ header {
     color: #636e72;
     line-height: 1;
     font-weight: 700;
+}
+
+.sheet-friend-empty {
+    color: #9aa0a6;
+    font-size: 12px;
 }
 
 .social-avatar-row {
@@ -2270,6 +2308,68 @@ header {
 
 .map-sheet.half .sheet-full-content {
     display: block;
+}
+
+.map-review-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    max-width: 448px;
+    height: var(--app-height);
+    margin: 0 auto;
+    background: #fff;
+    z-index: 1250;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.28s ease;
+    pointer-events: none;
+    box-shadow: -12px 0 28px rgba(0, 0, 0, 0.12);
+}
+
+.map-review-overlay.is-open {
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+.map-review-overlay-header {
+    padding: 20px 16px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    background: #fff;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.map-review-overlay-back {
+    border: none;
+    background: transparent;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #2d3436;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.map-review-overlay-list {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 16px 18px;
+}
+
+.map-review-overlay-list .review-card:first-child {
+    margin-top: 4px;
+}
+
+.sheet-subpage-empty {
+    padding: 44px 8px;
+    text-align: center;
+    color: #b2bec3;
+    font-size: 13px;
 }
 
 .sheet-info-block {
@@ -2960,6 +3060,10 @@ header {
    ========================================= */
 .record-page {
     padding: 18px 14px 90px;
+    height: 100%;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 
 .record-year-row {
@@ -3824,6 +3928,7 @@ header {
 
 .profile-header-left {
     position: relative;
+    z-index: 200;
 }
 
 .profile-menu-btn,
@@ -3884,16 +3989,16 @@ header {
 }
 
 .profile-menu-popover {
-    position: absolute;
-    top: calc(100% + 8px);
-    left: 0;
+    position: fixed;
+    top: 60px;
+    left: 20px;
     min-width: 132px;
     background: #fff;
     border: 1px solid #ececec;
     border-radius: 12px;
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
     padding: 6px;
-    z-index: 30;
+    z-index: 10050;
     display: none;
 }
 
@@ -4120,9 +4225,17 @@ header {
     color: #2d3436;
     margin-bottom: 2px;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 6px;
+    min-width: 0;
     cursor: pointer;
+}
+
+.activity-store-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .activity-delete-btn {
@@ -4133,6 +4246,8 @@ header {
     font-size: 12px;
     color: #b2bec3;
     font-weight: 400;
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 .activity-rating-row {
@@ -5131,33 +5246,25 @@ header {
 
 .info-row-item {
     display: flex;
-    flex-direction: column;
-    /* 手机端上下排列更整齐 */
-    padding: 16px;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 10px 16px;
     border-bottom: 2px solid #ffffff;
-    /* 白色分割线 */
     font-size: 14px;
     color: #2d3436;
 }
 
-/* 营业时间一行可以是横向的 */
 .info-row-item.row-time {
-    flex-direction: row;
-    align-items: center;
-    gap: 12px;
+    align-items: flex-start;
 }
 
 .info-label {
+    width: 72px;
     font-weight: 700;
     color: #2d3436;
-    margin-bottom: 4px;
-    /* 如果是上下排列，留点间距 */
-    flex-shrink: 0;
-}
-
-.row-time .info-label {
     margin-bottom: 0;
-    /* 横向排列不需要底部间距 */
+    flex-shrink: 0;
+    text-align: right;
 }
 
 .info-content {
@@ -5165,6 +5272,7 @@ header {
     line-height: 1.5;
     font-size: 13px;
     flex: 1;
+    min-width: 0;
     white-space: pre-line;
 }
 
@@ -5174,9 +5282,38 @@ header {
 
 .row-time .info-content {
     text-align: left;
-    /* 时间靠左显示 */
     color: #2d3436;
     font-weight: 500;
+}
+
+.hours-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+}
+
+.hours-item {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: 10px;
+    align-items: start;
+}
+
+.hours-day {
+    color: #2d3436;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.hours-times {
+    min-width: 0;
+}
+
+.hours-times > div {
+    white-space: nowrap;
+    line-height: 1.5;
+    margin: 0;
 }
 
 /* 底部“提供更多信息”按钮 */
@@ -5445,49 +5582,49 @@ header {
 }
 
 .delete-review-modal-card {
-    width: min(calc(100vw - 40px), 420px);
-    background: #ececec;
+    background: #fff;
+    width: min(calc(100vw - 56px), 320px);
     border-radius: 20px;
     padding: 14px;
 }
 
-.delete-review-modal-desc {
-    margin: 10px 2px 14px;
-    color: #5e6470;
-    font-size: 13px;
-    line-height: 1.55;
-}
-
-.delete-review-option {
-    width: 100%;
-    border: 1px solid #d9dde5;
-    background: #fff;
-    border-radius: 18px;
-    padding: 14px 16px;
+.delete-review-modal-actions {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 6px;
-    text-align: left;
-    cursor: pointer;
-    margin-bottom: 10px;
+    gap: 8px;
 }
 
-.delete-review-option.primary {
-    border-color: #ffb8b8;
-    background: #fff8f8;
-}
-
-.delete-review-option-title {
-    color: #1d232b;
-    font-size: 14px;
+.delete-review-action {
+    width: 100%;
+    min-height: 44px;
+    border-radius: 14px;
+    border: 1.5px solid transparent;
+    font-size: 13px;
     font-weight: 700;
+    cursor: pointer;
 }
 
-.delete-review-option-desc {
-    color: #717987;
+.delete-review-action-danger {
+    background: #e53935;
+    color: #fff;
+}
+
+.delete-review-action-dark {
+    background: #111;
+    color: #fff;
+}
+
+.delete-review-action-cancel {
+    align-self: flex-end;
+    width: auto;
+    min-width: 64px;
+    min-height: 30px;
+    padding: 0 14px;
+    background: #b8bcc4;
+    color: #fff;
+    border-color: transparent;
     font-size: 12px;
-    line-height: 1.5;
+    font-weight: 600;
 }
 
 .app-notice-btn {
