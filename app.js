@@ -33,7 +33,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v17";
+const APP_BUILD_VERSION = "v20";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 
 // 初始化 Firebase 服务
@@ -6027,9 +6027,9 @@ window.openRecordDayView = (dayKey) => {
                     ${(a.budget && Number(a.budget) > 0) ? `<em>花费: ${a.budget}</em>` : ''}
                 </div>
                 ${a.review ? renderExpandableReviewText(a.review, {
-                    textClassName: 'record-day-review',
-                    wrapperClassName: 'record-day-review-block'
-                }) : ''}
+            textClassName: 'record-day-review',
+            wrapperClassName: 'record-day-review-block'
+        }) : ''}
                 ${photos ? `<div class="record-day-photos">${photos}</div>` : ''}
             </div>
         `;

@@ -5476,26 +5476,26 @@ header {
 }
 
 .provide-hour-row {
-    display: flex;
+    /* display: flex; */
     align-items: center;
     gap: 10px;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
 }
 
 .provide-hour-row span {
     width: 62px;
     color: #222;
-    font-size: 14px;
+    font-size: 12px;
 }
 
 .provide-hour-input {
     flex: 1;
     border: 1px solid #ececec;
     background: #fff;
-    height: 40px;
+    height: 30px;
     padding: 0 12px;
     font-size: 12px;
-    border-radius: 14px;
+    border-radius: 10px;
 }
 
 .provide-input-textarea {
