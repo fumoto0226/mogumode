@@ -1043,9 +1043,9 @@
         </div>
 
         <!-- 动态图片放大 -->
-        <div id="activity-image-modal" class="modal-overlay" onclick="closeActivityImageModal()">
-            <div class="activity-image-modal-card" onclick="closeActivityImageModal()">
-                <button class="activity-image-close" onclick="closeActivityImageModal()">
+        <div id="activity-image-modal" class="modal-overlay" onclick="handleActivityImageModalClick(event)">
+            <div class="activity-image-modal-card" onclick="handleActivityImageCardClick(event)">
+                <button class="activity-image-close" onclick="event.stopPropagation(); closeActivityImageModal()">
                     <img src="images/close.svg" class="activity-close-icon" alt="close">
                 </button>
                 <div class="activity-image-tools" id="activity-image-tools" onclick="event.stopPropagation()">
@@ -1060,7 +1060,11 @@
                     </div>
                 </div>
                 <img id="activity-image-modal-img" class="activity-image-modal-img" src="" alt="activity image"
-                    onclick="event.stopPropagation()">
+                    onclick="handleActivityImageClick(event)" ondblclick="toggleActivityImageZoom(event)"
+                    ontouchstart="handleActivityImageTouchStart(event)"
+                    ontouchmove="handleActivityImageTouchMove(event)"
+                    ontouchend="handleActivityImageTouchEnd(event)"
+                    ontouchcancel="handleActivityImageTouchEnd(event)">
             </div>
         </div>
 

@@ -277,8 +277,8 @@ header {
 }
 
 .sort-circle-btn {
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
     background: white;
     border: 2px solid transparent;
@@ -950,7 +950,12 @@ header {
     -webkit-overflow-scrolling: touch;
 }
 
-#view-profile,
+#view-profile {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
 #view-fav {
     overflow: hidden;
 }
@@ -1025,6 +1030,7 @@ header {
 }
 
 .input-std {
+    font-size: 14px;
     width: 100%;
     padding: 12px;
     border: 1px solid #eee;
@@ -1660,7 +1666,7 @@ header {
 .add-picked-topbar {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     margin: 2px 0 10px;
 }
 
@@ -1671,6 +1677,7 @@ header {
 
 .add-picked-chip span {
     flex: 1 1 auto;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1760,6 +1767,9 @@ header {
     color: #2f7dde;
     font-size: 14px;
     cursor: pointer;
+    flex: 0 0 auto;
+    min-width: 2.5em;
+    white-space: nowrap;
 }
 
 .add-rating-card,
@@ -2217,10 +2227,6 @@ header {
     cursor: default;
 }
 
-.friend-comment-item.is-clickable {
-    cursor: pointer;
-}
-
 .sheet-social-btns {
     display: flex;
     gap: 10px;
@@ -2269,10 +2275,11 @@ header {
 }
 
 .social-icon-img {
-    width: 34px;
+    width: auto;
     height: 34px;
+    max-width: 34px;
+    max-height: 34px;
     display: block;
-    object-fit: contain;
     image-rendering: -webkit-optimize-contrast;
 }
 
@@ -2571,6 +2578,7 @@ header {
     color: #2d3436;
     white-space: pre-wrap;
     word-break: break-word;
+    padding-bottom: 3px;
 }
 
 .review-rating-row {
@@ -2938,6 +2946,7 @@ header {
     position: sticky;
     top: 0;
     z-index: 10;
+    background: #f4f4f4;
 }
 
 .fav-tabs-row {
@@ -4176,7 +4185,12 @@ header {
 
 /* Profile Tab Content */
 .profile-tab-content {
+    flex: 1;
+    min-height: 0;
     padding: 0 0 80px 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 
 .profile-activity-list {
@@ -4363,8 +4377,20 @@ header {
 .activity-image-modal-img {
     width: 100%;
     max-height: 80vh;
-    object-fit: cover;
+    object-fit: contain;
     border-radius: 0;
+    cursor: zoom-in;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-user-drag: none;
+    transform-origin: center center;
+    transform: scale(1);
+    transition: transform 0.2s ease;
+}
+
+.activity-image-modal-img.is-zoomed {
+    cursor: zoom-out;
 }
 
 .activity-image-tools {
@@ -4411,6 +4437,40 @@ header {
 /* Profile Favorites Tabs
    复用 .fav-tabs-wrapper / .fav-tabs-row / .fav-tab-btn 的样式 */
 .profile-fav-tabs-row {}
+
+#profile-content-favorites {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 0;
+}
+
+#profile-fav-list {
+    flex: 1;
+    min-height: 0 !important;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    padding: 16px;
+    padding-bottom: 8px;
+    background: #f4f4f4;
+}
+
+#view-profile #user-info {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#view-profile #guest-info {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
 
 /* Friends Page */
 .friends-page {

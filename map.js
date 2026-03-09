@@ -472,27 +472,17 @@ function refreshMapFriendSection(store) {
         const previewItems = revs.map((item, idx) => {
             const text = String(item.rev?.text || '').trim() || `评分 ${Number(item.rev?.rating || 0).toFixed(1)}`;
             const rating = Number(item.rev?.rating || 0);
-            const imgSrc = Array.isArray(item.rev?.images) ? item.rev.images[0] : '';
-            const clickableAttr = imgSrc ? ` data-image="${String(imgSrc).replace(/"/g, '&quot;')}"` : '';
             return `
                 <div class="sheet-friend-rating-frame${idx === 0 ? ' is-active' : ''}">
                     <div class="friend-score">${Number.isFinite(rating) && rating > 0 ? rating.toFixed(1) : '--'}</div>
                     <div class="friend-comment-carousel">
-                        <div class="friend-comment-item${imgSrc ? ' is-clickable' : ''}"${clickableAttr}>${escapeMapHtml(text)}</div>
+                        <div class="friend-comment-item">${escapeMapHtml(text)}</div>
                     </div>
                 </div>
             `;
         }).join('');
 
         ratingWrap.innerHTML = `<div class="friend-comment-carousel-track">${previewItems}</div>`;
-
-        ratingWrap.querySelectorAll('.friend-comment-item.is-clickable').forEach((el) => {
-            el.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const src = String(el.dataset.image || '');
-                if (src && window.openActivityImageModal) window.openActivityImageModal(src);
-            });
-        });
 
         if (revs.length > 1) {
             const track = ratingWrap.querySelector('.friend-comment-carousel-track');

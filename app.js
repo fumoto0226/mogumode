@@ -33,7 +33,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v20";
+const APP_BUILD_VERSION = "v21";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 
 // 初始化 Firebase 服务
@@ -4914,6 +4914,72 @@ function resetRecordDayViewState() {
     currentRecordDayKey = "";
 }
 
+function isVisibleElement(el) {
+    if (!el || !el.isConnected) return false;
+    const style = window.getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+}
+
+function isScrollableElement(el) {
+    if (!isVisibleElement(el)) return false;
+    const { overflowY } = window.getComputedStyle(el);
+    const allowsScroll = overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay';
+    return allowsScroll && el.scrollHeight > el.clientHeight + 2;
+}
+
+function getActiveViewScrollTarget() {
+    const activeView = Array.from(document.querySelectorAll('#app > section'))
+        .find(section => !section.classList.contains('hidden'));
+    if (!activeView) return null;
+
+    const directSelectorsByView = {
+        'view-home': ['.store-list'],
+        'view-add': ['#view-add'],
+        'view-fav': ['#record-day-view.is-open', '#record-day-view:not(.hidden)', '#view-fav'],
+        'view-profile': [
+            '#friends-list',
+            '#friends-page',
+            '#profile-fav-list',
+            '#profile-content-activity',
+            '#profile-content-favorites',
+            '#guest-info',
+            '#view-profile'
+        ]
+    };
+
+    const directSelectors = directSelectorsByView[activeView.id] || [];
+    for (const selector of directSelectors) {
+        const target = document.querySelector(selector);
+        if (isScrollableElement(target)) return target;
+    }
+
+    if (isScrollableElement(activeView)) return activeView;
+
+    const descendants = Array.from(activeView.querySelectorAll('*'))
+        .filter(isScrollableElement)
+        .sort((a, b) => b.scrollHeight - a.scrollHeight);
+    return descendants[0] || null;
+}
+
+function scrollActiveViewToTop() {
+    const scrollTarget = getActiveViewScrollTarget();
+    if (!scrollTarget) return;
+    scrollTarget.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function shouldIgnoreTopTap(target) {
+    return !!target.closest(
+        'button, a, input, textarea, select, label, summary, [role="button"], [contenteditable="true"], .user-circle, .location-capsule, .profile-menu-popover'
+    );
+}
+
+document.addEventListener('click', (e) => {
+    const trigger = e.target.closest('header, .record-day-header, .profile-header, .friends-header, .login-header');
+    if (!trigger || shouldIgnoreTopTap(e.target)) return;
+    scrollActiveViewToTop();
+});
+
 /* =========================================
    13. 页面切换逻辑
    在首页、地图、添加、收藏、个人页面之间切换
@@ -5657,7 +5723,7 @@ window.switchProfileTab = (tab) => {
 
     // 切换内容
     document.getElementById('profile-content-activity').style.display = tab === 'activity' ? 'block' : 'none';
-    document.getElementById('profile-content-favorites').style.display = tab === 'favorites' ? 'block' : 'none';
+    document.getElementById('profile-content-favorites').style.display = tab === 'favorites' ? 'flex' : 'none';
 
     // 渲染对应内容
     if (tab === 'activity') {
@@ -6080,6 +6146,7 @@ window.openActivityImageModal = (src, dayKey = "") => {
     if (!modal || !img) return;
     currentImageModalDateKey = dayKey || currentRecordDayKey || "";
     currentImageModalSrc = src;
+    resetActivityImageZoom();
     img.src = src;
     const canSetMain = !!(currentImageModalDateKey && currentUser && !isViewingFriendProfile());
     if (tools) tools.classList.toggle('hidden', !canSetMain);
@@ -6103,11 +6170,162 @@ window.closeActivityImageModal = () => {
     const modal = document.getElementById('activity-image-modal');
     const img = document.getElementById('activity-image-modal-img');
     if (!modal || !img) return;
+    clearPendingActivityImageModalClose();
+    resetActivityImageZoom();
     modal.classList.remove('open');
     img.src = '';
     img.onload = null;
     currentImageModalDateKey = "";
     currentImageModalSrc = "";
+};
+
+let activityImageModalCloseTimer = null;
+let activityImageZoomed = false;
+let activityImageTouchGesture = {
+    startDistance: 0,
+    startScale: 1,
+    active: false,
+    skipTapClose: false
+};
+
+function clearPendingActivityImageModalClose() {
+    if (!activityImageModalCloseTimer) return;
+    clearTimeout(activityImageModalCloseTimer);
+    activityImageModalCloseTimer = null;
+}
+
+function scheduleActivityImageModalClose() {
+    clearPendingActivityImageModalClose();
+    activityImageModalCloseTimer = setTimeout(() => {
+        activityImageModalCloseTimer = null;
+        closeActivityImageModal();
+    }, 220);
+}
+
+function resetActivityImageZoom() {
+    const img = document.getElementById('activity-image-modal-img');
+    activityImageZoomed = false;
+    activityImageTouchGesture.startDistance = 0;
+    activityImageTouchGesture.startScale = 1;
+    activityImageTouchGesture.active = false;
+    activityImageTouchGesture.skipTapClose = false;
+    if (!img) return;
+    img.classList.remove('is-zoomed');
+    img.style.transform = 'scale(1)';
+    img.style.transformOrigin = 'center center';
+}
+
+function getActivityImageCurrentScale(img) {
+    if (!img) return 1;
+    const match = (img.style.transform || '').match(/scale\(([\d.]+)\)/);
+    const scale = match ? Number(match[1]) : 1;
+    return Number.isFinite(scale) ? scale : 1;
+}
+
+function setActivityImageScale(img, scale, originX = 50, originY = 50) {
+    if (!img) return;
+    const nextScale = Math.min(4, Math.max(1, scale));
+    activityImageZoomed = nextScale > 1.01;
+    img.classList.toggle('is-zoomed', activityImageZoomed);
+    img.style.transformOrigin = `${originX}% ${originY}%`;
+    img.style.transform = `scale(${nextScale})`;
+}
+
+function getTouchDistance(touchA, touchB) {
+    const dx = touchA.clientX - touchB.clientX;
+    const dy = touchA.clientY - touchB.clientY;
+    return Math.hypot(dx, dy);
+}
+
+function getTouchMidpointPercent(img, touchA, touchB) {
+    const rect = img.getBoundingClientRect();
+    if (!rect.width || !rect.height) return { x: 50, y: 50 };
+    const clientX = (touchA.clientX + touchB.clientX) / 2;
+    const clientY = (touchA.clientY + touchB.clientY) / 2;
+    return {
+        x: ((clientX - rect.left) / rect.width) * 100,
+        y: ((clientY - rect.top) / rect.height) * 100
+    };
+}
+
+window.handleActivityImageModalClick = (event) => {
+    if (event.target !== event.currentTarget) return;
+    scheduleActivityImageModalClose();
+};
+
+window.handleActivityImageCardClick = (event) => {
+    if (event.target.closest('.activity-image-tools, .activity-image-close')) return;
+    scheduleActivityImageModalClose();
+};
+
+window.handleActivityImageClick = (event) => {
+    event.stopPropagation();
+    if (activityImageTouchGesture.skipTapClose) {
+        activityImageTouchGesture.skipTapClose = false;
+        clearPendingActivityImageModalClose();
+        return;
+    }
+    scheduleActivityImageModalClose();
+};
+
+window.toggleActivityImageZoom = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    clearPendingActivityImageModalClose();
+
+    const img = event.currentTarget;
+    if (!img) return;
+
+    if (activityImageZoomed) {
+        resetActivityImageZoom();
+        return;
+    }
+
+    const rect = img.getBoundingClientRect();
+    const originX = rect.width ? ((event.clientX - rect.left) / rect.width) * 100 : 50;
+    const originY = rect.height ? ((event.clientY - rect.top) / rect.height) * 100 : 50;
+
+    activityImageZoomed = true;
+    img.classList.add('is-zoomed');
+    img.style.transformOrigin = `${originX}% ${originY}%`;
+    img.style.transform = 'scale(2)';
+};
+
+window.handleActivityImageTouchStart = (event) => {
+    if (!event.currentTarget || event.touches.length !== 2) return;
+    const img = event.currentTarget;
+    const [touchA, touchB] = event.touches;
+    clearPendingActivityImageModalClose();
+    activityImageTouchGesture.startDistance = getTouchDistance(touchA, touchB);
+    activityImageTouchGesture.startScale = getActivityImageCurrentScale(img);
+    activityImageTouchGesture.active = activityImageTouchGesture.startDistance > 0;
+    activityImageTouchGesture.skipTapClose = activityImageTouchGesture.active;
+};
+
+window.handleActivityImageTouchMove = (event) => {
+    if (!event.currentTarget || event.touches.length !== 2 || !activityImageTouchGesture.active) return;
+    const img = event.currentTarget;
+    const [touchA, touchB] = event.touches;
+    const distance = getTouchDistance(touchA, touchB);
+    if (!distance || !activityImageTouchGesture.startDistance) return;
+    const scale = activityImageTouchGesture.startScale * (distance / activityImageTouchGesture.startDistance);
+    const midpoint = getTouchMidpointPercent(img, touchA, touchB);
+    event.preventDefault();
+    setActivityImageScale(img, scale, midpoint.x, midpoint.y);
+    activityImageTouchGesture.skipTapClose = true;
+};
+
+window.handleActivityImageTouchEnd = (event) => {
+    if (event.touches.length >= 2) return;
+    activityImageTouchGesture.active = false;
+    activityImageTouchGesture.startDistance = 0;
+    activityImageTouchGesture.startScale = 1;
+
+    const img = event.currentTarget;
+    if (img && getActivityImageCurrentScale(img) <= 1.01) {
+        setActivityImageScale(img, 1);
+        activityImageTouchGesture.skipTapClose = false;
+    }
 };
 
 function positionActivityImageOverlay() {
