@@ -2911,6 +2911,8 @@ header {
 
 /* Map Pin */
 .map-pin {
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -2918,23 +2920,26 @@ header {
     cursor: pointer;
     transition: transform 0.2s;
     position: absolute;
-    transform: translate(-50%, -50%);
 }
 
 .map-pin:active {
-    transform: translate(-50%, -50%) scale(0.9);
+    transform: scale(0.9);
 }
 
-.map-pin img {
+.map-pin img,
+.map-pin svg {
     width: 32px;
     height: 32px;
     display: block;
+    flex: 0 0 32px;
     image-rendering: auto;
     shape-rendering: geometricPrecision;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    transform: translateZ(0);
-    will-change: transform;
+    text-rendering: geometricPrecision;
+    transform-origin: center;
+}
+
+.map-pin svg {
+    overflow: visible;
 }
 
 /* =========================================

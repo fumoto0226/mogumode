@@ -33,7 +33,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v21";
+const APP_BUILD_VERSION = "v21.1";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 
 // 初始化 Firebase 服务
