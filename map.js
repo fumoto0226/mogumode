@@ -1268,6 +1268,23 @@ async function runPlacesSearchRequest(body, fieldMask, languageCode = 'ja') {
     return (await response.json()).places || [];
 }
 
+async function runPlacesNearbyRequest(body, fieldMask, languageCode = 'ja') {
+    const payload = {
+        ...body,
+        languageCode
+    };
+    const response = await fetch(`https://places.googleapis.com/v1/places:searchNearby`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': MAPS_API_KEY,
+            'X-Goog-FieldMask': fieldMask
+        },
+        body: JSON.stringify(payload)
+    });
+    return (await response.json()).places || [];
+}
+
 function mergeLocalizedPlaceResults(localizedPlaces = [], englishPlaces = []) {
     const localMap = new Map(localizedPlaces.map((p) => [p.id || '', p]));
     const englishMap = new Map(englishPlaces.map((p) => [p.id || '', p]));
@@ -1385,6 +1402,41 @@ window.placesSearchTextByBounds = async (q, bounds, photo = false) => {
         const [localPlaces, englishPlaces] = await Promise.all([
             runPlacesSearchRequest(body, f, 'ja'),
             runPlacesSearchRequest(body, f, 'en')
+        ]);
+        return mergeLocalizedPlaceResults(localPlaces, englishPlaces);
+    } catch (e) {
+        console.error(e);
+        return [];
+    }
+};
+
+window.placesSearchNearby = async (center, opts = {}) => {
+    const lat = Number(center?.lat);
+    const lng = Number(center?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+
+    const radius = Math.max(1, Math.min(500, Number(opts.radius) || 100));
+    const maxResultCount = Math.max(1, Math.min(20, Number(opts.maxResultCount) || 20));
+    const includedTypes = Array.isArray(opts.includedTypes) && opts.includedTypes.length
+        ? opts.includedTypes
+        : ['restaurant', 'cafe', 'bar', 'bakery', 'meal_takeaway'];
+    const f = 'places.displayName,places.formattedAddress,places.location,places.id,places.regularOpeningHours,places.currentOpeningHours,places.primaryType,places.primaryTypeDisplayName,places.types,places.photos';
+
+    try {
+        const body = {
+            includedTypes,
+            maxResultCount,
+            locationRestriction: {
+                circle: {
+                    center: { latitude: lat, longitude: lng },
+                    radius
+                }
+            },
+            rankPreference: 'DISTANCE'
+        };
+        const [localPlaces, englishPlaces] = await Promise.all([
+            runPlacesNearbyRequest(body, f, 'ja'),
+            runPlacesNearbyRequest(body, f, 'en')
         ]);
         return mergeLocalizedPlaceResults(localPlaces, englishPlaces);
     } catch (e) {

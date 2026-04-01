@@ -33,7 +33,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v21.1";
+const APP_BUILD_VERSION = "v22";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 
 // 初始化 Firebase 服务
@@ -2781,6 +2781,8 @@ let addSearchMap = null;
 let addSearchMapMarkers = [];
 let addSelectedSearchItemKey = "";
 let addSelectedMarkerScaleFrames = new Map();
+let addNearbySearchOrigin = null;
+let isAddNearbySearchLoading = false;
 let addComposerReturnContext = {
     source: 'pick',
     storeId: '',
@@ -3116,6 +3118,11 @@ function bindAddRatingGesture() {
 function refreshAddWalkTimeDisplay() {
     const walkEl = document.getElementById('add-walk-time-display');
     if (!walkEl) return;
+    if (Number.isFinite(selectedStoreDistance) && selectedStoreDistance >= 0) {
+        const mins = Math.max(1, Math.round(selectedStoreDistance / 70));
+        walkEl.innerText = `${mins}分钟`;
+        return;
+    }
     walkEl.innerText = selectedStoreLocation ? formatStoreDistanceText(selectedStoreLocation) : '--分钟';
 }
 
@@ -3151,6 +3158,14 @@ function updateAddSelectedStoreActions() {
     updateAddSearchClearButton();
 }
 
+function setAddNearbySearchButtonLoading(loading) {
+    const btn = document.getElementById('add-nearby-search-btn');
+    if (!btn) return;
+    btn.disabled = !!loading;
+    btn.classList.toggle('is-loading', !!loading);
+    btn.innerText = loading ? '读取附近店铺中...' : '搜索附近店铺';
+}
+
 function updateAddSearchClearButton() {
     const input = document.getElementById('add-search-input');
     const btn = document.getElementById('add-search-clear-btn');
@@ -3173,6 +3188,7 @@ window.clearAddSearchInput = () => {
     }
     addSearchLatestItems = [];
     addSearchLatestQuery = "";
+    addNearbySearchOrigin = null;
     addSelectedStoreName = "";
     addSelectedIsLocal = false;
     addSelectedSearchItemKey = "";
@@ -3237,6 +3253,7 @@ function resetAddComposerFlow() {
     addSelectedIsLocal = false;
     addSearchLatestItems = [];
     addSearchLatestQuery = "";
+    addNearbySearchOrigin = null;
     hideAddSearchMap();
     clearAddSearchMapMarkers();
     updateAddPickConfirmButton();
@@ -3602,12 +3619,18 @@ function refreshAddSearchMapMarkers(items = [], opts = {}) {
     map.fitBounds(bounds, 42);
 }
 
-function buildLocalAddSearchItem(store, listEl) {
+function buildLocalAddSearchItem(store, listEl, opts = {}) {
+    const distanceMeters = Number(opts.distanceMeters);
+    const distanceText = Number.isFinite(distanceMeters) && distanceMeters >= 0
+        ? `${Math.round(distanceMeters)}m`
+        : "";
+    const addressText = opts.addressText || store.address || store.formattedAddress || "";
     return {
         key: `local:${store.id}`,
         source: 'local',
         name: store.name,
-        address: store.address || store.formattedAddress || "",
+        address: addressText,
+        secondaryText: distanceText ? `${distanceText} · ${addressText || "地址未收录"}` : (addressText || "地址未收录"),
         lat: Number(store.lat),
         lng: Number(store.lng),
         onClick: () => {
@@ -3616,7 +3639,7 @@ function buildLocalAddSearchItem(store, listEl) {
             selectedExistingStoreId = store.id;
             selectedStorePlaceId = store.googlePlaceId || null;
             selectedStoreOpeningHours = store.openingHours || null;
-            selectedStoreDistance = getStoreLinearDistanceMeters(store);
+            selectedStoreDistance = Number.isFinite(distanceMeters) ? Math.round(distanceMeters) : getStoreLinearDistanceMeters(store);
             selectedStoreAddress = store.address || store.formattedAddress || null;
             selectedStoreCuisineLabel = getStoreCuisineText(store) || null;
             selectedStorePrimaryType = store.primaryType || null;
@@ -3647,14 +3670,20 @@ function getPreferredPlaceName(place) {
     ).trim();
 }
 
-function buildGoogleAddSearchItem(place, listEl) {
+function buildGoogleAddSearchItem(place, listEl, opts = {}) {
     const preferredName = getPreferredPlaceName(place);
     const placeKey = `google:${place.id || normalizeStoreName(preferredName)}`;
+    const distanceMeters = Number(opts.distanceMeters);
+    const distanceText = Number.isFinite(distanceMeters) && distanceMeters >= 0
+        ? `${Math.round(distanceMeters)}m`
+        : "";
+    const addressText = place.formattedAddress || "";
     return {
         key: placeKey,
         source: 'google',
         name: preferredName,
-        address: place.formattedAddress || "",
+        address: addressText,
+        secondaryText: distanceText ? `${distanceText} · ${addressText || "地址未收录"}` : (addressText || "地址未收录"),
         lat: Number(place.location?.latitude),
         lng: Number(place.location?.longitude),
         placeId: place.id || "",
@@ -3675,7 +3704,9 @@ function buildGoogleAddSearchItem(place, listEl) {
                 selectedStoreCuisineLabel = getCuisineRuleByType(place.primaryType)?.label || place.primaryTypeDisplayName?.text || null;
                 selectedStorePrimaryType = place.primaryType || null;
                 selectedStoreTypes = Array.isArray(place.types) ? [...place.types] : null;
-                selectedStoreDistance = getStoreLinearDistanceMeters(selectedStoreLocation);
+                selectedStoreDistance = Number.isFinite(distanceMeters)
+                    ? Math.round(distanceMeters)
+                    : getStoreLinearDistanceMeters(selectedStoreLocation);
             }
             onAddStorePicked(preferredName, false);
             openAddSearchMap({ preserveView: true });
@@ -3685,13 +3716,40 @@ function buildGoogleAddSearchItem(place, listEl) {
     };
 }
 
-function applyAddSearchResults(items, listEl, queryText) {
+function findMatchingLocalStoreForPlace(place) {
+    const placeId = String(place?.id || '').trim();
+    const normalizedGoogleName = normalizeStoreName(getPreferredPlaceName(place));
+    return localStores.find(s =>
+        (placeId && s.googlePlaceId && s.googlePlaceId === placeId) ||
+        (normalizedGoogleName && normalizeStoreName(s.name) === normalizedGoogleName)
+    ) || null;
+}
+
+function buildAddItemsFromGooglePlaces(places, listEl, origin = null) {
+    return (Array.isArray(places) ? places : []).map((place) => {
+        const lat = Number(place?.location?.latitude);
+        const lng = Number(place?.location?.longitude);
+        const distanceMeters = (origin && Number.isFinite(lat) && Number.isFinite(lng))
+            ? haversineDistanceMeters(origin, { lat, lng })
+            : null;
+        const localStore = findMatchingLocalStoreForPlace(place);
+        if (localStore) {
+            return buildLocalAddSearchItem(localStore, listEl, {
+                distanceMeters,
+                addressText: place.formattedAddress || localStore.address || localStore.formattedAddress || ""
+            });
+        }
+        return buildGoogleAddSearchItem(place, listEl, { distanceMeters });
+    }).filter(Boolean);
+}
+
+function applyAddSearchResults(items, listEl, queryText, opts = {}) {
     addSearchLatestItems = items;
     addSearchLatestQuery = (queryText || "").trim();
     renderAddSearchResultList(items, listEl);
     const toggleLink = document.getElementById('add-map-toggle-link');
     if (toggleLink) {
-        const shouldShow = addSearchLatestQuery.length >= 2;
+        const shouldShow = addSearchLatestQuery.length >= 2 || !!opts.forceMapToggle;
         toggleLink.classList.toggle('hidden', !shouldShow);
     }
 
@@ -3740,9 +3798,20 @@ window.searchAddStoresInMapArea = async () => {
     const map = ensureAddSearchMap();
     if (!map) return;
     const q = (addSearchLatestQuery || document.getElementById('add-search-input')?.value || '').trim();
-    if (q.length < 2) return;
     const bounds = map.getBounds();
     if (!bounds) return;
+    if (q.length < 2) {
+        if (!addNearbySearchOrigin) return;
+        const list = document.getElementById('add-search-results');
+        if (!list) return;
+        const center = bounds.getCenter?.();
+        const places = center && typeof window.placesSearchNearby === 'function'
+            ? await window.placesSearchNearby({ lat: center.lat(), lng: center.lng() }, { radius: 100, maxResultCount: 20 })
+            : [];
+        const items = buildAddItemsFromGooglePlaces(places, list, center ? { lat: center.lat(), lng: center.lng() } : addNearbySearchOrigin);
+        applyAddSearchResults(items, list, "", { forceMapToggle: true });
+        return;
+    }
     await window.searchStoreForAdd(q, { mapBounds: bounds });
 };
 
@@ -3752,12 +3821,12 @@ window.addEventListener('resize', () => {
 
 function renderAddSearchResultList(items, listEl) {
     if (!items.length) {
-        listEl.innerHTML = "<div style='padding:10px'>No results</div>";
+        listEl.innerHTML = "<div style='padding:10px'>没有结果</div>";
         return;
     }
 
     listEl.innerHTML = "";
-    items.slice(0, 8).forEach(item => {
+    items.slice(0, 20).forEach(item => {
         const d = document.createElement('div');
         d.className = `result-item ${item.key && item.key === addSelectedSearchItemKey ? 'active' : ''}`;
 
@@ -3767,7 +3836,7 @@ function renderAddSearchResultList(items, listEl) {
 
         d.innerHTML = `
             <div class="result-item-name"><b>${item.name}</b>${badge}</div>
-            <small>${item.address || "地址未收录"}</small>
+            <small>${item.secondaryText || item.address || "地址未收录"}</small>
         `;
 
         d.onclick = item.onClick;
@@ -3835,6 +3904,85 @@ window.searchStoreForAdd = async (queryText = null, opts = {}) => {
     }).map(p => buildGoogleAddSearchItem(p, list));
 
     applyAddSearchResults([...localItems, ...googleItems], list, q);
+};
+
+function getCurrentPositionOnce() {
+    return new Promise((resolve, reject) => {
+        if (!navigator.geolocation) {
+            reject(new Error("当前浏览器不支持读取定位"));
+            return;
+        }
+        navigator.geolocation.getCurrentPosition((position) => {
+            const lat = Number(position?.coords?.latitude);
+            const lng = Number(position?.coords?.longitude);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                reject(new Error("读取定位失败，请重试"));
+                return;
+            }
+            resolve({ lat, lng });
+        }, (error) => {
+            const code = Number(error?.code);
+            if (code === 1) reject(new Error("你拒绝了定位权限，请在浏览器设置里允许定位"));
+            else if (code === 2) reject(new Error("暂时无法获取当前位置，请检查定位服务"));
+            else if (code === 3) reject(new Error("定位超时，请重试"));
+            else reject(new Error("读取定位失败，请重试"));
+        }, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        });
+    });
+}
+
+window.searchNearbyAddStores = async () => {
+    if (isAddNearbySearchLoading) return;
+    const list = document.getElementById('add-search-results');
+    const input = document.getElementById('add-search-input');
+    if (!list) return;
+
+    isAddNearbySearchLoading = true;
+    setAddNearbySearchButtonLoading(true);
+
+    try {
+        const origin = await getCurrentPositionOnce();
+        addNearbySearchOrigin = origin;
+        resetSelectedStoreState();
+        const nearbyPlaces = typeof window.placesSearchNearby === 'function'
+            ? await window.placesSearchNearby(origin, { radius: 100, maxResultCount: 20 })
+            : [];
+
+        if (input) input.value = "";
+        lastAddQuery = "";
+        addSelectedSearchItemKey = "";
+        addSelectedStoreName = "";
+        addSelectedIsLocal = false;
+        selectedExistingStoreId = null;
+        updateAddPickConfirmButton();
+        updateAddSelectedStoreActions();
+        updateAddSearchClearButton();
+
+        list.classList.add('active');
+        if (!nearbyPlaces.length) {
+            addSearchLatestItems = [];
+            addSearchLatestQuery = "";
+            const toggleLink = document.getElementById('add-map-toggle-link');
+            if (toggleLink) {
+                toggleLink.classList.add('hidden');
+                toggleLink.innerText = '在地图上查看';
+            }
+            list.innerHTML = "<div style='padding:10px'>100米内没有 Google 地图店铺</div>";
+            hideAddSearchMap();
+            return;
+        }
+
+        const items = buildAddItemsFromGooglePlaces(nearbyPlaces, list, origin);
+        applyAddSearchResults(items, list, "", { forceMapToggle: true });
+    } catch (err) {
+        showAppNoticeModal(err?.message || "读取定位失败，请重试");
+    } finally {
+        isAddNearbySearchLoading = false;
+        setAddNearbySearchButtonLoading(false);
+    }
 };
 
 async function placesSearchTextCached(q, photo = false) {
