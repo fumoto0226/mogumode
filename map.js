@@ -72,6 +72,20 @@ function getSelectedStorePinUrl(store) {
     return 'images/dian01.svg';
 }
 
+function getMapPinMarkup(type = 'default') {
+    switch (type) {
+        case 'like':
+            return '<img src="images/pin-like.svg" alt="">';
+        case 'dislike':
+            return '<img src="images/pin-dislike.svg" alt="">';
+        case 'fav':
+            return '<img src="images/pin-fav.svg" alt="">';
+        case 'default':
+        default:
+            return '<img src="images/pin-default.svg" alt="">';
+    }
+}
+
 function setSelectedStorePin(store) {
     if (!map || !store?.lat || !store?.lng) return;
     const dest = { lat: Number(store.lat), lng: Number(store.lng) };
@@ -878,8 +892,8 @@ window.initMap = () => {
             const projection = this.getProjection();
             const point = projection.fromLatLngToDivPixel(this.latlng);
             if (point) {
-                this.div.style.left = point.x + 'px';
-                this.div.style.top = point.y + 'px';
+                this.div.style.left = Math.round(point.x) + 'px';
+                this.div.style.top = Math.round(point.y) + 'px';
             }
         }
 
@@ -999,19 +1013,19 @@ window.renderMarkers = () => {
 
         // 默认样式
         let pinClass = "pin-default";
-        let iconHtml = '<img src="images/pin-default.svg">';
+        let iconHtml = getMapPinMarkup('default');
 
         // 根据状态设置不同颜色
         // 优先级：难吃(蓝) > 好吃(红) > 想吃(黄) > 默认
         if (dislikes.has(store.id)) {
             pinClass = "pin-dislike";
-            iconHtml = '<img src="images/pin-dislike.svg">';
+            iconHtml = getMapPinMarkup('dislike');
         } else if (likes.has(store.id)) {
             pinClass = "pin-like";
-            iconHtml = '<img src="images/pin-like.svg">';
+            iconHtml = getMapPinMarkup('like');
         } else if (myFavs.includes(store.id)) {
             pinClass = "pin-fav";
-            iconHtml = '<img src="images/pin-fav.svg">';
+            iconHtml = getMapPinMarkup('fav');
         }
 
         // 创建标记
