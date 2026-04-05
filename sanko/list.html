@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <title>Work List - QingYan Studio</title>
+    <link rel="icon" type="image/svg+xml" href="./img/logo.svg" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <!-- 顶部：和首页一致的 Work / About + Map / List / Images 导航 -->
+    <section class="tabs-only-section">
+      <div class="tabs-container">
+        <div class="nav-tabs">
+          <button class="nav-tab active" data-page="work">Work</button>
+          <button class="nav-tab" data-page="about">About</button>
+        </div>
+        <div class="view-tabs">
+          <button class="view-tab active" data-view="list">List</button>
+          <button class="view-tab" data-view="images">Images</button>
+          <button class="view-tab" data-view="map" id="list-to-map">Map</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 主体：左侧大图，右侧列表 -->
+    <main class="list-page">
+      <section class="list-image-panel">
+        <div class="list-image-wrapper">
+          <img
+            id="list-main-image"
+            src=""
+            alt="Project Image"
+            class="list-main-image"
+          />
+        </div>
+      </section>
+
+      <section class="list-table-panel">
+        <table class="project-list-table">
+          <thead>
+            <tr>
+              <th id="year-header" class="col-year">
+                Year
+                <span id="year-arrow">▼</span>
+              </th>
+              <th class="col-title">Project</th>
+              <th class="col-designer" data-en="Client" data-zh="委托方">Client</th>
+              <th class="col-location">Location</th>
+            </tr>
+          </thead>
+          <tbody id="project-list-body">
+            <!-- 行由 JS 注入 -->
+          </tbody>
+        </table>
+      </section>
+    </main>
+
+    <!-- 页面底部锚点，用于从作品页返回时定位到列表底部 -->
+    <div id="list-bottom"></div>
+
+    <script src="./projects-data.js"></script>
+    <script src="./list.js"></script>
+  </body>
+</html>

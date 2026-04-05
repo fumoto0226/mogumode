@@ -711,6 +711,9 @@ function buildMapReviewItems(store, scope = 'all') {
 }
 
 function renderMapReviewCardHtml(store, item) {
+    const reviewGalleryKey = typeof window.registerActivityImageGallery === 'function'
+        ? window.registerActivityImageGallery(item.imgs.map(img => window.getImageAssetFullUrl ? window.getImageAssetFullUrl(img) : img).filter(Boolean))
+        : '';
     const openProfileAttr = item.isFriend
         ? `onclick="openFriendProfileFromReview('${item.friendUser.id}'); event.stopPropagation();"`
         : '';
@@ -739,9 +742,12 @@ function renderMapReviewCardHtml(store, item) {
                 wrapperClassName: 'review-text-block'
             })
             : `<div class="review-text">${item.text}</div>`) : ''}
-            ${item.imgs.length ? `<div class="review-images">${item.imgs.map(src =>
-            `<img src="${src}" onclick="openActivityImageModal('${String(src).replace(/'/g, "\\'")}'); event.stopPropagation();">`
-        ).join('')}</div>` : ''}
+            ${item.imgs.length ? `<div class="review-images">${item.imgs.map((src, index) => {
+            const fullSrc = window.getImageAssetFullUrl ? window.getImageAssetFullUrl(src) : String(src || '');
+            const thumbSrc = window.getImageAssetThumbUrl ? window.getImageAssetThumbUrl(src) : fullSrc;
+            if (!fullSrc || !thumbSrc) return '';
+            return `<img src="${String(thumbSrc).replace(/"/g, '&quot;')}" loading="lazy" decoding="async" onclick="openActivityImageModal('${String(fullSrc).replace(/'/g, "\\'")}', '', '${reviewGalleryKey}', ${index}); event.stopPropagation();">`;
+        }).join('')}</div>` : ''}
         </div>
     `;
 }
@@ -763,20 +769,26 @@ function renderMapReviewsAndAlbum(store) {
         bindReviewWheelProxy(reviewsList);
     }
 
-    const uniqPhotos = (typeof window.getStorePreviewImages === 'function')
-        ? window.getStorePreviewImages(store, 300)
+    const previewEntries = (typeof window.getStorePreviewImageEntries === 'function')
+        ? window.getStorePreviewImageEntries(store, 300)
         : Array.from(new Set([
             ...(Array.isArray(store?.images) ? store.images : []),
             ...revs.flatMap(r => Array.isArray(r?.images) ? r.images : [])
         ].filter(Boolean)));
     const albumGrid = document.getElementById('mp-album-grid');
     if (albumGrid) {
-        const photoItems = uniqPhotos.length
-            ? uniqPhotos.map(src =>
-                `<img src="${src}" onclick="openActivityImageModal('${String(src).replace(/'/g, "\\'")}'); event.stopPropagation();">`
-            ).join('')
+        const albumGalleryKey = typeof window.registerActivityImageGallery === 'function'
+            ? window.registerActivityImageGallery(previewEntries.map(entry => window.getImageAssetFullUrl ? window.getImageAssetFullUrl(entry) : entry).filter(Boolean))
             : '';
-        const photoPlaceholderText = uniqPhotos.length ? '没有更多图片了～' : '还没有图片';
+        const photoItems = previewEntries.length
+            ? previewEntries.map((src, index) => {
+                const fullSrc = window.getImageAssetFullUrl ? window.getImageAssetFullUrl(src) : String(src || '');
+                const thumbSrc = window.getImageAssetThumbUrl ? window.getImageAssetThumbUrl(src) : fullSrc;
+                if (!fullSrc || !thumbSrc) return '';
+                return `<img src="${String(thumbSrc).replace(/"/g, '&quot;')}" loading="lazy" decoding="async" onclick="openActivityImageModal('${String(fullSrc).replace(/'/g, "\\'")}', '', '${albumGalleryKey}', ${index}); event.stopPropagation();">`;
+            }).join('')
+            : '';
+        const photoPlaceholderText = previewEntries.length ? '没有更多图片了～' : '还没有图片';
         albumGrid.innerHTML = `
             ${photoItems}
             <div class="sheet-list-placeholder sheet-list-placeholder-photos">${photoPlaceholderText}</div>
@@ -786,7 +798,7 @@ function renderMapReviewsAndAlbum(store) {
     const revCountEl = document.getElementById('mp-review-count');
     const albumCountEl = document.getElementById('mp-album-count');
     if (revCountEl) revCountEl.innerText = String(revs.length);
-    if (albumCountEl) albumCountEl.innerText = String(uniqPhotos.length);
+    if (albumCountEl) albumCountEl.innerText = String(previewEntries.length);
 
     const avgRating = (typeof window.getStoreAverageRating === 'function')
         ? window.getStoreAverageRating(store)
@@ -1161,17 +1173,25 @@ window.renderMapCardFromDB = (store, opts = {}) => {
     const photoContainer = document.getElementById('mp-photos');
     if (photoContainer) {
         photoContainer.innerHTML = "";
-        const previewImages = (typeof window.getStorePreviewImages === 'function')
-            ? window.getStorePreviewImages(store, 80)
+        const previewImages = (typeof window.getStorePreviewImageEntries === 'function')
+            ? window.getStorePreviewImageEntries(store, 80)
             : (Array.isArray(store?.images) ? store.images : []);
         if (previewImages.length) {
-            previewImages.forEach(src => {
+            const previewGalleryKey = typeof window.registerActivityImageGallery === 'function'
+                ? window.registerActivityImageGallery(previewImages.map(entry => window.getImageAssetFullUrl ? window.getImageAssetFullUrl(entry) : entry).filter(Boolean))
+                : '';
+            previewImages.forEach((src, index) => {
+                const fullSrc = window.getImageAssetFullUrl ? window.getImageAssetFullUrl(src) : String(src || '');
+                const thumbSrc = window.getImageAssetThumbUrl ? window.getImageAssetThumbUrl(src) : fullSrc;
+                if (!fullSrc || !thumbSrc) return;
                 const img = document.createElement('img');
-                img.src = src;
+                img.src = thumbSrc;
                 img.className = 'mp-photo-item';
+                img.loading = 'lazy';
+                img.decoding = 'async';
                 img.onclick = (e) => {
                     e.stopPropagation();
-                    if (window.openActivityImageModal) window.openActivityImageModal(src);
+                    if (window.openActivityImageModal) window.openActivityImageModal(fullSrc, '', previewGalleryKey, index);
                 };
                 photoContainer.appendChild(img);
             });
@@ -1656,7 +1676,6 @@ window.copyMapStoreName = () => {
  * 关闭地图详情卡片
  */
 window.closeMapCard = (opts = {}) => {
-    const preserveMapView = !!opts.preserveMapView;
     stopMapFocusAnimation();
     stopMapFriendPreviewRotation();
     if (typeof window.closeMapReviewSubpage === 'function') window.closeMapReviewSubpage();
@@ -1671,8 +1690,6 @@ window.closeMapCard = (opts = {}) => {
     if (marker) marker.setMap(null);
     marker = null;
     activePinnedStoreId = "";
-    // 重置地图缩放
-    if (map && !preserveMapView) map.setZoom(15);
     window.renderMarkers();
 };
 

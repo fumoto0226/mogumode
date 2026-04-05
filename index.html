@@ -1061,12 +1061,27 @@
                         <span>今日主图</span>
                     </div>
                 </div>
-                <img id="activity-image-modal-img" class="activity-image-modal-img" src="" alt="activity image"
-                    onclick="handleActivityImageClick(event)" ondblclick="toggleActivityImageZoom(event)"
+                <div id="activity-image-counter" class="activity-image-counter hidden"></div>
+                <div id="activity-image-stage" class="activity-image-stage"
+                    onmousedown="handleActivityImageMouseDown(event)"
                     ontouchstart="handleActivityImageTouchStart(event)"
                     ontouchmove="handleActivityImageTouchMove(event)"
                     ontouchend="handleActivityImageTouchEnd(event)"
                     ontouchcancel="handleActivityImageTouchEnd(event)">
+                    <div id="activity-image-track" class="activity-image-track">
+                        <div class="activity-image-panel">
+                            <img id="activity-image-modal-img-prev" class="activity-image-modal-img activity-image-side-img" src="" alt="previous activity image" draggable="false">
+                        </div>
+                        <div class="activity-image-panel">
+                            <img id="activity-image-modal-img" class="activity-image-modal-img" src="" alt="activity image"
+                                draggable="false"
+                                onclick="handleActivityImageClick(event)" ondblclick="toggleActivityImageZoom(event)">
+                        </div>
+                        <div class="activity-image-panel">
+                            <img id="activity-image-modal-img-next" class="activity-image-modal-img activity-image-side-img" src="" alt="next activity image" draggable="false">
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1133,8 +1148,8 @@
     <!-- =========================================
          JAVASCRIPT FILES
          ========================================= -->
-    <script type="module" src="app.js"></script>
-    <script src="map.js"></script>
+    <script type="module" src="app.js?v=22-cachefix4"></script>
+    <script src="map.js?v=22-cachefix4"></script>
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvqupW6XZ7A61lutSD8_GlV31Xdc5ZTLw&callback=initGoogleMap&libraries=geometry">
         </script>

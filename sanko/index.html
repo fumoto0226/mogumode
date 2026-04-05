@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <script>
+      // 如果是从作品页面带锚点回来的，先在 <html> 上打一个标记，用于在样式里暂时隐藏页面避免看到顶部闪一下
+      if (
+        window.location.hash === '#projects-section' ||
+        window.location.hash === '#projects-section-list' ||
+        window.location.hash === '#projects-section-images'
+      ) {
+        document.documentElement.classList.add('start-at-projects');
+      }
+    </script>
+    <title>QingYan Studio</title>
+    <link rel="icon" type="image/svg+xml" href="./img/logo.svg" />
+    <link rel="stylesheet" href="./style.css" />
+    <!-- Mapbox GL JS -->
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet" />
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+  </head>
+  <body class="lock-scroll">
+    <!-- 预留：桌面端视图容器，后续单独设计 PC 布局 -->
+    <div class="desktop-view">
+      <!-- TODO: Desktop layout will go here -->
+    </div>
+
+    <!-- 当前移动端视图：使用现有布局，后续专门为手机做调整 -->
+    <div class="mobile-view">
+      <main class="viewport">
+        <div class="frame">
+          <!-- 黑色标题：在白色区域，被遮罩盖住/露出 -->
+          <header class="title-black">
+            <h1 class="title-text" data-en="QingYan Studio" data-zh="清言筑语">QingYan Studio</h1>
+          </header>
+
+          <!-- 图片蒙版：包含图片和白色标题，一起被裁切 -->
+          <div class="photo-shell">
+            <img
+              class="hero-photo hero-photo-1"
+              src="./img/home/横版/H01.webp"
+              alt="Hero Image 1"
+            />
+            <img
+              class="hero-photo hero-photo-2"
+              src=""
+              alt="Hero Image 2"
+              style="opacity: 0;"
+            />
+            
+            <!-- 白色标题：和图片一起被遮罩裁切 -->
+            <div class="title-white">
+              <h1 class="title-text" data-en="QingYan Studio" data-zh="清言筑语">QingYan Studio</h1>
+            </div>
+          </div>
+
+          <!-- 右上角 Logo（手机端） -->
+          <div class="top-logo">
+            <img src="./img/logo.svg" alt="Logo" class="logo-image" />
+          </div>
+
+          <!-- 右上角语言切换按钮（桌面端） -->
+          <div class="language-switch">
+            <button class="lang-btn lang-switch-btn" data-en="中文" data-zh="English">中文</button>
+          </div>
+
+          <!-- 底部信息，同样在外部白色区域 -->
+          <footer class="meta-row">
+            <section class="meta meta-bottom-left">
+              <p>Shanghai International Exchange Plaza</p>
+            </section>
+
+            <section class="meta meta-bottom-center">
+              <p>Designed by FGP Atelier + Jahn/</p>
+            </section>
+          </footer>
+
+          <!-- 手机端向下箭头 -->
+          <div class="scroll-arrow"></div>
+        </div>
+      </main>
+
+      <!-- 空白过渡区域 -->
+      <section class="spacer-section"></section>
+
+      <!-- 第一个板块：左侧 Work/About，右侧 Map/List/Images 标签 -->
+      <section class="tabs-only-section">
+        <div class="tabs-container">
+          <div class="nav-tabs">
+            <button class="nav-tab active" data-page="work" data-en="Works" data-zh="项目">Works</button>
+            <button class="nav-tab" data-page="film" data-en="Film" data-zh="影片">Film</button>
+            <button class="nav-tab" data-page="about" data-en="About" data-zh="关于我们">About</button>
+          </div>
+          <!-- 手机端标签栏中的语言切换按钮：绝对定位在Works下方 -->
+          <div class="language-switch-tabs">
+            <button class="lang-btn lang-switch-btn" data-en="中文" data-zh="English">中文</button>
+          </div>
+          <div class="view-tabs">
+            <button class="view-tab active" data-view="list" id="view-list-tab" data-en="List" data-zh="列表">List</button>
+            <button class="view-tab" data-view="images" id="view-images-tab" data-en="Images" data-zh="图片">Images</button>
+            <button class="view-tab" data-view="map" data-en="Map" data-zh="地图">Map</button>
+            <!-- 项目分类下拉菜单 -->
+            <div class="category-dropdown" id="category-dropdown">
+              <button class="category-btn" id="category-btn" data-en="Filter" data-zh="筛选">Filter</button>
+              <div class="category-menu" id="category-menu">
+                <div class="category-item active" data-category="all" data-en="All" data-zh="全部">All</div>
+                <div class="category-item" data-category="architecture" data-en="Architecture" data-zh="建筑">Architecture</div>
+                <div class="category-item" data-category="small-scale" data-en="Small-Scale" data-zh="小体量">Small-Scale</div>
+                <div class="category-item" data-category="interior" data-en="Interior" data-zh="室内">Interior</div>
+                <div class="category-item" data-category="commercial" data-en="Commercial" data-zh="商业">Commercial</div>
+                <div class="category-item" data-category="workspace" data-en="Workspace" data-zh="办公">Workspace</div>
+                <div class="category-item" data-category="residential" data-en="Residential" data-zh="住宅">Residential</div>
+                <div class="category-item" data-category="hospitality" data-en="Hospitality" data-zh="酒店">Hospitality</div>
+                <div class="category-item" data-category="field-trip" data-en="Field Trip" data-zh="习作">Field Trip</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- About 板块：点击 About 时显示 -->
+      <section class="about-section" id="about-section">
+        <!-- 桌面端 About 右上角语言切换按钮 -->
+        <button class="lang-btn lang-btn-about-desktop lang-switch-btn" data-en="中文" data-zh="English">中文</button>
+        <div class="about-wrapper">
+          <div class="about-container">
+            <!-- 单一文本面板：人物照片 + 文字 + 联系方式 -->
+            <div class="about-text-panel">
+          <!-- 人物照片（手机端：在文字上方；桌面端：由右侧 about-sidebar 展示） -->
+          <div class="about-portraits">
+            <figure class="about-portrait">
+              <img src="./img/QingyanZhu.webp" alt="Portrait of Qingyan Zhu" />
+              <figcaption class="about-portrait-caption" data-en="Qingyan Zhu" data-zh="朱清言">Qingyan Zhu</figcaption>
+            </figure>
+            <figure class="about-portrait">
+              <img src="./img/ZixiChen.webp" alt="Portrait of Zixi Chen" />
+              <figcaption class="about-portrait-caption" data-en="Zixi Chen" data-zh="陈子茜">Zixi Chen</figcaption>
+            </figure>
+          </div>
+
+          <!-- 英文内容 -->
+          <div class="lang-content lang-en">
+          <p>
+            We are a Shanghai-based architectural photography studio specializing in professional
+            architectural and spatial imagery. The studio focuses on delivering clear, vibrant, and highly
+            legible imagery that accurately conveys spatial logic and design intent, supporting
+            architectural firms in publications, competitions, and project presentations.
+          </p>
+          <p>
+            The studio is founded by architectural photographer Qingyan Zhu in 2019, who graduated from
+            School of the Art Institute of Chicago (SAIC). From 2017 to 2019, he trained with the
+            renowned Chicago-based architectural photography studio Hedrich Blessing Photographers (now
+            Hall+Merrick Photographers), known for its long-term documentation of modernist architecture,
+            including works by Frank Lloyd Wright, Mies van der Rohe, Eero Saarinen, and Skidmore,
+            Owings &amp; Merrill (SOM). During this period, he participated in the photography and
+            post-production of several significant projects.
+          </p>
+          <p>
+            The studio partner, Zixi Chen, graduated from Politecnico di Milano with a strong
+              architectural and interior design background, contributes to the studio's work through
+            architectural understanding and spatial analysis.
+          </p>
+          <p>
+              The studio's work has been published in leading architectural media such as ArchDaily,
+            Dezeen, A+U, Gooood, Archiposition, Architectural Practice, etc., and was featured in Issue
+            32 of Chinese Architectural Photographers by Archiposition.
+          </p>
+          </div>
+
+          <!-- 中文内容 -->
+          <div class="lang-content lang-zh" style="display: none;">
+            <p>
+              我们是一家常驻上海的建筑摄影工作室，专注于建筑与空间影像的专业拍摄。实践中，工作室以清晰、自然且具有高度可读性的影像语言，准确传达建筑空间逻辑与设计意图，服务于建筑事务所的传播、竞赛与项目展示需求。
+            </p>
+            <p>
+              工作室由建筑摄影师朱清言于2019年创立。朱清言毕业于芝加哥艺术学院（School of the Art Institute of Chicago），并于 2017–2019 年间师从芝加哥知名建筑摄影工作室 Hedrich Blessing Photographers（现 Hall+Merrick Photographers）。该工作室以长期记录现代主义建筑而闻名，曾为赖特、密斯·凡·德·罗、沙里宁、SOM 等建筑师及事务所拍摄作品。其间，朱清言参与多项重点建筑与空间项目的拍摄与后期制作。
+            </p>
+            <p>
+              合伙人陈子茜毕业于米兰理工大学（Politecnico di Milano），具备扎实的建筑与室内设计教育背景，从建筑理解与空间逻辑层面参与工作室影像创作。
+            </p>
+            <p>
+              工作室作品曾发表于 ArchDaily、Dezeen、A+U、谷德设计网、有方、《建筑实践》等国内外主流建筑媒体，并受访有方《中国建筑摄影师专辑》第32期。
+            </p>
+          </div>
+
+          <h3 class="about-subheading" data-en="Publication and Awards" data-zh="发布与奖项">Publication and Awards</h3>
+
+          <!-- 英文奖项 -->
+          <div class="lang-content lang-en">
+          <h4 class="about-year-heading">2025</h4>
+          <p>
+              Architizer A+Awards: Popular Choice Winner,Xi'an CCBD by Heatherwick Studio<br />
+              APR IID Awards: Gold Award, Bosch Global Flagship Showroom SH by HATCH Architects<br />
+              London Design Awards: Gold Winner, Microscopic Shanshui by Uncommon Architects<br />
+              Dezeen Awards: Rebirth Project Shortlisted, Renovation of SH Relay Factory by HCCH Studio<br />
+              Dezeen Awards: Mixed-use Project Shortlisterd, Xi'an CCBD by Heatherwick Studio
+          </p>
+
+          <h4 class="about-year-heading">2024</h4>
+          <p>
+              AMP  Photography Awards: Winner, Transaction Succeed Office by One House Design<br />
+              AMP  Photography Awards: Winner, Hangzhou Wangchao Center by SOM<br />
+              AMP  Photography Awards: Winner, Peng's House by L&M Design Lab<br />
+              BLT Design Awards: Winner Award in the Architectural Design, MAX Technology Park SH by HATCH Architects<br />
+              Dezeen Awards: Top 10 Chinese architecture projects of 2024, Twisted Brick Shell Concept Library by HCCH Studio<br />
+              Chinese Real Estate Design Awards: Gold Award, Hangzhou Wangchao Center by SOM<br />
+              CTBUH Awards: Award of Excellence, Hangzhou Wangchao Center by SOM<br />
+              IDA Design Awards: Bronze Award in the Industrial and Infrastructure Category, Yongchun Red Vinegar Factory by LEL Design Lab
+          </p>
+
+          <h4 class="about-year-heading">2023</h4>
+          <p>
+              Architizer A+ Vision Awards Urban Photograph: Special Mention<br />
+              Architizer A+Awards: Jury Winner and Popular Choice Winner,1000 Trees Phase 1 by Heatherwick Studio<br />
+              Dezeen Awards: Mixed-use Project Shortlisted, 1000 Trees Phase 1 by Heatherwick Studio<br />
+              Moët Hennessy Diageo Shanghai HQ by BNJN Design included in  Architectural Digest (CN) 2023: AD100<br />
+              Ganzo Dream World included in Tadao Ando Complete Works<br />
+              ARCHINA Top 10 Architecture Awards: ZEEKR Center Yangcheng Lake by HATCH Architects<br />
+              Asian Design Awards: Gold Award in the Commercial Exhibition Architecture Category, International Digital Sea Investment and Exhibition Center by Hatch Architects
+          </p>
+
+          <h4 class="about-year-heading">2022</h4>
+          <p>
+              ArchDaily Best Architectural Models: Yongchun Red Vinegar Factory by LEL Design Lab<br />
+              AIA Chicago Design Excellence Awards: ARCH XL Citations of Merit, Shanghai International Financial Center by FGP Atelier + Jahn/<br />
+              CTBUH Best Tall Building: Finalist, Shanghai International Financial Center by FGP Atelier + Jahn/<br />
+              APAlmanac Project of the Year Shortisted
+          </p>
+
+          <h4 class="about-year-heading">2021</h4>
+          <p>
+              RICS China Awards: Urban Regeneration of the Year Excellence Award, Zhangjiang Landsea Center by HATCH Architects<br />
+              Qingyan Zhu included in ArchPosition's article "40 Active Chinese Architectural Photographers"
+          </p>
+
+          <h4 class="about-year-heading">2020</h4>
+          <p>
+              Qingyan Zhu Reviewed by ArchPosition in "Chinese Architectural Photographers" Session 32
+            </p>
+          </div>
+
+          <!-- 中文奖项 -->
+          <div class="lang-content lang-zh" style="display: none;">
+            <h4 class="about-year-heading">2025</h4>
+            <p>
+              Heatherwick Studio的西安万象城荣获Architizer A+ Awards 大众评选奖<br />
+              汉齐建筑的博世家店上海全球旗舰店荣获APR IID 国际室内设计奖<br />
+              非筑设计的微观山水荣获伦敦设计奖金奖<br />
+              合尘建筑的上海继电器厂改造项目入围Dezeen设志大奖更新项目短名单<br />
+              Heatherwick Studio 的西安万象城入围Dezeen 设志大奖混合用途项目短名单
+            </p>
+
+            <h4 class="about-year-heading">2024</h4>
+            <p>
+              我们拍摄的上海易成办公室荣获AMP摄影大师奖室内类别优胜奖<br />
+              我们拍摄的杭州望朝中心荣获AMP摄影大师奖商业外景类别优胜奖<br />
+              我们拍摄的启东彭宅荣获AMP摄影大师奖住宅室内类别优胜奖<br />
+              汉齐建筑的MAX科技园上海美兰湖荣获BLT建筑设计奖更新类目奖<br />
+              合尘建筑的红砖概念图书馆入选Dezeen设志大奖十大最佳中国建筑项目<br />
+              SOM的杭州望朝中心荣获CREDAward地建师设计大奖金奖<br />
+              SOM的杭州望朝中心荣获CTBUH最佳高层建筑奖（亚洲地区）<br />
+              LEL Design Studio的永春红曲醋观光工厂荣获IDA Design Awards工业及基础设施类别铜奖
+            </p>
+
+            <h4 class="about-year-heading">2023</h4>
+            <p>
+              我们拍摄的作品荣获Architizer A+ Vision Awards 特别提名奖<br />
+              Heatherwick Studio的天安千树一期荣获Architizer A+ Awards 专业评审奖+大众评选奖<br />
+              Heatherwick Studio的天安千树一期入围Dezeen设志大奖混合用途项目短名单<br />
+              本真设计的轩尼诗MHD中国总部荣登《安邸 AD》2023增刊 - AD100<br />
+              安藤忠雄建筑研究所的元祖梦世界在《安藤忠雄全集》中收录<br />
+              汉齐建筑的极氪中心·苏州阳澄湖服务区荣登ARCHINA建筑中国年度建筑大奖Top 10<br />
+              汉齐建筑的上海数字江海招商展示中心荣获亚洲设计大奖国际商业建筑类别金奖
+            </p>
+
+            <h4 class="about-year-heading">2022</h4>
+            <p>
+              FGP Atelier + Jahn/ 的上海金融交易广场荣获AIA Chicago Awards 优秀设计奖项大型建筑类别优秀提名奖<br />
+              FGP Atelier + Jahn/ 的上海金融交易广场荣登CTBUH最佳高层建筑奖决赛入围<br />
+              Apalmanac建筑摄影奖 年度项目奖短名单<br />
+              渤岳建筑设计的永春红曲醋观光工厂模型荣登建日筑闻年度最佳建筑模型榜单
+            </p>
+
+            <h4 class="about-year-heading">2021</h4>
+          <p>
+              汉齐建筑设计的张江朗诗中心荣获 RICS CHINA Awards 年度城市更新优秀奖<br />
+              朱清言荣登有方《40位当下活跃的中国建筑摄影师》榜单
+            </p>
+
+            <h4 class="about-year-heading">2020</h4>
+            <p>
+              朱清言荣登有方《中国建筑摄影师》专题第32期采访
+          </p>
+          </div>
+
+          <!-- 联系方式（手机端移到最下面） -->
+          <div class="about-contact">
+            <p><span data-en="Cell" data-zh="电话">Cell</span>: +86 13402042087</p>
+            <p><span data-en="E-mail" data-zh="邮箱">E-mail</span>: qingyan@qingyan.studio</p>
+            <p>小红书<a href="https://www.xiaohongshu.com/user/profile/5f7bb328000000000101d801" target="_blank" rel="noopener">@清言筑语</a></p>
+            <p>Instagram<a href="https://www.instagram.com/qzhuphoto/" target="_blank" rel="noopener">@qzhuphoto</a></p>
+            <p>&nbsp;</p>
+            <p>&nbsp;</p>
+            <p>&nbsp;</p>
+          </div>
+        </div>
+
+        <!-- 桌面端右侧固定人物照片 + 联系方式侧栏 -->
+        <aside class="about-sidebar">
+          <div class="about-sidebar-portraits">
+            <figure class="about-portrait">
+              <img src="./img/QingyanZhu.webp" alt="Portrait of Qingyan Zhu" />
+              <figcaption class="about-portrait-caption" data-en="Qingyan Zhu" data-zh="朱清言">Qingyan Zhu</figcaption>
+            </figure>
+            <figure class="about-portrait">
+              <img src="./img/ZixiChen.webp" alt="Portrait of Zixi Chen" />
+              <figcaption class="about-portrait-caption" data-en="Zixi Chen" data-zh="陈子茜">Zixi Chen</figcaption>
+            </figure>
+          </div>
+          <div class="about-sidebar-contact">
+            <p><span data-en="Cell" data-zh="电话">Cell</span>: +86 13402042087</p>
+            <p><span data-en="E-mail" data-zh="邮箱">E-mail</span>: qingyan@qingyan.studio</p>
+            <p>小红书<a href="https://www.xiaohongshu.com/user/profile/5f7bb328000000000101d801" target="_blank" rel="noopener">@清言筑语</a></p>
+            <p>Instagram<a href="https://www.instagram.com/qzhuphoto/" target="_blank" rel="noopener">@qzhuphoto</a></p>
+        </div>
+        </aside>
+
+          </div> <!-- /.about-container -->
+          <img src="./img/logo.svg" alt="QingYan Studio Logo" class="about-corner-logo" />
+        </div>   <!-- /.about-wrapper -->
+      </section>
+
+      <section class="film-section" id="film-section">
+        <button class="lang-btn lang-btn-film-desktop lang-switch-btn" data-en="中文" data-zh="English">中文</button>
+        <div class="film-wrapper">
+          <div class="film-list-panel">
+            <div class="film-list" id="film-list"></div>
+          </div>
+          <div class="film-player-panel">
+            <div class="film-player-frame">
+              <video id="film-player" class="film-player" muted loop playsinline preload="metadata"></video>
+              <div class="film-loading-indicator" id="film-loading-indicator" data-en="Loading video..." data-zh="视频加载中">Loading video...</div>
+              <button type="button" class="film-center-play" id="film-center-play" aria-label="Play video">
+                <span class="film-center-play-icon"></span>
+              </button>
+              <div class="film-controls" id="film-controls">
+                <button type="button" class="film-play-btn" id="film-play-btn" aria-label="Pause video">
+                  <svg class="film-play-icon film-play-icon-pause" viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="6" y="5" width="4" height="14" rx="1"></rect>
+                    <rect x="14" y="5" width="4" height="14" rx="1"></rect>
+                  </svg>
+                  <svg class="film-play-icon film-play-icon-play" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M8 6l10 6-10 6z"></path>
+                  </svg>
+                </button>
+                <input type="range" id="film-progress" class="film-progress" min="0" max="1000" value="0" aria-label="Video progress" />
+                <div class="film-volume" id="film-volume">
+                  <button type="button" class="film-mute-btn" id="film-mute-btn" aria-label="Toggle sound">
+                    <svg class="film-volume-icon" id="film-volume-icon" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M4 10h4.2l4.8-4v12l-4.8-4H4z"></path>
+                      <path class="film-volume-wave" d="M15.4 10c1.1 1 1.7 2.2 1.7 4s-.6 3-1.7 4"></path>
+                      <path class="film-volume-wave" d="M17.5 7.8c1.7 1.5 2.5 3.5 2.5 6.2s-.8 4.7-2.5 6.2"></path>
+                      <path class="film-volume-slash" d="M5.5 5.5l13 13"></path>
+                    </svg>
+                  </button>
+                  <div class="film-volume-panel" id="film-volume-panel">
+                    <input type="range" id="film-volume-slider" class="film-volume-slider" min="0" max="100" value="0" aria-label="Video volume" />
+                  </div>
+                </div>
+                <button type="button" class="film-fullscreen-btn" id="film-fullscreen-btn" aria-label="Fullscreen video">
+                  <svg class="film-fullscreen-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M8 4H4v4"></path>
+                    <path d="M16 4h4v4"></path>
+                    <path d="M20 16v4h-4"></path>
+                    <path d="M4 16v4h4"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="copyright-film-desktop">
+          <p class="lang-content lang-zh" style="display: none;">版权所有 © 2026 QingYan Studio。网站设计 <a href="https://fumoto0226.github.io/zenglujin/" target="_blank" rel="noopener">Zenglujin</a>。</p>
+          <p class="lang-content lang-en">© 2026 QingYan Studio. All Rights Reserved. Site by <a href="https://fumoto0226.github.io/zenglujin/" target="_blank" rel="noopener">Zenglujin</a>.</p>
+        </div>
+      </section>
+
+      <!-- 第二个板块：左边缩略图+信息，右侧 Map/List/Images 视图 -->
+      <section class="projects-section" id="projects-section">
+        <!-- 桌面端 Works 左下角中文按钮 -->
+        <button class="lang-btn lang-btn-work-desktop lang-switch-btn" data-en="中文" data-zh="English">中文</button>
+        <!-- 桌面端 Works 右下角版权信息 -->
+        <div class="copyright-work-desktop">
+          <p class="lang-content lang-zh" style="display: none;">版权所有 © 2026 QingYan Studio。网站设计 <a href="https://fumoto0226.github.io/zenglujin/" target="_blank" rel="noopener">Zenglujin</a>。</p>
+          <p class="lang-content lang-en">© 2026 QingYan Studio. All Rights Reserved. Site by <a href="https://fumoto0226.github.io/zenglujin/" target="_blank" rel="noopener">Zenglujin</a>.</p>
+        </div>
+        <div class="projects-container">
+          <!-- 左侧：预览图和信息 -->
+          <div class="project-preview">
+            <div class="preview-image-wrapper">
+              <img 
+                id="preview-image" 
+                src="./img/programs/ACZ + 猜一建筑/下水那天 THE LAUNCH/cover.webp" 
+                alt="Project Preview"
+                class="preview-image"
+              />
+              <!-- 手机端：预览图右上角 View All 按钮 -->
+              <button class="preview-view-all-btn" id="preview-view-all-btn" data-en="View All" data-zh="查看全部">View All</button>
+            </div>
+            <div class="preview-info">
+              <h2 id="preview-title" class="preview-title">The Launch</h2>
+              <p id="preview-description" class="preview-description">Client: Practice on Earth + Arc Z. Photographed in 2025.</p>
+            </div>
+          </div>
+
+          <!-- 右侧：地图和项目点 / 列表视图 -->
+          <div class="project-map">
+            <!-- 地图视图 -->
+            <div class="map-container" id="map-container">
+              <!-- Mapbox 地图 -->
+              <div id="map"></div>
+              <!-- 项目点标记会通过 JS 添加到地图上 -->
+              <!-- 手机端归位按钮 -->
+              <button class="map-reset-btn" id="map-reset-btn" title="归位">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- 列表视图（仅右侧区域切换） -->
+            <div class="map-list-container" id="map-list-container">
+              <table class="project-list-table">
+                <thead>
+                  <tr>
+                    <th class="col-year" data-en="Year" data-zh="年份">Year</th>
+                    <th class="col-title" data-en="Project" data-zh="项目名">Project</th>
+                    <th class="col-designer" data-en="Client" data-zh="委托方">Client</th>
+                    <th class="col-location" data-en="Location" data-zh="位置">Location</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Images 视图：全宽缩略图网格（初始隐藏，点击 Images 时显示） -->
+        <div class="images-grid" id="images-grid">
+          <!-- 缩略图内容由 script.js 根据 projects 数据自动填充 -->
+        </div>
+      </section>
+
+      <!-- 用于从作品页返回时滚动到首页底部 List 视图的锚点 -->
+      <div id="projects-section-list"></div>
+      
+      <!-- 用于从作品页返回时滚动到首页底部 Images 视图的锚点 -->
+      <div id="projects-section-images"></div>
+    </div>
+
+    <script src="./projects-data.js"></script>
+    <script src="./script.js"></script>
+  </body>
+</html>

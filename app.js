@@ -33,7 +33,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v22";
+const APP_BUILD_VERSION = "v23";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 
 // 初始化 Firebase 服务
@@ -80,6 +80,10 @@ let postSuccessState = null;
 let currentRecordDayKey = "";
 let currentImageModalDateKey = "";
 let currentImageModalSrc = "";
+let currentImageModalGallery = [];
+let currentImageModalIndex = 0;
+let activityImageGallerySeed = 0;
+const activityImageGalleryRegistry = new Map();
 let recordMainImageByDay = loadRecordMainImageMap();
 let recordAutoFocusPending = false;
 let currentUserAvatarUrl = "";
@@ -368,6 +372,74 @@ async function compressImageForUpload(fileOrBlob, options = {}) {
     return compressed.size < source.size ? compressed : source;
 }
 
+function normalizeImageAsset(entry) {
+    if (!entry) return { full: '', thumb: '' };
+    if (typeof entry === 'string') {
+        const src = entry.trim();
+        return { full: src, thumb: src };
+    }
+    if (typeof entry === 'object') {
+        const full = String(entry.full || entry.url || entry.src || '').trim();
+        const thumb = String(entry.thumb || entry.preview || entry.thumbnail || full).trim();
+        return { full, thumb: thumb || full };
+    }
+    return { full: '', thumb: '' };
+}
+
+function createImageAssetPayload(fullUrl, thumbUrl = '') {
+    const full = String(fullUrl || '').trim();
+    const thumb = String(thumbUrl || full).trim();
+    if (!full) return '';
+    if (!thumb || thumb === full) return full;
+    return { full, thumb };
+}
+
+function getImageAssetFullUrl(entry) {
+    return normalizeImageAsset(entry).full;
+}
+
+function getImageAssetThumbUrl(entry) {
+    const asset = normalizeImageAsset(entry);
+    return asset.thumb || asset.full;
+}
+
+function collectImageAssetUrls(entries) {
+    return Array.from(new Set((Array.isArray(entries) ? entries : [])
+        .flatMap((entry) => {
+            const asset = normalizeImageAsset(entry);
+            return [asset.full, asset.thumb].filter(Boolean);
+        })));
+}
+
+async function uploadImageAssetPair(fileOrBlob, basename) {
+    const fullBlob = await compressImageForUpload(fileOrBlob, {
+        maxWidth: 1600,
+        maxHeight: 1600,
+        quality: 0.8,
+        minQuality: 0.56,
+        maxBytes: 420 * 1024
+    });
+    const thumbBlob = await compressImageForUpload(fileOrBlob, {
+        maxWidth: 360,
+        maxHeight: 360,
+        quality: 0.68,
+        minQuality: 0.48,
+        maxBytes: 56 * 1024
+    });
+
+    const fullRef = ref(storage, `p/${basename}_full.jpg`);
+    const thumbRef = ref(storage, `p/${basename}_thumb.jpg`);
+    await Promise.all([
+        uploadBytes(fullRef, fullBlob, { contentType: 'image/jpeg' }),
+        uploadBytes(thumbRef, thumbBlob, { contentType: 'image/jpeg' })
+    ]);
+    const [fullUrl, thumbUrl] = await Promise.all([
+        getDownloadURL(fullRef),
+        getDownloadURL(thumbRef)
+    ]);
+    return createImageAssetPayload(fullUrl, thumbUrl);
+}
+
 async function copyGooglePlacePhotoToStorage(photoRef, options = {}) {
     const {
         maxHeightPx = 800,
@@ -385,10 +457,28 @@ async function copyGooglePlacePhotoToStorage(photoRef, options = {}) {
         minQuality: 0.56,
         maxBytes: 420 * 1024
     });
-    const filename = `google_${Date.now()}.jpg`;
-    const storageRef = ref(storage, 'p/' + filename);
-    await uploadBytes(storageRef, compressedBlob, { contentType: 'image/jpeg' });
-    return getDownloadURL(storageRef);
+    const thumbBlob = await compressImageForUpload(blob, {
+        maxWidth: 360,
+        maxHeight: 360,
+        quality: 0.68,
+        minQuality: 0.48,
+        maxBytes: 56 * 1024
+    });
+    const basename = `google_${Date.now()}`;
+    const fullRef = ref(storage, `p/${basename}_full.jpg`);
+    const thumbRef = ref(storage, `p/${basename}_thumb.jpg`);
+    await Promise.all([
+        uploadBytes(fullRef, compressedBlob, { contentType: 'image/jpeg' }),
+        uploadBytes(thumbRef, thumbBlob, { contentType: 'image/jpeg' })
+    ]);
+    const [fullUrl, thumbUrl] = await Promise.all([
+        getDownloadURL(fullRef),
+        getDownloadURL(thumbRef)
+    ]);
+    return {
+        full: fullUrl,
+        thumb: thumbUrl
+    };
 }
 
 // 暴露到全局供 map.js 使用
@@ -888,7 +978,8 @@ function loadFavs() {
                 });
             }
 
-            applyFilters();                       // 重新渲染以更新收藏状态
+            if (isHomeViewActive()) refreshVisibleStoreCardPreferenceVisuals();
+            else applyFilters();                       // 重新渲染以更新收藏状态
             const favView = document.getElementById('view-fav');
             if (favView && !favView.classList.contains('hidden')) {
                 renderRecordCalendar();
@@ -1654,36 +1745,51 @@ function getStoreReviewCount(store) {
     return Array.isArray(store?.revs) ? store.revs.length : 0;
 }
 
-function getStorePreviewImages(store, maxCount = 12) {
-    const cover = String(store?.googleCoverImage || '').trim();
+function getStorePreviewImageEntries(store, maxCount = 12) {
+    const coverFull = String(store?.googleCoverImage || '').trim();
+    const coverThumb = String(store?.googleCoverImageThumb || coverFull).trim();
     const revs = Array.isArray(store?.revs) ? [...store.revs] : [];
     revs.sort((a, b) => Number(b?.createdAt || 0) - Number(a?.createdAt || 0));
 
     const ordered = [];
-    if (cover) ordered.push(cover);
+    if (coverFull) ordered.push(createImageAssetPayload(coverFull, coverThumb));
 
     revs.forEach((rev) => {
         const imgs = Array.isArray(rev?.images) ? rev.images : [];
-        imgs.filter(Boolean).forEach((src) => ordered.push(src));
+        imgs.forEach((entry) => {
+            const full = getImageAssetFullUrl(entry);
+            if (full) ordered.push(createImageAssetPayload(full, getImageAssetThumbUrl(entry)));
+        });
     });
 
     const storeImgs = Array.isArray(store?.images) ? store.images : [];
-    storeImgs.filter(Boolean).forEach((src) => ordered.push(src));
+    storeImgs.forEach((entry) => {
+        const full = getImageAssetFullUrl(entry);
+        if (full) ordered.push(createImageAssetPayload(full, getImageAssetThumbUrl(entry)));
+    });
 
     const deduped = [];
     const seen = new Set();
-    ordered.forEach((src) => {
-        if (!src || seen.has(src)) return;
-        seen.add(src);
-        deduped.push(src);
+    ordered.forEach((entry) => {
+        const full = getImageAssetFullUrl(entry);
+        if (!full || seen.has(full)) return;
+        seen.add(full);
+        deduped.push(entry);
     });
 
     return deduped.slice(0, Math.max(1, maxCount));
 }
 
+function getStorePreviewImages(store, maxCount = 12) {
+    return getStorePreviewImageEntries(store, maxCount).map(getImageAssetFullUrl).filter(Boolean);
+}
+
 window.getStoreAverageRating = getStoreAverageRating;
 window.getStoreReviewCount = getStoreReviewCount;
 window.getStorePreviewImages = getStorePreviewImages;
+window.getStorePreviewImageEntries = getStorePreviewImageEntries;
+window.getImageAssetFullUrl = getImageAssetFullUrl;
+window.getImageAssetThumbUrl = getImageAssetThumbUrl;
 
 function renderReactionAvatars(avatars, count) {
     if (!count || count <= 0) {
@@ -1710,7 +1816,7 @@ function renderStoreActionGroup(storeId, isLiked, isDisliked, cardIndex = 0) {
     const dislikeIcon = isDisliked ? "images/dislike-f.svg" : "images/dislike.svg";
     const likeIcon = isLiked ? "images/like-f.svg" : "images/like.svg";
     return `
-        <div class="action-group" onclick="event.stopPropagation()">
+        <div class="action-group" data-store-id="${storeId}" onclick="event.stopPropagation()">
             <div class="action-item ${isDisliked ? 'active-dislike' : ''}" onclick="toggleLocalAction('${storeId}', 'dislike')">
                 ${renderReactionAvatars(stats.dislike.avatars, dislikeCount)}
                 <img src="${dislikeIcon}" class="action-icon" alt="dislike">
@@ -1721,6 +1827,51 @@ function renderStoreActionGroup(storeId, isLiked, isDisliked, cardIndex = 0) {
             </div>
         </div>
     `;
+}
+
+function isHomeViewActive() {
+    const homeView = document.getElementById('view-home');
+    return !!(homeView && !homeView.classList.contains('hidden'));
+}
+
+function getStoreStatusClassById(storeId) {
+    if (localDislikes.has(storeId)) return 'status-disliked';
+    if (localLikes.has(storeId)) return 'status-liked';
+    if (myFavIds.includes(storeId)) return 'status-fav';
+    return '';
+}
+
+function updateStoreCardPreferenceVisuals(storeId) {
+    const sid = String(storeId || '');
+    if (!sid) return;
+    const isFav = myFavIds.includes(sid);
+    const isLiked = localLikes.has(sid);
+    const isDisliked = localDislikes.has(sid);
+    const nextStatusClass = getStoreStatusClassById(sid);
+
+    document.querySelectorAll('.store-card[data-store-id]').forEach((card) => {
+        if (String(card.dataset.storeId || '') !== sid) return;
+        card.classList.remove('status-fav', 'status-liked', 'status-disliked');
+        if (nextStatusClass) card.classList.add(nextStatusClass);
+
+        const bookmarkIcon = card.querySelector('.bookmark-icon-btn');
+        if (bookmarkIcon) {
+            bookmarkIcon.setAttribute('src', isFav ? 'images/bookmark-f.svg' : 'images/bookmark.svg');
+        }
+
+        const actionGroup = card.querySelector('.action-group');
+        if (actionGroup) {
+            actionGroup.outerHTML = renderStoreActionGroup(sid, isLiked, isDisliked);
+        }
+    });
+}
+
+function refreshVisibleStoreCardPreferenceVisuals() {
+    document.querySelectorAll('.store-card[data-store-id]').forEach((card) => {
+        const sid = String(card.dataset.storeId || '');
+        if (!sid) return;
+        updateStoreCardPreferenceVisuals(sid);
+    });
 }
 
 /**
@@ -1751,15 +1902,15 @@ window.renderStores = (list) => {
 
         const avgRating = getStoreAverageRating(s);
         const reviewCount = getStoreReviewCount(s);
-        const rawImgs = getStorePreviewImages(s);
+        const rawImgs = getStorePreviewImageEntries(s);
         const displayImgs = rawImgs.length ? rawImgs : ["https://placehold.co/200?text=No+Image"];
         const imagesHtml = displayImgs.map(src =>
-            `<img src="${src}" class="store-img-item" loading="lazy">`
+            `<img src="${getImageAssetThumbUrl(src)}" class="store-img-item" loading="lazy" decoding="async">`
         ).join('');
 
         // 返回店铺卡片的HTML
         return `
-        <div class="store-card ${statusClass}" id="card-${s.id}" onclick="openDetail('${s.id}')">
+        <div class="store-card ${statusClass}" id="card-${s.id}" data-store-id="${s.id}" onclick="openDetail('${s.id}')">
             <!-- 卡片头部：店名、收藏按钮、评分、步行时间 -->
             <div class="card-header-row">
                 <div class="info-col">
@@ -2005,10 +2156,10 @@ async function deleteStorageFilesByUrls(urls) {
 }
 
 function collectStoreAllImageUrls(store) {
-    const storeImages = Array.isArray(store?.images) ? store.images : [];
+    const storeImages = collectImageAssetUrls(Array.isArray(store?.images) ? store.images : []);
     const reviewImages = (Array.isArray(store?.revs) ? store.revs : [])
-        .flatMap(r => Array.isArray(r?.images) ? r.images : []);
-    const coverImage = store?.googleCoverImage ? [store.googleCoverImage] : [];
+        .flatMap(r => collectImageAssetUrls(Array.isArray(r?.images) ? r.images : []));
+    const coverImage = [store?.googleCoverImage, store?.googleCoverImageThumb].filter(Boolean);
     return Array.from(new Set([...coverImage, ...storeImages, ...reviewImages].filter(Boolean)));
 }
 
@@ -2283,14 +2434,20 @@ window.confirmDeleteReviewRecord = async (mode) => {
         ? revs.map((rev, revIndex) => revIndex === idx ? { ...rev, text: '', images: [] } : rev)
         : revs.filter((_, revIndex) => revIndex !== idx);
     const remainingReviewImageSet = new Set(
-        nextRevs.flatMap(r => Array.isArray(r?.images) ? r.images : []).filter(Boolean)
+        nextRevs.flatMap(r => (Array.isArray(r?.images) ? r.images : []).map(getImageAssetFullUrl)).filter(Boolean)
+    );
+    const remainingReviewAssetUrlSet = new Set(
+        nextRevs.flatMap(r => collectImageAssetUrls(Array.isArray(r?.images) ? r.images : []))
     );
     const targetImages = Array.isArray(targetRev?.images) ? targetRev.images.filter(Boolean) : [];
-    const deleteCandidates = targetImages.filter(url => !remainingReviewImageSet.has(url));
+    const targetImageUrls = collectImageAssetUrls(targetImages);
+    const deleteCandidates = targetImageUrls.filter((url) => !remainingReviewAssetUrlSet.has(url));
     const storeImages = Array.isArray(store.images) ? store.images : [];
-    const nextStoreImages = storeImages.filter(url => {
-        if (!targetImages.includes(url)) return true;
-        return remainingReviewImageSet.has(url);
+    const targetFullSet = new Set(targetImages.map(getImageAssetFullUrl).filter(Boolean));
+    const nextStoreImages = storeImages.filter((entry) => {
+        const full = getImageAssetFullUrl(entry);
+        if (!targetFullSet.has(full)) return true;
+        return remainingReviewImageSet.has(full);
     });
 
     try {
@@ -2431,6 +2588,8 @@ window.toggleFav = async (oid) => {
     // 刷新页面显示
     if (document.getElementById('view-fav').classList.contains('hidden') === false) {
         renderRecordCalendar();
+    } else if (isHomeViewActive()) {
+        updateStoreCardPreferenceVisuals(id);
     } else {
         applyFilters();               // 否则刷新首页
     }
@@ -2493,6 +2652,8 @@ window.toggleLocalAction = async (id, type) => {
     // 4. 刷新页面显示
     if (document.getElementById('view-fav').classList.contains('hidden') === false) {
         renderRecordCalendar();
+    } else if (isHomeViewActive()) {
+        updateStoreCardPreferenceVisuals(id);
     } else {
         applyFilters();
     }
@@ -2531,17 +2692,9 @@ window.submitNew = async () => {
                 throw new Error("只能上传图片文件");
             }
             // 用户上传了图片，上传到 Firebase Storage
-            reviewImageUrls = await Promise.all([...files].map(async f => {
-                const compressedFile = await compressImageForUpload(f, {
-                    maxWidth: 1600,
-                    maxHeight: 1600,
-                    quality: 0.8,
-                    minQuality: 0.56,
-                    maxBytes: 420 * 1024
-                });
-                const r = ref(storage, 'p/' + Date.now() + '_' + f.name.replace(/\.[^.]+$/, '') + '.jpg');
-                await uploadBytes(r, compressedFile, { contentType: 'image/jpeg' });
-                return getDownloadURL(r);
+            reviewImageUrls = await Promise.all([...files].map(async (f, index) => {
+                const base = `${Date.now()}_${index}_${f.name.replace(/\.[^.]+$/, '')}`;
+                return uploadImageAssetPair(f, base);
             }));
         }
 
@@ -2650,12 +2803,15 @@ window.submitNew = async () => {
 
             const originalText = btn.innerHTML;
             btn.innerHTML = `<div class="spinner"></div> <span>获取店铺封面中...</span>`;
-            let googleCoverUrl = "";
+            let googleCoverAsset = "";
             try {
-                googleCoverUrl = await copyGooglePlacePhotoToStorage(fetchedPhotoRef);
+                googleCoverAsset = await copyGooglePlacePhotoToStorage(fetchedPhotoRef);
             } catch (err) {
                 console.error("Google封面转存失败，降级使用Google直链:", err);
-                googleCoverUrl = `https://places.googleapis.com/v1/${fetchedPhotoRef}/media?maxHeightPx=800&maxWidthPx=800&key=${MAPS_API_KEY}`;
+                googleCoverAsset = createImageAssetPayload(
+                    `https://places.googleapis.com/v1/${fetchedPhotoRef}/media?maxHeightPx=800&maxWidthPx=800&key=${MAPS_API_KEY}`,
+                    `https://places.googleapis.com/v1/${fetchedPhotoRef}/media?maxHeightPx=320&maxWidthPx=320&key=${MAPS_API_KEY}`
+                );
             } finally {
                 btn.innerHTML = originalText;
             }
@@ -2668,7 +2824,14 @@ window.submitNew = async () => {
             selectedStoreDistance = createDistance;
 
             // === 新店铺：创建 ===
-            const storeAlbumImages = Array.from(new Set([googleCoverUrl, ...reviewImageUrls].filter(Boolean)));
+            const storeAlbumImages = [];
+            const pushUniqueImageAsset = (entry) => {
+                const full = getImageAssetFullUrl(entry);
+                if (!full || storeAlbumImages.some(item => getImageAssetFullUrl(item) === full)) return;
+                storeAlbumImages.push(entry);
+            };
+            pushUniqueImageAsset(googleCoverAsset);
+            reviewImageUrls.forEach(pushUniqueImageAsset);
             const createdStore = {
                 name: document.getElementById('newName').value,           // 店名
                 budget: budgetVal,                                        // 预算
@@ -2683,7 +2846,8 @@ window.submitNew = async () => {
                 cuisineLabel: selectedStoreCuisineLabel || null,          // 料理种类
                 primaryType: selectedStorePrimaryType || null,            // Google 主类型
                 types: Array.isArray(selectedStoreTypes) ? selectedStoreTypes : [], // Google 类型
-                googleCoverImage: googleCoverUrl,
+                googleCoverImage: getImageAssetFullUrl(googleCoverAsset),
+                googleCoverImageThumb: getImageAssetThumbUrl(googleCoverAsset),
                 images: storeAlbumImages,                                 // 相册图（封面图固定第一张）
                 createdAt: Date.now(),                                    // 创建时间戳
                 revs: [newReview]
@@ -5296,14 +5460,14 @@ window.switchFavTab = (tab) => {
 
             const avgRating = getStoreAverageRating(s);
             const reviewCount = getStoreReviewCount(s);
-            const rawImgs = getStorePreviewImages(s);
+            const rawImgs = getStorePreviewImageEntries(s);
             const displayImgs = rawImgs.length ? rawImgs : ["https://placehold.co/200?text=No+Image"];
             const imagesHtml = displayImgs.map(src =>
-                `<img src="${src}" class="store-img-item" loading="lazy">`
+                `<img src="${getImageAssetThumbUrl(src)}" class="store-img-item" loading="lazy" decoding="async">`
             ).join('');
 
             return `
-        <div class="store-card ${statusClass}" onclick="openDetail('${s.id}')">
+        <div class="store-card ${statusClass}" data-store-id="${s.id}" onclick="openDetail('${s.id}')">
             <div class="card-header-row">
                 <div class="info-col">
                     <div class="store-name-row">
@@ -5658,14 +5822,14 @@ function renderRandomResult(s) {
     const cardIndex = Math.max(0, localStores.findIndex(x => x.id === s.id));
     const avgRating = getStoreAverageRating(s);
     const reviewCount = getStoreReviewCount(s);
-    const rawImgs = getStorePreviewImages(s);
+    const rawImgs = getStorePreviewImageEntries(s);
     const displayImgs = rawImgs.length ? rawImgs : ["https://placehold.co/200?text=No+Image"];
     const imagesHtml = displayImgs.map(src =>
-        `<img src="${src}" class="store-img-item" loading="lazy">`
+        `<img src="${getImageAssetThumbUrl(src)}" class="store-img-item" loading="lazy" decoding="async">`
     ).join('');
 
     container.innerHTML = `
-    <div class="store-card ${statusClass}" onclick="openDetail('${s.id}')" style="margin:0;">
+    <div class="store-card ${statusClass}" data-store-id="${s.id}" onclick="openDetail('${s.id}')" style="margin:0;">
         <div class="card-header-row">
             <div class="info-col">
                 <div class="store-name-row">
@@ -6007,9 +6171,15 @@ function renderActivityCards(container, activities) {
         // 图片缩略图
         let photosHtml = '';
         if (a.images && a.images.length) {
-            photosHtml = `<div class="activity-photos">${a.images.slice(0, 5).map(src =>
-                `<img src="${src}" class="activity-photo-thumb" loading="lazy" onclick="openActivityImageModal('${src.replace(/'/g, "\\'")}', '${a.dayKey || ''}'); event.stopPropagation();">`
-            ).join('')}</div>`;
+            const galleryEntries = a.images.slice(0, 5);
+            const galleryImages = galleryEntries.map(getImageAssetFullUrl).filter(Boolean);
+            const galleryKey = window.registerActivityImageGallery(galleryImages);
+            photosHtml = `<div class="activity-photos">${galleryEntries.map((entry, index) => {
+                const fullSrc = getImageAssetFullUrl(entry);
+                const thumbSrc = getImageAssetThumbUrl(entry);
+                if (!fullSrc || !thumbSrc) return '';
+                return `<img src="${thumbSrc.replace(/"/g, '&quot;')}" class="activity-photo-thumb" loading="lazy" decoding="async" onclick="openActivityImageModal('${fullSrc.replace(/'/g, "\\'")}', '${a.dayKey || ''}', '${galleryKey}', ${index}); event.stopPropagation();">`;
+            }).join('')}</div>`;
         }
 
         // 评论文字
@@ -6082,11 +6252,11 @@ function setMainImageForDay(dayKey, src) {
 function getPrimaryImageForDay(dayActs) {
     if (!Array.isArray(dayActs) || !dayActs.length) return '';
     const main = getMainImageForDay(dayActs[0].dayKey);
-    if (main && dayActs.some(a => Array.isArray(a.images) && a.images.includes(main))) {
+    if (main && dayActs.some(a => Array.isArray(a.images) && a.images.some((entry) => getImageAssetFullUrl(entry) === main))) {
         return main;
     }
     for (const a of dayActs) {
-        const src = Array.isArray(a.images) ? a.images[0] : '';
+        const src = Array.isArray(a.images) ? getImageAssetThumbUrl(a.images[0]) : '';
         if (src) return src;
     }
     return '';
@@ -6101,6 +6271,213 @@ function getRecordActivitiesByDay(activities) {
     dayMap.forEach(list => list.sort((x, y) => x.createdAt - y.createdAt));
     return dayMap;
 }
+
+function normalizeActivityImageGallery(images) {
+    return Array.from(new Set((Array.isArray(images) ? images : []).filter(Boolean).map(src => String(src))));
+}
+
+window.registerActivityImageGallery = (images) => {
+    const normalized = normalizeActivityImageGallery(images);
+    if (!normalized.length) return "";
+    if (activityImageGalleryRegistry.size > 800) activityImageGalleryRegistry.clear();
+    activityImageGallerySeed += 1;
+    const key = `gallery-${activityImageGallerySeed}`;
+    activityImageGalleryRegistry.set(key, normalized);
+    return key;
+};
+
+function resolveActivityImageGallery(galleryKey, fallbackSrc = "") {
+    const images = normalizeActivityImageGallery(activityImageGalleryRegistry.get(String(galleryKey || "")));
+    if (images.length) return images;
+    return fallbackSrc ? [String(fallbackSrc)] : [];
+}
+
+function getActivityImageModalElements() {
+    return {
+        modal: document.getElementById('activity-image-modal'),
+        stage: document.getElementById('activity-image-stage'),
+        track: document.getElementById('activity-image-track'),
+        img: document.getElementById('activity-image-modal-img'),
+        prevImg: document.getElementById('activity-image-modal-img-prev'),
+        nextImg: document.getElementById('activity-image-modal-img-next'),
+        pinIcon: document.getElementById('activity-main-pin-icon'),
+        pinLabel: document.getElementById('activity-main-pin-label'),
+        setMainBtn: document.getElementById('activity-set-main-btn'),
+        state: document.getElementById('activity-main-state'),
+        tools: document.getElementById('activity-image-tools'),
+        counter: document.getElementById('activity-image-counter')
+    };
+}
+
+function setActivityImagePanelSource(img, src) {
+    if (!img) return;
+    if (src) {
+        img.src = src;
+        img.style.visibility = 'visible';
+    } else {
+        img.src = '';
+        img.style.visibility = 'hidden';
+    }
+}
+
+function getActivityImageSlideWidth() {
+    const stage = document.getElementById('activity-image-stage');
+    return Math.round(stage?.clientWidth || 0);
+}
+
+function setActivityImageTrackOffset(offsetX) {
+    const track = document.getElementById('activity-image-track');
+    if (!track) return;
+    activityImageTrackOffsetX = Number(offsetX) || 0;
+    track.style.transform = `translateX(${activityImageTrackOffsetX}px)`;
+}
+
+function resetActivityImageTrackPosition() {
+    const track = document.getElementById('activity-image-track');
+    if (!track) return;
+    track.style.transition = 'none';
+    setActivityImageTrackOffset(0);
+}
+
+function animateActivityImageTrackTo(targetOffset, transition, onComplete = null) {
+    const track = document.getElementById('activity-image-track');
+    if (!track) {
+        if (typeof onComplete === 'function') onComplete();
+        return;
+    }
+    let finished = false;
+    let timeoutId = null;
+    const cleanup = () => {
+        track.removeEventListener('transitionend', handleTransitionEnd);
+        if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
+    const finish = () => {
+        if (finished) return;
+        finished = true;
+        cleanup();
+        if (typeof onComplete === 'function') onComplete();
+    };
+    const handleTransitionEnd = (event) => {
+        if (event.target !== track || event.propertyName !== 'transform') return;
+        finish();
+    };
+    track.addEventListener('transitionend', handleTransitionEnd);
+    timeoutId = window.setTimeout(finish, 420);
+    track.style.transition = transition;
+    requestAnimationFrame(() => setActivityImageTrackOffset(targetOffset));
+}
+
+function syncActivityImageModalImage() {
+    const {
+        img,
+        prevImg,
+        nextImg,
+        modal,
+        pinIcon,
+        pinLabel,
+        setMainBtn,
+        state,
+        tools,
+        counter
+    } = getActivityImageModalElements();
+    if (!img || !modal) return;
+
+    const src = currentImageModalGallery[currentImageModalIndex] || "";
+    const prevSrc = currentImageModalIndex > 0 ? currentImageModalGallery[currentImageModalIndex - 1] : "";
+    const nextSrc = currentImageModalIndex < currentImageModalGallery.length - 1 ? currentImageModalGallery[currentImageModalIndex + 1] : "";
+    currentImageModalSrc = src;
+    setActivityImagePanelSource(prevImg, prevSrc);
+    setActivityImagePanelSource(img, src);
+    setActivityImagePanelSource(nextImg, nextSrc);
+    resetActivityImageTrackPosition();
+
+    const canSetMain = !!(currentImageModalDateKey && currentUser && !isViewingFriendProfile());
+    if (tools) tools.classList.toggle('hidden', !canSetMain);
+    if (pinIcon && pinLabel && state && canSetMain) {
+        const isMain = getMainImageForDay(currentImageModalDateKey) === src;
+        pinIcon.src = isMain ? 'images/main-f.svg' : 'images/main.svg';
+        pinLabel.innerText = '设为今日主图';
+        if (setMainBtn) setMainBtn.classList.toggle('hidden', isMain);
+        state.classList.toggle('hidden', !isMain);
+    } else if (setMainBtn && state) {
+        setMainBtn.classList.remove('hidden');
+        state.classList.add('hidden');
+    }
+
+    if (counter) {
+        const total = currentImageModalGallery.length;
+        counter.classList.toggle('hidden', total <= 1);
+        counter.innerText = total > 1 ? `${currentImageModalIndex + 1} / ${total}` : '';
+    }
+
+    const alignOverlay = () => positionActivityImageOverlay();
+    img.onload = alignOverlay;
+    if (modal.classList.contains('open')) requestAnimationFrame(alignOverlay);
+}
+
+function commitActivityImageModalStep(step) {
+    const total = currentImageModalGallery.length;
+    if (total <= 1) return false;
+    const nextIndex = currentImageModalIndex + Number(step || 0);
+    if (nextIndex < 0 || nextIndex >= total) return false;
+    currentImageModalIndex = nextIndex;
+    resetActivityImageZoom();
+    syncActivityImageModalImage();
+    return true;
+}
+
+function finishActivityImageSwipe(deltaX) {
+    const slideWidth = getActivityImageSlideWidth();
+    if (!slideWidth) {
+        if (Math.abs(deltaX) >= 48) return commitActivityImageModalStep(deltaX < 0 ? 1 : -1);
+        resetActivityImageTrackPosition();
+        return false;
+    }
+
+    const threshold = slideWidth * 0.18;
+    let step = 0;
+    if (deltaX <= -threshold && currentImageModalIndex < currentImageModalGallery.length - 1) step = 1;
+    else if (deltaX >= threshold && currentImageModalIndex > 0) step = -1;
+
+    if (!step) {
+        activityImageTrackAnimating = true;
+        animateActivityImageTrackTo(0, 'transform 0.22s ease', () => {
+            resetActivityImageTrackPosition();
+            activityImageTrackAnimating = false;
+        });
+        return false;
+    }
+
+    activityImageTrackAnimating = true;
+    animateActivityImageTrackTo(step > 0 ? -slideWidth : slideWidth, 'transform 0.28s ease', () => {
+        commitActivityImageModalStep(step);
+        activityImageTrackAnimating = false;
+    });
+    return true;
+}
+
+function animateActivityImageModalStep(step) {
+    if (!step || activityImageTrackAnimating) return false;
+    if (activityImageZoomed) {
+        resetActivityImageZoom();
+    }
+    const slideWidth = getActivityImageSlideWidth();
+    if (!slideWidth) return commitActivityImageModalStep(step);
+    const nextIndex = currentImageModalIndex + step;
+    if (nextIndex < 0 || nextIndex >= currentImageModalGallery.length) return false;
+    activityImageTrackAnimating = true;
+    animateActivityImageTrackTo(step > 0 ? -slideWidth : slideWidth, 'transform 0.28s ease', () => {
+        commitActivityImageModalStep(step);
+        activityImageTrackAnimating = false;
+    });
+    return true;
+}
+
+window.navigateActivityImageModal = (direction) => {
+    if (direction === 'prev') return animateActivityImageModalStep(-1);
+    if (direction === 'next') return animateActivityImageModalStep(1);
+    return false;
+};
 
 window.renderRecordCalendar = () => {
     const wrap = document.getElementById('record-calendar-wrap');
@@ -6220,11 +6597,19 @@ window.openRecordDayView = (dayKey) => {
         const d = new Date(a.createdAt);
         const hh = String(d.getHours()).padStart(2, '0');
         const mm = String(d.getMinutes()).padStart(2, '0');
-        const photos = (a.images || []).slice(0, 5).map((src) => `
-            <div class="record-photo-item" onclick="openActivityImageModal('${src.replace(/'/g, "\\'")}', '${dayKey}'); event.stopPropagation();">
-                <img src="${src}" loading="lazy" alt="photo">
+        const galleryEntries = (a.images || []).slice(0, 5);
+        const galleryImages = galleryEntries.map(getImageAssetFullUrl).filter(Boolean);
+        const galleryKey = window.registerActivityImageGallery(galleryImages);
+        const photos = galleryEntries.map((entry, index) => {
+            const fullSrc = getImageAssetFullUrl(entry);
+            const thumbSrc = getImageAssetThumbUrl(entry);
+            if (!fullSrc || !thumbSrc) return '';
+            return `
+            <div class="record-photo-item" onclick="openActivityImageModal('${fullSrc.replace(/'/g, "\\'")}', '${dayKey}', '${galleryKey}', ${index}); event.stopPropagation();">
+                <img src="${thumbSrc.replace(/"/g, '&quot;')}" loading="lazy" decoding="async" alt="photo">
             </div>
-        `).join('');
+        `;
+        }).join('');
         const deleteBtn = Number.isInteger(a.reviewIndex) && a.reviewIndex >= 0
             ? `<button class="review-delete-btn activity-delete-btn" onclick="deleteMyStoreReview('${a.storeId}', ${a.reviewIndex}); event.stopPropagation();">删除</button>`
             : '';
@@ -6282,59 +6667,67 @@ function renderSimpleRatingIcons(score) {
     ).join('');
 }
 
-window.openActivityImageModal = (src, dayKey = "") => {
+window.openActivityImageModal = (src, dayKey = "", galleryKey = "", startIndex = -1) => {
     if (!src) return;
     const modal = document.getElementById('activity-image-modal');
     const img = document.getElementById('activity-image-modal-img');
-    const pinIcon = document.getElementById('activity-main-pin-icon');
-    const pinLabel = document.getElementById('activity-main-pin-label');
-    const setMainBtn = document.getElementById('activity-set-main-btn');
-    const state = document.getElementById('activity-main-state');
-    const tools = document.getElementById('activity-image-tools');
     if (!modal || !img) return;
     currentImageModalDateKey = dayKey || currentRecordDayKey || "";
-    currentImageModalSrc = src;
+    currentImageModalGallery = resolveActivityImageGallery(galleryKey, src);
+    const srcIndex = currentImageModalGallery.indexOf(String(src));
+    currentImageModalIndex = Number.isInteger(startIndex) && startIndex >= 0
+        ? Math.min(currentImageModalGallery.length - 1, startIndex)
+        : (srcIndex >= 0 ? srcIndex : 0);
     resetActivityImageZoom();
-    img.src = src;
-    const canSetMain = !!(currentImageModalDateKey && currentUser && !isViewingFriendProfile());
-    if (tools) tools.classList.toggle('hidden', !canSetMain);
-    if (pinIcon && pinLabel && state && canSetMain) {
-        const isMain = getMainImageForDay(currentImageModalDateKey) === src;
-        pinIcon.src = isMain ? 'images/main-f.svg' : 'images/main.svg';
-        pinLabel.innerText = '设为今日主图';
-        if (setMainBtn) setMainBtn.classList.toggle('hidden', isMain);
-        state.classList.toggle('hidden', !isMain);
-    } else if (setMainBtn && state) {
-        setMainBtn.classList.remove('hidden');
-        state.classList.add('hidden');
-    }
-    const alignOverlay = () => positionActivityImageOverlay();
-    img.onload = alignOverlay;
     modal.classList.add('open');
-    requestAnimationFrame(alignOverlay);
+    syncActivityImageModalImage();
 };
 
 window.closeActivityImageModal = () => {
     const modal = document.getElementById('activity-image-modal');
     const img = document.getElementById('activity-image-modal-img');
+    const prevImg = document.getElementById('activity-image-modal-img-prev');
+    const nextImg = document.getElementById('activity-image-modal-img-next');
+    const counter = document.getElementById('activity-image-counter');
     if (!modal || !img) return;
     clearPendingActivityImageModalClose();
     resetActivityImageZoom();
     modal.classList.remove('open');
     img.src = '';
+    if (prevImg) prevImg.src = '';
+    if (nextImg) nextImg.src = '';
     img.onload = null;
+    if (counter) {
+        counter.innerText = '';
+        counter.classList.add('hidden');
+    }
     currentImageModalDateKey = "";
     currentImageModalSrc = "";
+    currentImageModalGallery = [];
+    currentImageModalIndex = 0;
 };
 
 let activityImageModalCloseTimer = null;
 let activityImageZoomed = false;
+let activityImageTrackOffsetX = 0;
+let activityImageTrackAnimating = false;
 let activityImageTouchGesture = {
     startDistance: 0,
     startScale: 1,
     active: false,
-    skipTapClose: false
+    skipTapClose: false,
+    startX: 0,
+    startY: 0,
+    deltaX: 0,
+    deltaY: 0,
+    swipeActive: false,
+    mouseActive: false
 };
+
+function clearActivityImageMouseDragListeners() {
+    window.removeEventListener('mousemove', window.handleActivityImageMouseMove);
+    window.removeEventListener('mouseup', window.handleActivityImageMouseUp);
+}
 
 function clearPendingActivityImageModalClose() {
     if (!activityImageModalCloseTimer) return;
@@ -6353,13 +6746,25 @@ function scheduleActivityImageModalClose() {
 function resetActivityImageZoom() {
     const img = document.getElementById('activity-image-modal-img');
     activityImageZoomed = false;
+    activityImageTrackAnimating = false;
     activityImageTouchGesture.startDistance = 0;
     activityImageTouchGesture.startScale = 1;
     activityImageTouchGesture.active = false;
     activityImageTouchGesture.skipTapClose = false;
+    activityImageTouchGesture.startX = 0;
+    activityImageTouchGesture.startY = 0;
+    activityImageTouchGesture.deltaX = 0;
+    activityImageTouchGesture.deltaY = 0;
+    activityImageTouchGesture.swipeActive = false;
+    activityImageTouchGesture.mouseActive = false;
+    clearActivityImageMouseDragListeners();
+    document.body.style.cursor = '';
+    resetActivityImageTrackPosition();
     if (!img) return;
     img.classList.remove('is-zoomed');
-    img.style.transform = 'scale(1)';
+    img.classList.remove('is-dragging');
+    img.style.transition = '';
+    img.style.transform = 'translateX(0px) scale(1)';
     img.style.transformOrigin = 'center center';
 }
 
@@ -6376,7 +6781,7 @@ function setActivityImageScale(img, scale, originX = 50, originY = 50) {
     activityImageZoomed = nextScale > 1.01;
     img.classList.toggle('is-zoomed', activityImageZoomed);
     img.style.transformOrigin = `${originX}% ${originY}%`;
-    img.style.transform = `scale(${nextScale})`;
+    img.style.transform = `translateX(0px) scale(${nextScale})`;
 }
 
 function getTouchDistance(touchA, touchB) {
@@ -6436,12 +6841,24 @@ window.toggleActivityImageZoom = (event) => {
     activityImageZoomed = true;
     img.classList.add('is-zoomed');
     img.style.transformOrigin = `${originX}% ${originY}%`;
-    img.style.transform = 'scale(2)';
+    img.style.transform = 'translateX(0px) scale(2)';
 };
 
 window.handleActivityImageTouchStart = (event) => {
-    if (!event.currentTarget || event.touches.length !== 2) return;
-    const img = event.currentTarget;
+    const img = document.getElementById('activity-image-modal-img');
+    if (!img || activityImageTrackAnimating) return;
+    if (event.touches.length === 1) {
+        const touch = event.touches[0];
+        const track = document.getElementById('activity-image-track');
+        if (track) track.style.transition = 'none';
+        activityImageTouchGesture.startX = touch.clientX;
+        activityImageTouchGesture.startY = touch.clientY;
+        activityImageTouchGesture.deltaX = 0;
+        activityImageTouchGesture.deltaY = 0;
+        activityImageTouchGesture.swipeActive = false;
+        return;
+    }
+    if (event.touches.length !== 2) return;
     const [touchA, touchB] = event.touches;
     clearPendingActivityImageModalClose();
     activityImageTouchGesture.startDistance = getTouchDistance(touchA, touchB);
@@ -6451,8 +6868,30 @@ window.handleActivityImageTouchStart = (event) => {
 };
 
 window.handleActivityImageTouchMove = (event) => {
-    if (!event.currentTarget || event.touches.length !== 2 || !activityImageTouchGesture.active) return;
-    const img = event.currentTarget;
+    const img = document.getElementById('activity-image-modal-img');
+    if (!img) return;
+    if (event.touches.length === 1 && !activityImageZoomed && currentImageModalGallery.length > 1) {
+        const touch = event.touches[0];
+        activityImageTouchGesture.deltaX = touch.clientX - activityImageTouchGesture.startX;
+        activityImageTouchGesture.deltaY = touch.clientY - activityImageTouchGesture.startY;
+        const absX = Math.abs(activityImageTouchGesture.deltaX);
+        const absY = Math.abs(activityImageTouchGesture.deltaY);
+        if (absX > 14 && absX > absY * 1.2) {
+            activityImageTouchGesture.swipeActive = true;
+            activityImageTouchGesture.skipTapClose = true;
+            event.preventDefault();
+        }
+        if (activityImageTouchGesture.swipeActive) {
+            let effectiveDelta = activityImageTouchGesture.deltaX;
+            if ((currentImageModalIndex === 0 && effectiveDelta > 0) ||
+                (currentImageModalIndex === currentImageModalGallery.length - 1 && effectiveDelta < 0)) {
+                effectiveDelta *= 0.3;
+            }
+            setActivityImageTrackOffset(effectiveDelta);
+        }
+        return;
+    }
+    if (event.touches.length !== 2 || !activityImageTouchGesture.active) return;
     const [touchA, touchB] = event.touches;
     const distance = getTouchDistance(touchA, touchB);
     if (!distance || !activityImageTouchGesture.startDistance) return;
@@ -6468,12 +6907,90 @@ window.handleActivityImageTouchEnd = (event) => {
     activityImageTouchGesture.active = false;
     activityImageTouchGesture.startDistance = 0;
     activityImageTouchGesture.startScale = 1;
+    const hadSwipe = activityImageTouchGesture.swipeActive;
+    const img = document.getElementById('activity-image-modal-img');
 
-    const img = event.currentTarget;
+    if (hadSwipe && !activityImageZoomed) {
+        const dx = activityImageTouchGesture.deltaX;
+        finishActivityImageSwipe(dx);
+        activityImageTouchGesture.skipTapClose = true;
+    } else {
+        resetActivityImageTrackPosition();
+    }
+    activityImageTouchGesture.swipeActive = false;
+    activityImageTouchGesture.deltaX = 0;
+    activityImageTouchGesture.deltaY = 0;
+
     if (img && getActivityImageCurrentScale(img) <= 1.01) {
         setActivityImageScale(img, 1);
-        activityImageTouchGesture.skipTapClose = false;
+        if (!hadSwipe) activityImageTouchGesture.skipTapClose = false;
     }
+};
+
+window.handleActivityImageMouseDown = (event) => {
+    if (event.button !== 0 || activityImageZoomed || currentImageModalGallery.length <= 1 || activityImageTrackAnimating) return;
+    const img = document.getElementById('activity-image-modal-img');
+    if (!img) return;
+    event.preventDefault();
+    clearPendingActivityImageModalClose();
+    const track = document.getElementById('activity-image-track');
+    if (track) track.style.transition = 'none';
+    activityImageTouchGesture.startX = event.clientX;
+    activityImageTouchGesture.startY = event.clientY;
+    activityImageTouchGesture.deltaX = 0;
+    activityImageTouchGesture.deltaY = 0;
+    activityImageTouchGesture.swipeActive = false;
+    activityImageTouchGesture.mouseActive = true;
+    img.classList.add('is-dragging');
+    document.body.style.cursor = 'grabbing';
+    clearActivityImageMouseDragListeners();
+    window.addEventListener('mousemove', window.handleActivityImageMouseMove);
+    window.addEventListener('mouseup', window.handleActivityImageMouseUp);
+};
+
+window.handleActivityImageMouseMove = (event) => {
+    if (!activityImageTouchGesture.mouseActive || activityImageZoomed) return;
+    activityImageTouchGesture.deltaX = event.clientX - activityImageTouchGesture.startX;
+    activityImageTouchGesture.deltaY = event.clientY - activityImageTouchGesture.startY;
+    const absX = Math.abs(activityImageTouchGesture.deltaX);
+    const absY = Math.abs(activityImageTouchGesture.deltaY);
+    if (absX > 14 && absX > absY * 1.2) {
+        activityImageTouchGesture.swipeActive = true;
+        activityImageTouchGesture.skipTapClose = true;
+        event.preventDefault();
+    }
+    if (activityImageTouchGesture.swipeActive) {
+        let effectiveDelta = activityImageTouchGesture.deltaX;
+        if ((currentImageModalIndex === 0 && effectiveDelta > 0) ||
+            (currentImageModalIndex === currentImageModalGallery.length - 1 && effectiveDelta < 0)) {
+            effectiveDelta *= 0.3;
+        }
+        setActivityImageTrackOffset(effectiveDelta);
+    }
+};
+
+window.handleActivityImageMouseUp = (event) => {
+    if (!activityImageTouchGesture.mouseActive) return;
+    const img = document.getElementById('activity-image-modal-img');
+    const hadSwipe = activityImageTouchGesture.swipeActive;
+    const dx = activityImageTouchGesture.deltaX;
+    const dy = activityImageTouchGesture.deltaY;
+    activityImageTouchGesture.mouseActive = false;
+    activityImageTouchGesture.swipeActive = false;
+    activityImageTouchGesture.deltaX = 0;
+    activityImageTouchGesture.deltaY = 0;
+    clearActivityImageMouseDragListeners();
+    if (img) {
+        img.classList.remove('is-dragging');
+    }
+    document.body.style.cursor = '';
+    if (hadSwipe) {
+        finishActivityImageSwipe(dx);
+        activityImageTouchGesture.skipTapClose = true;
+    } else {
+        resetActivityImageTrackPosition();
+    }
+    if (event) event.preventDefault();
 };
 
 function positionActivityImageOverlay() {
@@ -6506,7 +7023,7 @@ window.addEventListener('resize', () => {
 window.toggleCurrentImageAsMain = () => {
     if (!currentImageModalDateKey || !currentImageModalSrc) return;
     setMainImageForDay(currentImageModalDateKey, currentImageModalSrc);
-    openActivityImageModal(currentImageModalSrc, currentImageModalDateKey);
+    syncActivityImageModalImage();
     renderRecordCalendar();
     if (currentRecordDayKey === currentImageModalDateKey) openRecordDayView(currentRecordDayKey);
 };
@@ -6583,15 +7100,15 @@ window.switchProfileFavTab = (tab) => {
 
             const avgRating = getStoreAverageRating(s);
             const reviewCount = getStoreReviewCount(s);
-            const rawImgs = getStorePreviewImages(s);
+            const rawImgs = getStorePreviewImageEntries(s);
             const displayImgs = rawImgs.length ? rawImgs : ['https://placehold.co/200?text=No+Image'];
             const imagesHtml = displayImgs.map(src =>
-                `<img src="${src}" class="store-img-item" loading="lazy">`
+                `<img src="${getImageAssetThumbUrl(src)}" class="store-img-item" loading="lazy" decoding="async">`
             ).join('');
 
             if (readonly) {
                 return `
-            <div class="store-card ${statusClass}" onclick="openDetail('${s.id}')">
+            <div class="store-card ${statusClass}" data-store-id="${s.id}" onclick="openDetail('${s.id}')">
                 <div class="card-header-row">
                     <div class="info-col">
                         <div class="store-name-row">
@@ -6605,7 +7122,7 @@ window.switchProfileFavTab = (tab) => {
             }
 
             return `
-        <div class="store-card ${statusClass}" onclick="openDetail('${s.id}')">
+            <div class="store-card ${statusClass}" data-store-id="${s.id}" onclick="openDetail('${s.id}')">
             <div class="card-header-row">
                 <div class="info-col">
                     <div class="store-name-row">
@@ -6739,7 +7256,8 @@ async function ensureAllUsersLoaded(forceReload = false) {
                 usersLoadErrorMsg = "";
 
                 // 好友点赞/差评变化后自动刷新，无需手动刷新页面
-                applyFilters();
+                if (isHomeViewActive()) refreshVisibleStoreCardPreferenceVisuals();
+                else applyFilters();
                 const favView = document.getElementById('view-fav');
                 if (favView && !favView.classList.contains('hidden')) {
                     switchFavTab(currentFavTab);

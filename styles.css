@@ -4406,23 +4406,59 @@ header {
     opacity: 0.96;
 }
 
+.activity-image-stage {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.activity-image-track {
+    display: flex;
+    width: 300%;
+    height: 100%;
+    margin-left: -100%;
+    transform: translateX(0px);
+    transition: transform 0.28s ease;
+    will-change: transform;
+}
+
+.activity-image-panel {
+    width: 33.3333%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    box-sizing: border-box;
+    position: relative;
+}
+
 .activity-image-modal-img {
     width: 100%;
     max-height: 80vh;
     object-fit: contain;
     border-radius: 0;
-    cursor: zoom-in;
+    cursor: grab;
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
     -webkit-user-drag: none;
     transform-origin: center center;
-    transform: scale(1);
+    transform: translateX(0px) scale(1);
     transition: transform 0.2s ease;
 }
 
 .activity-image-modal-img.is-zoomed {
     cursor: zoom-out;
+}
+
+.activity-image-modal-img.is-dragging {
+    cursor: grabbing;
+}
+
+.activity-image-side-img {
+    pointer-events: none;
 }
 
 .activity-image-tools {
@@ -4433,6 +4469,23 @@ header {
     display: flex;
     flex-direction: column;
     gap: 10px;
+}
+
+.activity-image-counter {
+    position: absolute;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    z-index: 3;
+    min-width: 54px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.42);
+    color: #fff;
+    font-size: 12px;
+    line-height: 1.2;
+    text-align: center;
+    backdrop-filter: blur(8px);
 }
 
 .activity-set-main-btn {
