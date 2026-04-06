@@ -33,8 +33,9 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v23";
+const APP_BUILD_VERSION = "v24";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
+const LOCATION_CACHE_STORAGE_KEY = "mogumode:last-origin-v2";
 
 // 初始化 Firebase 服务
 const app = initializeApp(firebaseConfig);           // 初始化 Firebase 应用
@@ -42,10 +43,10 @@ const auth = getAuth(app);                           // 获取认证服务
 const db = getFirestore(app);                        // 获取数据库服务
 const storage = getStorage(app);                     // 获取存储服务
 
-// 固定的起点位置（Cocoon Tower - 新宿的一个地标建筑）
+// 固定起点仅作内部兜底，不再作为默认显示位置
 const FIXED_ORIGIN = { lat: 35.691638, lng: 139.697005 };
 window.mapOrigin = { ...FIXED_ORIGIN };
-window.mapOriginType = 'cocoon';
+window.mapOriginType = 'gps';
 
 /* =========================================
    2. 全局状态变量
@@ -4899,6 +4900,12 @@ let tempCoords = null;   // 临时坐标
 let geocoder = null;     // 地理编码器
 let miniConfirmMap = null;
 let miniConfirmMarker = null;
+let tempLocationMeta = null;
+let currentResolvedLocationLabel = "";
+let currentResolvedLocationDetail = "";
+let hasBootstrappedLocation = false;
+let locationLabelRetryTimer = 0;
+let gsiMunicipalityMapPromise = null;
 
 function waitForGoogleMaps(maxWaitMs = 2500) {
     return new Promise((resolve) => {
@@ -4919,6 +4926,66 @@ function waitForGoogleMaps(maxWaitMs = 2500) {
             }
         }, 120);
     });
+}
+
+function loadCachedLocationState() {
+    try {
+        const raw = localStorage.getItem(LOCATION_CACHE_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        const lat = Number(parsed?.lat);
+        const lng = Number(parsed?.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        const label = String(parsed?.label || "").trim();
+        const detail = String(parsed?.detail || "").trim();
+        if (isGenericCurrentLocationText(label) && isGenericCurrentLocationText(detail)) return null;
+        return {
+            lat,
+            lng,
+            label,
+            detail
+        };
+    } catch {
+        return null;
+    }
+}
+
+function saveCachedLocationState(coords, meta = {}) {
+    try {
+        const lat = Number(coords?.lat);
+        const lng = Number(coords?.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+        localStorage.setItem(LOCATION_CACHE_STORAGE_KEY, JSON.stringify({
+            lat,
+            lng,
+            label: String(meta?.label || "").trim(),
+            detail: String(meta?.detail || "").trim()
+        }));
+    } catch {
+        // ignore storage write failures
+    }
+}
+
+function setCurrentLocationText(label, detail = "") {
+    const textEl = document.getElementById('current-location-text');
+    if (!textEl) return;
+    const safeLabel = String(label || "读取位置").trim() || "读取位置";
+    const safeDetail = String(detail || safeLabel).trim() || safeLabel;
+    textEl.innerText = safeLabel;
+    textEl.title = safeDetail;
+}
+
+function setLocationConfirmDetailText(detail = "") {
+    const detailEl = document.getElementById('loc-confirm-current');
+    if (!detailEl) return;
+    const safeDetail = String(detail || currentResolvedLocationDetail || currentResolvedLocationLabel || "读取中...").trim() || "读取中...";
+    detailEl.innerText = `当前位置：${safeDetail}`;
+    detailEl.title = safeDetail;
+}
+
+function isGenericCurrentLocationText(text = "") {
+    const normalized = String(text || "").trim();
+    return !normalized || normalized === "当前位置" || normalized === "读取位置" || normalized === "正在定位...";
 }
 
 function normalizeFullWidthDigits(text) {
@@ -4952,6 +5019,156 @@ function findLandmarkName(results = []) {
     return '';
 }
 
+function pickAddressComponent(comps = [], candidateTypes = []) {
+    for (const wantedType of candidateTypes) {
+        const found = comps.find(comp => Array.isArray(comp?.types) && comp.types.includes(wantedType) && comp.long_name);
+        if (found?.long_name) return normalizeFullWidthDigits(found.long_name);
+    }
+    return '';
+}
+
+function buildCityDistrictLabel(results = []) {
+    const primary = results[0];
+    const comps = Array.isArray(primary?.address_components) ? primary.address_components : [];
+    const prefecture = pickAddressComponent(comps, ['administrative_area_level_1']);
+    const locality = pickAddressComponent(comps, ['locality', 'administrative_area_level_2', 'postal_town', 'sublocality_level_1']);
+    const short = `${prefecture}${locality}`.trim();
+    if (short) return short;
+    const fallback = toJapaneseAddressText(primary?.formatted_address || '');
+    return fallback || '当前位置';
+}
+
+function formatFallbackReverseGeocodePayload(payload = {}) {
+    const address = payload?.address || {};
+    const pieces = [
+        address.city || address.town || address.village,
+        address.city_district,
+        address.suburb,
+        address.neighbourhood,
+        address.quarter,
+        address.road,
+        address.house_number
+    ]
+        .map(v => normalizeFullWidthDigits(v || '').trim())
+        .filter(Boolean)
+        .filter((value, index, arr) => arr.findIndex(item => item === value) === index);
+
+    const displayName = normalizeFullWidthDigits(String(payload?.display_name || '').trim())
+        .replace(/^日本[、,\s]*/, '')
+        .replace(/,\s*Japan$/i, '')
+        .replace(/,\s*/g, '');
+    const shortText = toJapaneseAddressText(pieces.join('') || '');
+    const fullText = toJapaneseAddressText(displayName || shortText || '');
+
+    return {
+        label: shortText || fullText || '当前位置',
+        detail: fullText || '当前位置'
+    };
+}
+
+async function loadGsiMunicipalityMap() {
+    if (gsiMunicipalityMapPromise) return gsiMunicipalityMapPromise;
+    gsiMunicipalityMapPromise = (async () => {
+        const response = await fetch('https://maps.gsi.go.jp/js/muni.js');
+        if (!response.ok) throw new Error(`muni.js load failed: ${response.status}`);
+        const source = await response.text();
+        const map = new Map();
+        const regex = /GSI\.MUNI_ARRAY\["(\d+)"\]\s*=\s*'([^']+)'/g;
+        let match;
+        while ((match = regex.exec(source))) {
+            const muniCd = String(match[1] || '').trim();
+            const parts = String(match[2] || '').split(',');
+            map.set(muniCd, {
+                prefectureCode: String(parts[0] || '').trim(),
+                prefecture: normalizeFullWidthDigits(parts[1] || '').trim(),
+                municipalityCode: String(parts[2] || '').trim(),
+                municipality: normalizeFullWidthDigits(parts[3] || '').trim()
+            });
+        }
+        return map;
+    })().catch((error) => {
+        gsiMunicipalityMapPromise = null;
+        throw error;
+    });
+    return gsiMunicipalityMapPromise;
+}
+
+async function reverseGeocodeCurrentCoordsViaGsi(lat, lng) {
+    try {
+        const [reverseResponse, muniMap] = await Promise.all([
+            fetch(`https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}`),
+            loadGsiMunicipalityMap()
+        ]);
+        if (!reverseResponse.ok) throw new Error(`gsi reverse failed: ${reverseResponse.status}`);
+        const payload = await reverseResponse.json();
+        const results = payload?.results || {};
+        const muniCd = String(results?.muniCd || '').trim();
+        const town = normalizeFullWidthDigits(results?.lv01Nm || '').trim();
+        const muni = muniMap.get(muniCd);
+        const fullText = `${muni?.prefecture || ''}${muni?.municipality || ''}${town || ''}`.trim();
+        if (!isGenericCurrentLocationText(fullText)) {
+            return { label: fullText, detail: fullText };
+        }
+    } catch (error) {
+        console.warn('GSI reverse geocode failed', error);
+    }
+    return null;
+}
+
+async function reverseGeocodeCurrentCoordsFallback(lat, lng) {
+    try {
+        const gsiMeta = await reverseGeocodeCurrentCoordsViaGsi(lat, lng);
+        if (gsiMeta) return gsiMeta;
+
+        const params = new URLSearchParams({
+            format: 'jsonv2',
+            lat: String(lat),
+            lon: String(lng),
+            'accept-language': 'ja'
+        });
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?${params.toString()}`, {
+            headers: {
+                Accept: 'application/json'
+            }
+        });
+        if (!response.ok) throw new Error(`reverse geocode failed: ${response.status}`);
+        const payload = await response.json();
+        return formatFallbackReverseGeocodePayload(payload);
+    } catch (error) {
+        console.warn('Fallback reverse geocode failed', error);
+        return { label: '当前位置', detail: '当前位置' };
+    }
+}
+
+function clearLocationLabelRetryTimer() {
+    if (!locationLabelRetryTimer) return;
+    clearTimeout(locationLabelRetryTimer);
+    locationLabelRetryTimer = 0;
+}
+
+async function retryResolveCurrentLocationLabel(attempt = 1) {
+    const lat = Number(window.mapOrigin?.lat);
+    const lng = Number(window.mapOrigin?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    const meta = await reverseGeocodeCurrentCoords(lat, lng);
+    if (!isGenericCurrentLocationText(meta?.label) || !isGenericCurrentLocationText(meta?.detail)) {
+        applyResolvedLocation({ lat, lng }, meta, { refresh: false });
+        if (tempCoords && Number(tempCoords.lat) === lat && Number(tempCoords.lng) === lng) {
+            tempLocationMeta = meta;
+            setLocationConfirmDetailText(meta.detail);
+        }
+        return;
+    }
+
+    if (attempt >= 4) return;
+    clearLocationLabelRetryTimer();
+    locationLabelRetryTimer = setTimeout(() => {
+        locationLabelRetryTimer = 0;
+        retryResolveCurrentLocationLabel(attempt + 1);
+    }, 1500 * attempt);
+}
+
 function renderMiniConfirmMap(coords) {
     const mapEl = document.getElementById('mini-map-confirm');
     if (!mapEl || !coords) return;
@@ -4977,24 +5194,27 @@ function renderMiniConfirmMap(coords) {
 
 function reverseGeocodeCurrentCoords(lat, lng) {
     return new Promise(async (resolve) => {
-        const mapsReady = await waitForGoogleMaps(2500);
+        const mapsReady = await waitForGoogleMaps(10000);
         if (!mapsReady || !window.google?.maps) {
-            resolve("当前位置");
+            resolve(await reverseGeocodeCurrentCoordsFallback(lat, lng));
             return;
         }
         if (!geocoder) geocoder = new google.maps.Geocoder();
-        geocoder.geocode({ location: { lat: Number(lat), lng: Number(lng) } }, (results, status) => {
+        geocoder.geocode({ location: { lat: Number(lat), lng: Number(lng) } }, async (results, status) => {
             if (status === 'OK' && Array.isArray(results) && results.length) {
-                // 优先展示建筑/地标名，其次展示日式地址（丁目-番-号）
+                const cityDistrict = buildCityDistrictLabel(results);
+                const addressText = toJapaneseAddressText(results[0]?.formatted_address || '');
                 const landmark = findLandmarkName(results);
-                if (landmark) {
-                    resolve(landmark);
+                const locationMeta = {
+                    label: addressText || cityDistrict || landmark || '当前位置',
+                    detail: addressText || landmark || cityDistrict || '当前位置'
+                };
+                if (!isGenericCurrentLocationText(locationMeta.label) || !isGenericCurrentLocationText(locationMeta.detail)) {
+                    resolve(locationMeta);
                     return;
                 }
-                resolve(toJapaneseAddressText(results[0]?.formatted_address || ''));
-                return;
             }
-            resolve("当前位置");
+            resolve(await reverseGeocodeCurrentCoordsFallback(lat, lng));
         });
     });
 }
@@ -5005,6 +5225,59 @@ function syncLocationTriggerIcon() {
     iconEl.src = window.mapOriginType === 'gps'
         ? 'images/weizhih.svg'
         : 'images/weizhilan.svg';
+}
+
+function applyResolvedLocation(coords, meta = {}, opts = {}) {
+    const lat = Number(coords?.lat);
+    const lng = Number(coords?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    const label = String(meta?.label || currentResolvedLocationLabel || "当前位置").trim() || "当前位置";
+    const detail = String(meta?.detail || label).trim() || label;
+
+    window.mapOrigin = { lat, lng };
+    window.mapOriginType = 'gps';
+    tempCoords = { lat, lng };
+    tempLocationMeta = { label, detail };
+    currentResolvedLocationLabel = label;
+    currentResolvedLocationDetail = detail;
+
+    setCurrentLocationText(label, detail);
+    setLocationConfirmDetailText(detail);
+    syncLocationTriggerIcon();
+    if (window.refreshCurrentOriginMarker) window.refreshCurrentOriginMarker();
+    if (opts.persist !== false) saveCachedLocationState({ lat, lng }, { label, detail });
+    if (opts.refresh !== false) refreshDistanceDependentViews();
+
+    if (isGenericCurrentLocationText(label) && isGenericCurrentLocationText(detail)) {
+        retryResolveCurrentLocationLabel(1);
+    } else {
+        clearLocationLabelRetryTimer();
+    }
+}
+
+function openLocationConfirmForState(coords, meta = {}) {
+    const lat = Number(coords?.lat);
+    const lng = Number(coords?.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    tempCoords = { lat, lng };
+    tempLocationMeta = {
+        label: String(meta?.label || currentResolvedLocationLabel || "当前位置").trim() || "当前位置",
+        detail: String(meta?.detail || currentResolvedLocationDetail || meta?.label || "当前位置").trim() || "当前位置"
+    };
+    setLocationConfirmDetailText(tempLocationMeta.detail);
+    toggleLocationConfirmModal(true);
+    renderMiniConfirmMap(tempCoords);
+}
+
+async function getGeolocationPermissionState() {
+    try {
+        if (!navigator.permissions?.query) return 'unsupported';
+        const status = await navigator.permissions.query({ name: 'geolocation' });
+        return String(status?.state || 'unsupported');
+    } catch {
+        return 'unsupported';
+    }
 }
 
 function toggleLocationLoadingModal(visible) {
@@ -5028,10 +5301,29 @@ function toggleLocationConfirmModal(visible) {
 }
 
 /**
- * 切换位置菜单
+ * 顶部位置入口
  */
 window.toggleLocationMenu = () => {
-    document.getElementById('location-menu').classList.toggle('active');
+    window.handleLocationTriggerClick();
+};
+
+window.handleLocationTriggerClick = () => {
+    const lat = Number(window.mapOrigin?.lat);
+    const lng = Number(window.mapOrigin?.lng);
+    if (
+        Number.isFinite(lat)
+        && Number.isFinite(lng)
+        && currentResolvedLocationLabel
+        && !isGenericCurrentLocationText(currentResolvedLocationLabel)
+        && !isGenericCurrentLocationText(currentResolvedLocationDetail)
+    ) {
+        openLocationConfirmForState({ lat, lng }, {
+            label: currentResolvedLocationLabel,
+            detail: currentResolvedLocationDetail || currentResolvedLocationLabel
+        });
+        return;
+    }
+    window.startFetchLocation({ showConfirm: true, force: true });
 };
 
 function refreshDistanceDependentViews() {
@@ -5041,11 +5333,10 @@ function refreshDistanceDependentViews() {
 }
 
 /**
- * 选择固定位置
+ * 保留固定位置入口，先隐藏不删
  */
 window.selectFixedLocation = (name) => {
-    document.getElementById('current-location-text').innerText = name;
-    document.getElementById('location-menu').classList.remove('active');
+    setCurrentLocationText(name, name);
     window.mapOrigin = { ...FIXED_ORIGIN };
     window.mapOriginType = 'cocoon';
     syncLocationTriggerIcon();
@@ -5056,23 +5347,31 @@ window.selectFixedLocation = (name) => {
 /**
  * 开始获取当前GPS位置
  */
-window.startFetchLocation = () => {
-    document.getElementById('location-menu').classList.remove('active');
+window.startFetchLocation = (options = {}) => {
+    const opts = typeof options === 'boolean'
+        ? { showConfirm: options }
+        : (options && typeof options === 'object' ? options : {});
+    const showConfirm = opts.showConfirm !== false;
+    const silentError = opts.silentError === true;
+    const showLoading = opts.showLoading !== false;
     if (isFetchingCurrentLocation) return;
     if (!navigator.geolocation) {
-        showAppNoticeModal("当前浏览器不支持读取定位");
+        if (!silentError) showAppNoticeModal("当前浏览器不支持读取定位");
         return;
     }
 
     isFetchingCurrentLocation = true;
     tempCoords = null;
+    tempLocationMeta = null;
     toggleLocationConfirmModal(false);
 
     if (locationLoadingShowTimer) clearTimeout(locationLoadingShowTimer);
-    locationLoadingShowTimer = setTimeout(() => {
-        toggleLocationLoadingModal(true);
-        locationLoadingShowTimer = null;
-    }, 180);
+    if (showLoading) {
+        locationLoadingShowTimer = setTimeout(() => {
+            toggleLocationLoadingModal(true);
+            locationLoadingShowTimer = null;
+        }, 180);
+    }
 
     const finalizeFetch = () => {
         isFetchingCurrentLocation = false;
@@ -5088,31 +5387,36 @@ window.startFetchLocation = () => {
         const lng = Number(position?.coords?.longitude);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
             finalizeFetch();
-            showAppNoticeModal("读取定位失败，请重试");
+            if (!silentError) showAppNoticeModal("读取定位失败，请重试");
             return;
         }
 
         tempCoords = { lat, lng };
+        const locationMeta = await reverseGeocodeCurrentCoords(lat, lng);
+        tempLocationMeta = locationMeta;
         finalizeFetch();
 
-        toggleLocationConfirmModal(true);
-        renderMiniConfirmMap(tempCoords);
+        if (showConfirm) {
+            openLocationConfirmForState(tempCoords, locationMeta);
+            return;
+        }
+        applyResolvedLocation(tempCoords, locationMeta);
     }, (error) => {
         finalizeFetch();
         const code = Number(error?.code);
         if (code === 1) {
-            showAppNoticeModal("你拒绝了定位权限，请在浏览器设置里允许定位");
+            if (!silentError) showAppNoticeModal("你拒绝了定位权限，请在浏览器设置里允许定位");
             return;
         }
         if (code === 2) {
-            showAppNoticeModal("暂时无法获取当前位置，请检查定位服务");
+            if (!silentError) showAppNoticeModal("暂时无法获取当前位置，请检查定位服务");
             return;
         }
         if (code === 3) {
-            showAppNoticeModal("定位超时，请重试");
+            if (!silentError) showAppNoticeModal("定位超时，请重试");
             return;
         }
-        showAppNoticeModal("读取定位失败，请重试");
+        if (!silentError) showAppNoticeModal("读取定位失败，请重试");
     }, {
         enableHighAccuracy: true,
         timeout: 10000,
@@ -5124,15 +5428,17 @@ window.startFetchLocation = () => {
  * 确认使用GPS位置
  */
 window.confirmGPSLocation = () => {
-    const newLoc = "当前位置";
-    document.getElementById('current-location-text').innerText = newLoc;
     if (tempCoords && Number.isFinite(tempCoords.lat) && Number.isFinite(tempCoords.lng)) {
-        window.mapOrigin = { lat: Number(tempCoords.lat), lng: Number(tempCoords.lng) };
+        applyResolvedLocation({
+            lat: Number(tempCoords.lat),
+            lng: Number(tempCoords.lng)
+        }, tempLocationMeta || {});
+    } else if (Number.isFinite(window.mapOrigin?.lat) && Number.isFinite(window.mapOrigin?.lng)) {
+        applyResolvedLocation(window.mapOrigin, tempLocationMeta || {
+            label: currentResolvedLocationLabel || "当前位置",
+            detail: currentResolvedLocationDetail || currentResolvedLocationLabel || "当前位置"
+        });
     }
-    window.mapOriginType = 'gps';
-    syncLocationTriggerIcon();
-    if (window.refreshCurrentOriginMarker) window.refreshCurrentOriginMarker();
-    refreshDistanceDependentViews();
     closeLocModals();
 };
 
@@ -5153,10 +5459,39 @@ window.closeLocModals = () => {
     }
 };
 
+async function initPreferredLocationOnStartup() {
+    if (hasBootstrappedLocation) return;
+    hasBootstrappedLocation = true;
+
+    const cached = loadCachedLocationState();
+    if (cached) {
+        applyResolvedLocation(
+            { lat: cached.lat, lng: cached.lng },
+            { label: cached.label || "当前位置", detail: cached.detail || cached.label || "当前位置" },
+            { persist: false, refresh: false }
+        );
+    } else {
+        setCurrentLocationText("读取位置", "读取位置");
+        setLocationConfirmDetailText("读取中...");
+        syncLocationTriggerIcon();
+    }
+
+    const permissionState = await getGeolocationPermissionState();
+    const canAutoRefresh =
+        permissionState === 'granted'
+        || (!cached && (permissionState === 'prompt' || permissionState === 'unsupported'));
+
+    if (canAutoRefresh) {
+        window.startFetchLocation({ showConfirm: false, silentError: true, showLoading: false });
+    }
+}
+
 // 点击页面其他地方时关闭位置菜单
 document.addEventListener('click', (e) => {
-    if (!document.getElementById('location-trigger').contains(e.target)) {
-        document.getElementById('location-menu').classList.remove('active');
+    const trigger = document.getElementById('location-trigger');
+    const menu = document.getElementById('location-menu');
+    if (trigger && menu && !trigger.contains(e.target)) {
+        menu.classList.remove('active');
     }
 });
 
@@ -5165,6 +5500,7 @@ initHomeSearchInput();
 initScrollbarAutoFade();
 renderBuildVersionTag();
 resetAddComposerFlow();
+initPreferredLocationOnStartup();
 
 function resetFriendProfileOverlayState() {
     const profileView = document.getElementById('view-profile');

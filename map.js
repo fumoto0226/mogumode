@@ -174,7 +174,7 @@ function setMapSheetMode(mode) {
 
 function getCurrentOriginState() {
     const origin = window.mapOrigin || ORIGIN;
-    const type = window.mapOriginType || 'cocoon';
+    const type = window.mapOriginType || 'gps';
     return { origin, type };
 }
 

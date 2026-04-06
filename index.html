@@ -12,6 +12,7 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="application-name" content="MoguMode">
     <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/svg+xml" href="images/logo.svg">
     <link rel="apple-touch-icon" href="images/pwa/apple-touch-icon.png">
 
     <!-- External Libraries -->
@@ -37,18 +38,18 @@
 
                 <div class="top-row">
                     <div class="logo-area">
-                        <span>🍄</span> MoguMode
+                        <img src="images/logo.svg" alt="MoguMode" class="brand-logo-icon"> MoguMode
                         <span id="build-version-tag" class="build-version-tag">v-</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 10px;">
                         <div style="position: relative;">
-                            <div class="location-capsule" id="location-trigger" onclick="toggleLocationMenu()">
-                                <img id="current-location-icon" src="images/weizhilan.svg" style="width: 14px;">
-                                <span id="current-location-text">cocoon tower</span>
+                            <div class="location-capsule" id="location-trigger" onclick="handleLocationTriggerClick()">
+                                <img id="current-location-icon" src="images/weizhih.svg" style="width: 14px;">
+                                <span id="current-location-text" title="正在定位...">正在定位...</span>
                                 <img src="images/edit.svg" style="width: 14px;">
                             </div>
 
-                            <div id="location-menu" class="location-menu">
+                            <div id="location-menu" class="location-menu location-menu-hidden">
                                 <div class="loc-item" onclick="selectFixedLocation('cocoon tower')">
                                     <img src="images/weizhilan.svg" style="width: 14px;"> cocoon tower
                                 </div>
@@ -73,6 +74,7 @@
                         <div id="mini-map-confirm" style="height:200px; background:#eee;"></div>
                         <div style="padding-top:20px;">
                             <h3 style="margin:0 0 10px 0; font-size:18px;">你在这里吗？</h3>
+                            <div id="loc-confirm-current" class="loc-confirm-current">当前位置：读取中...</div>
                             <div class="loc-actions">
                                 <button class="action-btn btn-cancel" onclick="startFetchLocation()">重新读取</button>
                                 <button class="action-btn btn-cancel" onclick="closeLocModals()">取消</button>
@@ -628,7 +630,7 @@
             <div id="guest-info" class="login-page">
                 <!-- Logo区域 -->
                 <div class="login-header">
-                    <div class="login-logo">🍄 MoguMode</div>
+                    <div class="login-logo"><img src="images/logo.svg" alt="MoguMode" class="brand-logo-icon"> MoguMode</div>
                 </div>
 
                 <!-- 首屏登录入口 -->
@@ -1148,8 +1150,8 @@
     <!-- =========================================
          JAVASCRIPT FILES
          ========================================= -->
-    <script type="module" src="app.js?v=22-cachefix4"></script>
-    <script src="map.js?v=22-cachefix4"></script>
+    <script type="module" src="app.js?v=23-location5"></script>
+    <script src="map.js?v=23-location5"></script>
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvqupW6XZ7A61lutSD8_GlV31Xdc5ZTLw&callback=initGoogleMap&libraries=geometry">
         </script>
