@@ -467,8 +467,13 @@ function computeMapFriendSocial(storeId) {
     const myAvatar = typeof window.getCurrentUserAvatarUrl === 'function'
         ? window.getCurrentUserAvatarUrl()
         : DEFAULT_AVATAR_URL;
+    const myFavs = window.myFavIds || [];
     const myLikes = window.localLikes || new Set();
     const myDislikes = window.localDislikes || new Set();
+    if (myFavs.includes(storeId)) {
+        result.fav.count += 1;
+        result.fav.avatars.unshift(myAvatar);
+    }
     if (myLikes.has(storeId)) {
         result.like.count += 1;
         result.like.avatars.unshift(myAvatar);
@@ -672,7 +677,15 @@ function isMyMapReview(rev) {
 
 function getSortedMapStoreReviews(store) {
     return (Array.isArray(store?.revs) ? [...store.revs] : [])
-        .sort((a, b) => Number(b?.createdAt || 0) - Number(a?.createdAt || 0));
+        .sort((a, b) => {
+            const bTs = typeof window.getReviewEffectiveTimestamp === 'function'
+                ? window.getReviewEffectiveTimestamp(b)
+                : Number(b?.editedAt || b?.createdAt || 0);
+            const aTs = typeof window.getReviewEffectiveTimestamp === 'function'
+                ? window.getReviewEffectiveTimestamp(a)
+                : Number(a?.editedAt || a?.createdAt || 0);
+            return bTs - aTs;
+        });
 }
 
 function buildMapReviewItems(store, scope = 'all') {
@@ -685,7 +698,9 @@ function buildMapReviewItems(store, scope = 'all') {
         const text = typeof r?.text === 'string' ? r.text.trim() : '';
         const imgs = Array.isArray(r?.images) ? r.images.filter(Boolean) : [];
         const avatar = resolveMapReviewAvatar(r, i);
-        const dateStr = formatMapReviewDate(r?.createdAt);
+        const dateStr = typeof window.formatReviewDisplayDateLabel === 'function'
+            ? window.formatReviewDisplayDateLabel(r)
+            : formatMapReviewDate(r?.createdAt);
         const isMine = isMyMapReview(r);
         const friendUser = resolveFriendFromReview(r, aliasMap);
         const isFriend = !!friendUser?.id;
@@ -710,7 +725,9 @@ function buildMapReviewItems(store, scope = 'all') {
     });
 }
 
-function renderMapReviewCardHtml(store, item) {
+function renderMapReviewCardHtml(store, item, opts = {}) {
+    const source = String(opts?.source || '').trim() || 'map';
+    const reviewScope = String(opts?.reviewScope || '').trim();
     const reviewGalleryKey = typeof window.registerActivityImageGallery === 'function'
         ? window.registerActivityImageGallery(item.imgs.map(img => window.getImageAssetFullUrl ? window.getImageAssetFullUrl(img) : img).filter(Boolean))
         : '';
@@ -718,8 +735,11 @@ function renderMapReviewCardHtml(store, item) {
         ? `onclick="openFriendProfileFromReview('${item.friendUser.id}'); event.stopPropagation();"`
         : '';
     const friendBadge = item.isFriend ? `<span class="review-friend-badge">好友</span>` : '';
-    const deleteBtn = (item.isMine && item.originalIndex >= 0)
-        ? `<button class="review-delete-btn" onclick="deleteMyStoreReview('${store.id}', ${item.originalIndex}); event.stopPropagation();">删除</button>`
+    const actionBtns = (item.isMine && item.originalIndex >= 0)
+        ? `<div class="review-actions">
+            <button class="review-edit-btn" onclick="openEditReviewComposer('${store.id}', ${item.originalIndex}, { source: '${source}', reviewScope: '${reviewScope}' }); event.stopPropagation();">编辑</button>
+            <button class="review-delete-btn" onclick="deleteMyStoreReview('${store.id}', ${item.originalIndex}); event.stopPropagation();">删除</button>
+        </div>`
         : '';
 
     return `
@@ -730,7 +750,7 @@ function renderMapReviewCardHtml(store, item) {
                     <div class="review-username">${item.userName}${friendBadge}</div>
                     <div class="review-user-meta">${item.dateStr}</div>
                 </div>
-                ${deleteBtn}
+                ${actionBtns}
             </div>
             <div class="review-rating-row" style="margin-bottom:${item.text ? '8px' : '0'};">
                 <b>${item.rating.toFixed(1)}</b>
@@ -759,7 +779,7 @@ function renderMapReviewsAndAlbum(store) {
     const reviewsList = document.getElementById('mp-reviews-list');
     if (reviewsList) {
         const reviewCards = reviewItems.length
-            ? reviewItems.map(item => renderMapReviewCardHtml(store, item)).join('')
+            ? reviewItems.map(item => renderMapReviewCardHtml(store, item, { source: 'map' })).join('')
             : '';
         const reviewPlaceholderText = revs.length ? '没有更多评论了～' : '还没有评论';
         reviewsList.innerHTML = `
@@ -822,7 +842,10 @@ function renderMapReviewSubpage(store, scope = 'mine') {
         return;
     }
 
-    listEl.innerHTML = items.map(item => renderMapReviewCardHtml(store, item)).join('');
+    listEl.innerHTML = items.map(item => renderMapReviewCardHtml(store, item, {
+        source: 'map-review',
+        reviewScope: scope
+    })).join('');
 }
 
 window.openMapReviewSubpage = (scope = 'mine') => {
@@ -831,14 +854,18 @@ window.openMapReviewSubpage = (scope = 'mine') => {
     const store = (window.localStores || []).find(s => s.id === storeId);
     const overlay = document.getElementById('map-review-overlay');
     if (!card || !store || !overlay) return;
+    card.dataset.reviewScope = scope;
     renderMapReviewSubpage(store, scope);
     overlay.classList.remove('hidden');
     requestAnimationFrame(() => overlay.classList.add('is-open'));
 };
 
-window.closeMapReviewSubpage = () => {
+window.closeMapReviewSubpage = (opts = {}) => {
+    const { keepScope = false } = opts || {};
     const overlay = document.getElementById('map-review-overlay');
+    const card = document.getElementById('map-detail-card');
     if (!overlay) return;
+    if (card && !keepScope) delete card.dataset.reviewScope;
     overlay.classList.remove('is-open');
     setTimeout(() => {
         if (!overlay.classList.contains('is-open')) overlay.classList.add('hidden');
@@ -1094,15 +1121,28 @@ window.renderMarkers = () => {
    显示店铺的详细信息
    ========================================= */
 window.renderMapCardFromDB = (store, opts = {}) => {
-    const { mode = 'half' } = opts || {};
+    const { mode = 'half', fromMap = false, sourceView = '', reviewScope = '', suppressAnimation = false } = opts || {};
     mountMapSheetToAppRoot();
     stopMapFriendPreviewRotation();
-    if (typeof window.closeMapReviewSubpage === 'function') window.closeMapReviewSubpage();
 
     if (!store) return;
     const card = document.getElementById('map-detail-card');
+    const overlay = document.getElementById('map-review-overlay');
     if (!card) return;
+    const sameStore = String(card.dataset.storeId || '') === String(store.id || '');
+    const preservedReviewScope = String(reviewScope || (sameStore ? card.dataset.reviewScope || '' : '')).trim();
+    if (!preservedReviewScope && typeof window.closeMapReviewSubpage === 'function') {
+        window.closeMapReviewSubpage({ keepScope: !!preservedReviewScope });
+    }
     card.dataset.storeId = store.id || "";
+    card.dataset.sourceView = String(sourceView || document.querySelector('#app > section:not(.hidden)')?.id || '')
+        .replace(/^view-/, '') || (fromMap ? 'map' : '');
+    card.dataset.fromMap = fromMap ? '1' : '0';
+    if (preservedReviewScope) {
+        card.dataset.reviewScope = preservedReviewScope;
+    } else {
+        delete card.dataset.reviewScope;
+    }
     setSelectedStorePin(store);
 
     // 1. 填充基本信息
@@ -1240,11 +1280,24 @@ window.renderMapCardFromDB = (store, opts = {}) => {
 
     // 7. 显示 sheet（统一样式）
     card.classList.remove('peek', 'full', 'half');
+    card.classList.toggle('no-entry-animation', !!suppressAnimation);
     card.classList.add('active');
     setMapSheetMode(mode);
     setMapSheetBackdrop(true);
     if (window.switchSheetTab) window.switchSheetTab('reviews');
     if (window.lucide) window.lucide.createIcons();
+    if (suppressAnimation) {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                card.classList.remove('no-entry-animation');
+            });
+        });
+    }
+    if (preservedReviewScope && overlay) {
+        renderMapReviewSubpage(store, preservedReviewScope);
+        overlay.classList.remove('hidden');
+        requestAnimationFrame(() => overlay.classList.add('is-open'));
+    }
 };
 /* =========================================
    4. Google Places 搜索
@@ -1680,7 +1733,13 @@ window.closeMapCard = (opts = {}) => {
     stopMapFriendPreviewRotation();
     if (typeof window.closeMapReviewSubpage === 'function') window.closeMapReviewSubpage();
     const card = document.getElementById('map-detail-card');
-    if (card) card.classList.remove('active', 'peek', 'half', 'full');
+    if (card) {
+        card.classList.remove('active', 'peek', 'half', 'full');
+        delete card.dataset.storeId;
+        delete card.dataset.reviewScope;
+        delete card.dataset.sourceView;
+        delete card.dataset.fromMap;
+    }
     setMapSheetBackdrop(false);
     const fullDetail = document.getElementById('full-detail-page');
     if (fullDetail) fullDetail.classList.remove('open', 'half', 'from-map');
@@ -1693,13 +1752,19 @@ window.closeMapCard = (opts = {}) => {
     window.renderMarkers();
 };
 
-window.restoreMapSelectionContext = ({ storeId, mode = 'half' } = {}) => {
+window.restoreMapSelectionContext = ({ storeId, mode = 'half', reviewScope = '', suppressAnimation = false } = {}) => {
     if (!storeId) return;
     const store = (window.localStores || []).find(s => s.id === storeId);
     if (!store) return;
     window.initMap();
     requestAnimationFrame(() => {
-        window.renderMapCardFromDB(store, { mode, fromMap: true });
+        window.renderMapCardFromDB(store, {
+            mode,
+            fromMap: true,
+            sourceView: 'map',
+            reviewScope,
+            suppressAnimation
+        });
         refreshMapSearchListHighlight();
     });
 };

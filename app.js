@@ -33,7 +33,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v24";
+const APP_BUILD_VERSION = "v25";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 const LOCATION_CACHE_STORAGE_KEY = "mogumode:last-origin-v2";
 
@@ -98,6 +98,9 @@ let friendsPageHideTimer = null;
 let recordDayViewHideTimer = null;
 let locationLoadingShowTimer = null;
 let isFetchingCurrentLocation = false;
+let addComposerEditState = null;
+let addComposerExistingImageEntries = [];
+let addComposerOverlayHideTimer = null;
 
 window.myFriends = myFriends;
 
@@ -1746,6 +1749,184 @@ function getStoreReviewCount(store) {
     return Array.isArray(store?.revs) ? store.revs.length : 0;
 }
 
+function getStoreBudgetSamples(store) {
+    const reviewBudgets = (Array.isArray(store?.revs) ? store.revs : [])
+        .map((rev) => Number(rev?.budget))
+        .filter((value) => Number.isFinite(value) && value > 0);
+
+    if (reviewBudgets.length) return reviewBudgets;
+
+    const fallbackBudget = Number(store?.budget);
+    return Number.isFinite(fallbackBudget) && fallbackBudget > 0 ? [fallbackBudget] : [];
+}
+
+function getStoreMedianBudget(store) {
+    const budgets = getStoreBudgetSamples(store).slice().sort((a, b) => a - b);
+    if (!budgets.length) return 0;
+    const middle = Math.floor(budgets.length / 2);
+    if (budgets.length % 2 === 1) return budgets[middle];
+    return Math.round((budgets[middle - 1] + budgets[middle]) / 2);
+}
+
+function renderStoreBudgetMeta(store) {
+    const medianBudget = getStoreMedianBudget(store);
+    if (!Number.isFinite(medianBudget) || medianBudget <= 0) return '';
+    const roundedBudget = Math.round(medianBudget / 100) * 100;
+    return `<span class="store-budget-meta">¥${roundedBudget}</span>`;
+}
+
+function getStoreLatestReviewTimestamp(store) {
+    return (Array.isArray(store?.revs) ? store.revs : []).reduce((latest, rev) => {
+        const reviewTs = getReviewEffectiveTimestamp(rev);
+        return reviewTs > latest ? reviewTs : latest;
+    }, 0);
+}
+
+function getTimestampValue(value) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (value instanceof Date) return value.getTime();
+    if (value && typeof value.toMillis === 'function') {
+        const millis = value.toMillis();
+        return Number.isFinite(millis) ? millis : 0;
+    }
+    if (value && typeof value.seconds === 'number') {
+        const millis = (value.seconds * 1000) + Math.floor(Number(value.nanoseconds || 0) / 1e6);
+        return Number.isFinite(millis) ? millis : 0;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getReviewEffectiveTimestamp(rev) {
+    return getTimestampValue(rev?.editedAt) || getTimestampValue(rev?.createdAt);
+}
+
+function formatAbsoluteDateTime(ts) {
+    const t = Number(ts);
+    if (!Number.isFinite(t) || t <= 0) return '';
+    const d = new Date(t);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${y}.${m}.${day} ${hh}:${mm}`;
+}
+
+function formatReviewDisplayDateLabel(rev) {
+    const editedAt = getTimestampValue(rev?.editedAt);
+    const baseTs = editedAt || getTimestampValue(rev?.createdAt);
+    if (!baseTs) return '';
+    return `${editedAt ? '编辑于 ' : ''}${formatAbsoluteDateTime(baseTs)}`;
+}
+
+function getStoreLatestActivityTimestamp(store) {
+    const storeCreatedAt = getTimestampValue(store?.createdAt);
+    const latestReviewAt = getStoreLatestReviewTimestamp(store);
+    return Math.max(storeCreatedAt, latestReviewAt);
+}
+
+function getUserAliasSet(user) {
+    const aliases = new Set();
+    const uid = String(user?.id || user?.uid || '').trim().toLowerCase();
+    const email = String(user?.email || '').trim().toLowerCase();
+    const displayName = String(user?.displayName || '').trim().toLowerCase();
+    if (uid) aliases.add(uid);
+    if (email) aliases.add(email);
+    if (email.includes('@')) aliases.add(email.split('@')[0]);
+    if (displayName) aliases.add(displayName);
+    return aliases;
+}
+
+function getStoreFriendReviewCount(store) {
+    const revs = Array.isArray(store?.revs) ? store.revs : [];
+    const friendIds = Array.isArray(myFriends) ? myFriends : [];
+    if (!revs.length || !friendIds.length) return 0;
+
+    const usersById = new Map(
+        (Array.isArray(allUsersCache) ? allUsersCache : [])
+            .filter(user => user?.id)
+            .map(user => [String(user.id), user])
+    );
+    const friendEntries = friendIds.map((friendId) => {
+        const key = String(friendId || '').trim().toLowerCase();
+        if (!key) return null;
+        const user = usersById.get(String(friendId)) || { id: friendId };
+        return { key, aliases: getUserAliasSet(user) };
+    }).filter(Boolean);
+    if (!friendEntries.length) return 0;
+
+    const matched = new Set();
+    revs.forEach((rev) => {
+        const revUid = String(rev?.uid || '').trim().toLowerCase();
+        const revUser = String(rev?.user || '').trim().toLowerCase();
+        if (!revUid && !revUser) return;
+        for (const entry of friendEntries) {
+            if (matched.has(entry.key)) continue;
+            if ((revUid && entry.aliases.has(revUid)) || (revUser && entry.aliases.has(revUser))) {
+                matched.add(entry.key);
+                break;
+            }
+        }
+    });
+
+    return matched.size;
+}
+
+function formatStoreRecentReviewText(timestamp) {
+    const ts = getTimestampValue(timestamp);
+    if (!ts) return { text: '', isFresh: false };
+
+    const diff = Math.max(0, Date.now() - ts);
+    const minuteMs = 60 * 1000;
+    const hourMs = 60 * minuteMs;
+    const dayMs = 24 * hourMs;
+    const weekMs = 7 * dayMs;
+    const monthMs = 30 * dayMs;
+    const yearMs = 365 * dayMs;
+
+    if (diff < hourMs) {
+        const minutes = Math.max(1, Math.floor(diff / minuteMs));
+        return { text: `${minutes}分钟前有人吃过`, isFresh: true };
+    }
+    if (diff < dayMs) {
+        const hours = Math.max(1, Math.floor(diff / hourMs));
+        return { text: `${hours}小时前有人吃过`, isFresh: false };
+    }
+    if (diff < weekMs) {
+        const days = Math.max(1, Math.floor(diff / dayMs));
+        return { text: `${days}天前有人吃过`, isFresh: false };
+    }
+    if (diff < monthMs) {
+        const weeks = Math.max(1, Math.floor(diff / weekMs));
+        return { text: `${weeks}周前有人吃过`, isFresh: false };
+    }
+    if (diff < yearMs) {
+        const months = Math.max(1, Math.floor(diff / monthMs));
+        return { text: `${months}个月前有人吃过`, isFresh: false };
+    }
+
+    const years = Math.max(1, Math.floor(diff / yearMs));
+    return { text: `${years}年前有人吃过`, isFresh: false };
+}
+
+function renderStoreActivityMeta(store) {
+    const latestReviewAt = getStoreLatestReviewTimestamp(store);
+    const recent = formatStoreRecentReviewText(latestReviewAt);
+    if (!recent.text) return '';
+    const friendCount = getStoreFriendReviewCount(store);
+
+    return `
+        <div class="store-activity-meta">
+            <span class="store-activity-time${recent.isFresh ? ' is-fresh' : ''}">${recent.text}</span>
+            ${friendCount > 0 ? `
+            <span class="store-activity-divider">·</span>
+            <span class="store-activity-friends">${friendCount}个朋友吃过此店</span>
+            ` : ''}
+        </div>
+    `;
+}
+
 function getStorePreviewImageEntries(store, maxCount = 12) {
     const coverFull = String(store?.googleCoverImage || '').trim();
     const coverThumb = String(store?.googleCoverImageThumb || coverFull).trim();
@@ -1791,6 +1972,8 @@ window.getStorePreviewImages = getStorePreviewImages;
 window.getStorePreviewImageEntries = getStorePreviewImageEntries;
 window.getImageAssetFullUrl = getImageAssetFullUrl;
 window.getImageAssetThumbUrl = getImageAssetThumbUrl;
+window.getReviewEffectiveTimestamp = getReviewEffectiveTimestamp;
+window.formatReviewDisplayDateLabel = formatReviewDisplayDateLabel;
 
 function renderReactionAvatars(avatars, count) {
     if (!count || count <= 0) {
@@ -1849,6 +2032,7 @@ function updateStoreCardPreferenceVisuals(storeId) {
     const isLiked = localLikes.has(sid);
     const isDisliked = localDislikes.has(sid);
     const nextStatusClass = getStoreStatusClassById(sid);
+    const store = localStores.find(item => item.id === sid);
 
     document.querySelectorAll('.store-card[data-store-id]').forEach((card) => {
         if (String(card.dataset.storeId || '') !== sid) return;
@@ -1863,6 +2047,19 @@ function updateStoreCardPreferenceVisuals(storeId) {
         const actionGroup = card.querySelector('.action-group');
         if (actionGroup) {
             actionGroup.outerHTML = renderStoreActionGroup(sid, isLiked, isDisliked);
+        }
+
+        const nextActivityHtml = store ? renderStoreActivityMeta(store).trim() : '';
+        const activityMetaEl = card.querySelector('.store-activity-meta');
+        const imageScrollEl = card.querySelector('.store-img-scroll');
+        if (nextActivityHtml) {
+            if (activityMetaEl) {
+                activityMetaEl.outerHTML = nextActivityHtml;
+            } else if (imageScrollEl) {
+                imageScrollEl.insertAdjacentHTML('afterend', nextActivityHtml);
+            }
+        } else if (activityMetaEl) {
+            activityMetaEl.remove();
         }
     });
 }
@@ -1903,6 +2100,7 @@ window.renderStores = (list) => {
 
         const avgRating = getStoreAverageRating(s);
         const reviewCount = getStoreReviewCount(s);
+        const budgetMeta = renderStoreBudgetMeta(s);
         const rawImgs = getStorePreviewImageEntries(s);
         const displayImgs = rawImgs.length ? rawImgs : ["https://placehold.co/200?text=No+Image"];
         const imagesHtml = displayImgs.map(src =>
@@ -1931,6 +2129,7 @@ window.renderStores = (list) => {
                          <span style="margin:0 4px">•</span> 
                         <img src="images/walk.svg" style="width:10px; margin-right:3px;">
                          ${formatStoreDistanceText(s)}
+                         ${budgetMeta ? `<span style="margin:0 4px">•</span>${budgetMeta}` : ''}
                     </div>
                 </div>
                 
@@ -1938,6 +2137,7 @@ window.renderStores = (list) => {
             </div>
             <!-- 店铺图片横向滚动区域 -->
             <div class="store-img-scroll">${imagesHtml}</div>
+            ${renderStoreActivityMeta(s)}
         </div>`;
     }).join('') + `
         <div class="store-list-endcap" aria-hidden="true">已经到底了</div>
@@ -2729,6 +2929,7 @@ window.submitNew = async () => {
         }
 
         const budgetVal = document.getElementById('newBudget').value;
+        const budgetNum = Number(budgetVal);
         const addRating = Number(document.getElementById('add-rating-slider')?.value || 3.8);
         const reviewText = (document.getElementById('newReview').value || '').trim();
         const newReview = {
@@ -2737,8 +2938,102 @@ window.submitNew = async () => {
             uid: currentUser.uid,
             createdAt: Date.now(),
             rating: addRating,
+            budget: Number.isFinite(budgetNum) && budgetNum > 0 ? budgetNum : 0,
             images: reviewImageUrls
         };
+
+        if (isAddComposerEditMode()) {
+            const sid = String(addComposerEditState?.storeId || '');
+            const idx = Number(addComposerEditState?.reviewIndex);
+            const store = localStores.find(item => item.id === sid);
+            const revs = Array.isArray(store?.revs) ? store.revs : [];
+            if (!store || !Number.isInteger(idx) || idx < 0 || idx >= revs.length) {
+                throw new Error("这条记录不存在或已更新");
+            }
+
+            const targetRev = revs[idx];
+            if (!isReviewMine(targetRev, getCurrentUserAliases())) {
+                throw new Error("只能编辑自己的评论");
+            }
+
+            const nextReviewImages = reviewImageUrls.length
+                ? reviewImageUrls
+                : (Array.isArray(targetRev?.images) ? targetRev.images.filter(Boolean) : []);
+            const repostedAt = Date.now();
+            const nextRevs = revs.map((rev, revIndex) => revIndex === idx
+                ? {
+                    ...rev,
+                    text: newReview.text,
+                    rating: Number(newReview.rating || store?.rating || 3.8),
+                    budget: newReview.budget,
+                    images: nextReviewImages,
+                    editedAt: repostedAt
+                }
+                : rev
+            );
+
+            const remainingReviewImageSet = new Set(
+                nextRevs.flatMap(r => (Array.isArray(r?.images) ? r.images : []).map(getImageAssetFullUrl)).filter(Boolean)
+            );
+            const remainingReviewAssetUrlSet = new Set(
+                nextRevs.flatMap(r => collectImageAssetUrls(Array.isArray(r?.images) ? r.images : []))
+            );
+            const targetImages = Array.isArray(targetRev?.images) ? targetRev.images.filter(Boolean) : [];
+            const targetImageUrls = collectImageAssetUrls(targetImages);
+            const deleteCandidates = reviewImageUrls.length
+                ? targetImageUrls.filter((url) => !remainingReviewAssetUrlSet.has(url))
+                : [];
+            const storeImages = Array.isArray(store.images) ? store.images : [];
+            const targetFullSet = new Set(targetImages.map(getImageAssetFullUrl).filter(Boolean));
+            const nextStoreImages = [];
+            const pushUniqueStoreImage = (entry) => {
+                const full = getImageAssetFullUrl(entry);
+                if (!full || nextStoreImages.some(item => getImageAssetFullUrl(item) === full)) return;
+                nextStoreImages.push(entry);
+            };
+
+            storeImages.forEach((entry) => {
+                const full = getImageAssetFullUrl(entry);
+                if (targetFullSet.has(full) && !remainingReviewImageSet.has(full)) return;
+                pushUniqueStoreImage(entry);
+            });
+            nextReviewImages.forEach(pushUniqueStoreImage);
+
+            await updateDoc(doc(db, "stores", sid), {
+                revs: nextRevs,
+                images: nextStoreImages
+            });
+            await deleteStorageFilesByUrls(deleteCandidates);
+
+            localStores = localStores.map(item => item.id === sid ? { ...item, revs: nextRevs, images: nextStoreImages } : item);
+            window.localStores = localStores;
+            applyFilters();
+            renderRecordCalendar();
+            renderProfileActivity();
+            const mapSheet = document.getElementById('map-detail-card');
+            const isSameStoreSheetOpen = !!(mapSheet
+                && mapSheet.classList.contains('active')
+                && String(mapSheet.dataset.storeId || '') === sid);
+            if (isSameStoreSheetOpen && window.renderMapCardFromDB) {
+                const nextStore = { ...store, revs: nextRevs, images: nextStoreImages };
+                const modeName = mapSheet.classList.contains('full') ? 'full' : (mapSheet.classList.contains('peek') ? 'peek' : 'half');
+                window.renderMapCardFromDB(nextStore, {
+                    mode: modeName,
+                    fromMap: mapSheet.dataset.fromMap === '1',
+                    sourceView: mapSheet.dataset.sourceView || addComposerReturnContext.baseView || '',
+                    reviewScope: mapSheet.dataset.reviewScope || '',
+                    suppressAnimation: true
+                });
+            }
+
+            resetAddComposerFlow();
+            showAppFeedbackToast("已重新发布");
+            if (!restoreAddComposerReturnTarget()) {
+                switchView('home');
+            }
+            btn.classList.remove('loading');
+            return;
+        }
 
         let postSuccessPayload = null;
 
@@ -2887,31 +3182,7 @@ window.submitNew = async () => {
  * 当用户选择图片后，显示预览
  */
 window.previewImg = (inp) => {
-    const d = document.getElementById('preview-list');
-    d.innerHTML = "";
-    const ph = document.getElementById('upload-placeholder');
-    const files = [...(inp.files || [])];
-
-    if (files.some(f => !isImageFile(f))) {
-        inp.value = "";
-        ph.style.display = 'block';
-        d.classList.add('hidden');
-        return showAppNoticeModal("只能上传图片文件");
-    }
-
-    if (files.length) {
-        ph.style.display = 'none';
-        d.classList.remove('hidden');
-        files.forEach(f => {
-            const i = document.createElement('img');
-            i.src = URL.createObjectURL(f);  // 创建本地预览URL
-            i.className = "preview-item";
-            d.appendChild(i);
-        });
-    } else {
-        ph.style.display = 'block';
-        d.classList.add('hidden');
-    }
+    renderAddComposerPreview();
 };
 
 /* =========================================
@@ -2951,7 +3222,12 @@ let isAddNearbySearchLoading = false;
 let addComposerReturnContext = {
     source: 'pick',
     storeId: '',
-    sheetMode: 'half'
+    sheetMode: 'half',
+    reviewScope: '',
+    dayKey: '',
+    baseView: '',
+    baseScrollTop: 0,
+    useOverlay: false
 };
 
 function normalizeStoreName(name) {
@@ -2962,7 +3238,12 @@ function resetAddComposerReturnContext() {
     addComposerReturnContext = {
         source: 'pick',
         storeId: '',
-        sheetMode: 'half'
+        sheetMode: 'half',
+        reviewScope: '',
+        dayKey: '',
+        baseView: '',
+        baseScrollTop: 0,
+        useOverlay: false
     };
 }
 
@@ -3374,7 +3655,166 @@ function onAddStorePicked(name, isLocal) {
     refreshAddWalkTimeDisplay();
 }
 
-function resetAddComposerFlow() {
+function isAddComposerEditMode() {
+    return !!addComposerEditState;
+}
+
+function syncAddComposerModeUI() {
+    const editBtn = document.getElementById('add-chip-edit-btn');
+    const cancelBtn = document.getElementById('edit-cancel-btn');
+    const postBtnText = document.getElementById('post-btn-text');
+    const isEditMode = isAddComposerEditMode();
+
+    if (editBtn) {
+        editBtn.disabled = isEditMode;
+        editBtn.classList.toggle('is-locked', isEditMode);
+        editBtn.innerText = isEditMode ? '锁定' : '修改';
+    }
+    if (cancelBtn) cancelBtn.classList.toggle('hidden', !isEditMode);
+    if (postBtnText) postBtnText.innerText = isEditMode ? '重新发布' : '发布记录';
+}
+
+function renderAddComposerPreview() {
+    const previewList = document.getElementById('preview-list');
+    const uploadPlaceholder = document.getElementById('upload-placeholder');
+    const input = document.getElementById('fileInput');
+    if (!previewList || !uploadPlaceholder || !input) return;
+
+    previewList.innerHTML = "";
+    const files = [...(input.files || [])];
+    if (files.some(f => !isImageFile(f))) {
+        input.value = "";
+        uploadPlaceholder.style.display = 'block';
+        previewList.classList.add('hidden');
+        showAppNoticeModal("只能上传图片文件");
+        return;
+    }
+
+    if (files.length) {
+        uploadPlaceholder.style.display = 'none';
+        previewList.classList.remove('hidden');
+        files.forEach((file) => {
+            const img = document.createElement('img');
+            img.src = URL.createObjectURL(file);
+            img.className = "preview-item";
+            previewList.appendChild(img);
+        });
+        return;
+    }
+
+    const existingImages = Array.isArray(addComposerExistingImageEntries) ? addComposerExistingImageEntries : [];
+    if (existingImages.length) {
+        uploadPlaceholder.style.display = 'none';
+        previewList.classList.remove('hidden');
+        existingImages.forEach((entry) => {
+            const src = getImageAssetThumbUrl(entry) || getImageAssetFullUrl(entry);
+            if (!src) return;
+            const img = document.createElement('img');
+            img.src = src;
+            img.className = "preview-item";
+            previewList.appendChild(img);
+        });
+        return;
+    }
+
+    uploadPlaceholder.style.display = 'block';
+    previewList.classList.add('hidden');
+}
+
+function showAddComposerOverlay() {
+    const addView = document.getElementById('view-add');
+    if (!addView) return;
+    if (addComposerOverlayHideTimer) {
+        clearTimeout(addComposerOverlayHideTimer);
+        addComposerOverlayHideTimer = null;
+    }
+    addView.classList.remove('hidden');
+    addView.classList.add('edit-overlay');
+    addView.scrollTop = 0;
+    requestAnimationFrame(() => {
+        addView.classList.add('is-open');
+    });
+}
+
+function hideAddComposerOverlay() {
+    const addView = document.getElementById('view-add');
+    if (!addView) return;
+    if (addComposerOverlayHideTimer) {
+        clearTimeout(addComposerOverlayHideTimer);
+        addComposerOverlayHideTimer = null;
+    }
+    addView.classList.remove('is-open');
+    addComposerOverlayHideTimer = setTimeout(() => {
+        if (addView.classList.contains('is-open')) return;
+        addView.classList.add('hidden');
+        addView.classList.remove('edit-overlay');
+    }, 300);
+}
+
+function restoreAddComposerReturnTarget() {
+    const context = { ...addComposerReturnContext };
+    resetAddComposerReturnContext();
+
+    if (context.useOverlay) {
+        hideAddComposerOverlay();
+        if (context.source === 'profile-activity' || context.source === 'record-day') {
+            requestAnimationFrame(() => restoreActiveViewScrollTop(context.baseScrollTop));
+        }
+        return true;
+    }
+
+    if (context.source === 'map' || context.source === 'map-review') {
+        const baseView = String(context.baseView || '').trim() || 'home';
+        switchView(baseView);
+        requestAnimationFrame(() => {
+            restoreActiveViewScrollTop(context.baseScrollTop);
+
+            if (baseView === 'map' && typeof window.restoreMapSelectionContext === 'function') {
+                window.restoreMapSelectionContext({
+                    storeId: context.storeId,
+                    mode: context.sheetMode || 'half',
+                    reviewScope: context.reviewScope || '',
+                    suppressAnimation: true
+                });
+                return;
+            }
+
+            const store = (Array.isArray(localStores) ? localStores : []).find(item => item.id === context.storeId);
+            if (!store || typeof window.renderMapCardFromDB !== 'function') return;
+            window.renderMapCardFromDB(store, {
+                mode: context.sheetMode || 'half',
+                fromMap: baseView === 'map',
+                sourceView: baseView,
+                reviewScope: context.reviewScope || '',
+                suppressAnimation: true
+            });
+        });
+        return true;
+    }
+
+    if (context.source === 'profile-activity') {
+        switchView('profile');
+        requestAnimationFrame(() => {
+            if (typeof window.switchProfileTab === 'function') window.switchProfileTab('activity');
+            requestAnimationFrame(() => restoreActiveViewScrollTop(context.baseScrollTop));
+        });
+        return true;
+    }
+
+    if (context.source === 'record-day') {
+        switchView('fav');
+        requestAnimationFrame(() => {
+            if (context.dayKey) openRecordDayView(context.dayKey);
+            requestAnimationFrame(() => restoreActiveViewScrollTop(context.baseScrollTop));
+        });
+        return true;
+    }
+
+    return false;
+}
+
+function resetAddComposerFlow(opts = {}) {
+    const { keepEditState = false } = opts;
     const pick = document.getElementById('add-step-pick');
     const form = document.getElementById('add-step-form');
     const list = document.getElementById('add-search-results');
@@ -3413,6 +3853,10 @@ function resetAddComposerFlow() {
             window.clearAddSearchInput();
         });
     }
+    if (!keepEditState) {
+        addComposerEditState = null;
+        addComposerExistingImageEntries = [];
+    }
     resetSelectedStoreState();
     addSelectedStoreName = "";
     addSelectedIsLocal = false;
@@ -3426,6 +3870,8 @@ function resetAddComposerFlow() {
     refreshAddWalkTimeDisplay();
     refreshAddRatingMushrooms();
     updateAddSearchClearButton();
+    renderAddComposerPreview();
+    syncAddComposerModeUI();
 }
 
 function showAddComposerPickStep() {
@@ -3487,6 +3933,8 @@ window.openAddComposerForStore = (storeId) => {
     if (!storeId) return;
     const sheet = document.getElementById('map-detail-card');
     const currentMode = sheet?.classList.contains('full') ? 'full' : (sheet?.classList.contains('peek') ? 'peek' : 'half');
+    const baseView = getActiveViewKey();
+    const baseScrollTop = captureActiveViewScrollTop();
     if (window.closeMapCard) {
         window.closeMapCard({ preserveMapView: true });
     }
@@ -3494,13 +3942,89 @@ window.openAddComposerForStore = (storeId) => {
     addComposerReturnContext = {
         source: 'map',
         storeId,
-        sheetMode: currentMode
+        sheetMode: currentMode,
+        reviewScope: '',
+        dayKey: '',
+        baseView,
+        baseScrollTop
     };
     requestAnimationFrame(() => {
         if (!openAddComposerForStore(storeId)) return;
         const addView = document.getElementById('view-add');
         if (addView) addView.scrollTo({ top: 0, behavior: 'auto' });
     });
+};
+
+window.openEditReviewComposer = (storeId, reviewIndex, opts = {}) => {
+    if (!currentUser) {
+        showAppNoticeModal("请先登录");
+        return;
+    }
+    const sid = String(storeId || '');
+    const idx = Number(reviewIndex);
+    const store = localStores.find(item => item.id === sid);
+    const revs = Array.isArray(store?.revs) ? store.revs : [];
+    const targetRev = (Number.isInteger(idx) && idx >= 0 && idx < revs.length) ? revs[idx] : null;
+    if (!store || !targetRev) {
+        showAppNoticeModal("这条记录不存在或已更新");
+        return;
+    }
+    if (!isReviewMine(targetRev, getCurrentUserAliases())) {
+        showAppNoticeModal("只能编辑自己的评论");
+        return;
+    }
+
+    const sheet = document.getElementById('map-detail-card');
+    const currentMode = sheet?.classList.contains('full') ? 'full' : (sheet?.classList.contains('peek') ? 'peek' : 'half');
+    const source = String(opts?.source || '').trim() || 'profile-activity';
+    const reviewScope = String(opts?.reviewScope || '').trim();
+    const dayKey = String(opts?.dayKey || '').trim();
+    const baseView = getActiveViewKey();
+    const baseScrollTop = captureActiveViewScrollTop();
+
+    showAddComposerOverlay();
+    addComposerReturnContext = {
+        source,
+        storeId: sid,
+        sheetMode: currentMode,
+        reviewScope,
+        dayKey,
+        baseView,
+        baseScrollTop,
+        useOverlay: true
+    };
+
+    requestAnimationFrame(() => {
+        if (!openAddComposerForStore(sid)) return;
+        addComposerEditState = {
+            storeId: sid,
+            reviewIndex: idx
+        };
+        addComposerExistingImageEntries = Array.isArray(targetRev.images) ? [...targetRev.images] : [];
+
+        const budgetInput = document.getElementById('newBudget');
+        const reviewInput = document.getElementById('newReview');
+        const fileInput = document.getElementById('fileInput');
+        if (budgetInput) {
+            const budgetNum = Number(targetRev?.budget);
+            budgetInput.value = Number.isFinite(budgetNum) && budgetNum > 0 ? String(budgetNum) : '';
+        }
+        if (reviewInput) reviewInput.value = String(targetRev?.text || '');
+        if (fileInput) fileInput.value = '';
+        setAddRatingValue(Number(targetRev?.rating || store?.rating || 3.8));
+        renderAddComposerPreview();
+        syncAddComposerModeUI();
+
+        const addView = document.getElementById('view-add');
+        if (addView) addView.scrollTo({ top: 0, behavior: 'auto' });
+    });
+};
+
+window.cancelEditReviewComposer = () => {
+    resetAddComposerFlow();
+    if (!restoreAddComposerReturnTarget()) {
+        switchView('home');
+    }
 };
 
 window.confirmAddStoreSelection = () => {
@@ -3521,20 +4045,19 @@ window.confirmAddStoreSelection = () => {
 };
 
 window.handleAddComposerBack = () => {
+    if (isAddComposerEditMode()) {
+        window.cancelEditReviewComposer();
+        return;
+    }
     if (addComposerReturnContext.source === 'map' && addComposerReturnContext.storeId) {
-        const { storeId, sheetMode } = addComposerReturnContext;
-        switchView('map');
-        requestAnimationFrame(() => {
-            if (typeof window.restoreMapSelectionContext === 'function') {
-                window.restoreMapSelectionContext({ storeId, mode: sheetMode || 'half' });
-            }
-        });
+        restoreAddComposerReturnTarget();
         return;
     }
     showAddComposerPickStep();
 };
 
 window.editAddStoreSelection = () => {
+    if (isAddComposerEditMode()) return;
     if (addComposerReturnContext.source === 'map') {
         window.handleAddComposerBack();
         return;
@@ -4361,9 +4884,18 @@ function initAutoSuggestInputs() {
 
 function initHomeSearchInput() {
     const homeInput = document.getElementById('home-search');
+    const clearBtn = document.getElementById('home-search-clear');
     if (!homeInput || homeInput.dataset.bound === '1') return;
     homeInput.dataset.bound = '1';
+    updateHomeSearchClearButton();
+    if (clearBtn && clearBtn.dataset.bound !== '1') {
+        clearBtn.dataset.bound = '1';
+        clearBtn.addEventListener('click', () => {
+            window.clearHomeSearch();
+        });
+    }
     homeInput.addEventListener('input', () => {
+        updateHomeSearchClearButton();
         clearTimeout(homeSearchDebounceTimer);
         homeSearchDebounceTimer = setTimeout(() => {
             homeSearchQuery = (homeInput.value || "").trim().toLowerCase();
@@ -4371,6 +4903,24 @@ function initHomeSearchInput() {
         }, 180);
     });
 }
+
+function updateHomeSearchClearButton() {
+    const homeInput = document.getElementById('home-search');
+    const clearBtn = document.getElementById('home-search-clear');
+    if (!homeInput || !clearBtn) return;
+    clearBtn.classList.toggle('hidden', !String(homeInput.value || '').trim());
+}
+
+window.clearHomeSearch = function () {
+    const homeInput = document.getElementById('home-search');
+    if (!homeInput) return;
+    clearTimeout(homeSearchDebounceTimer);
+    homeInput.value = '';
+    homeSearchQuery = '';
+    updateHomeSearchClearButton();
+    applyFilters();
+    homeInput.focus();
+};
 
 function initScrollbarAutoFade() {
     const timers = new WeakMap();
@@ -4415,7 +4965,7 @@ window.selectSortOption = (text, sortKey) => {
     const btnText = document.getElementById('sort-btn-text');
     if (btnText) {
         const labelMap = {
-            default: '综合排序',
+            default: '最新发布',
             price: '价格排序',
             distance: '距离排序',
             rating: '评价排序'
@@ -4426,8 +4976,7 @@ window.selectSortOption = (text, sortKey) => {
 
     // 更新选中状态
     document.querySelectorAll('.sort-menu-item').forEach(item => {
-        item.classList.remove('active');
-        if (item.innerText === text) item.classList.add('active');
+        item.classList.toggle('active', item.dataset.sortKey === sortKey);
     });
 
     console.log(`Sorting by: ${sortKey}`);
@@ -4817,7 +5366,10 @@ function applyFilters() {
         } else if (currentSortKey === 'rating') {
             result = getStoreAverageRating(b) - getStoreAverageRating(a); // 默认高->低
         } else {
-            result = (b.createdAt || 0) - (a.createdAt || 0); // 综合默认新->旧
+            result = getStoreLatestActivityTimestamp(b) - getStoreLatestActivityTimestamp(a);
+            if (result === 0) {
+                result = getTimestampValue(b?.createdAt) - getTimestampValue(a?.createdAt);
+            }
         }
         return isSortReversed ? -result : result;
     });
@@ -5610,6 +6162,24 @@ function getActiveViewScrollTarget() {
     return descendants[0] || null;
 }
 
+function getActiveViewKey() {
+    const activeView = Array.from(document.querySelectorAll('#app > section'))
+        .find(section => !section.classList.contains('hidden'));
+    return String(activeView?.id || '').replace(/^view-/, '') || 'home';
+}
+
+function captureActiveViewScrollTop() {
+    const scrollTarget = getActiveViewScrollTarget();
+    return scrollTarget ? scrollTarget.scrollTop : 0;
+}
+
+function restoreActiveViewScrollTop(scrollTop) {
+    const target = getActiveViewScrollTarget();
+    if (!target) return;
+    const top = Number(scrollTop);
+    target.scrollTop = Number.isFinite(top) && top >= 0 ? top : 0;
+}
+
 function scrollActiveViewToTop() {
     const scrollTarget = getActiveViewScrollTarget();
     if (!scrollTarget) return;
@@ -5796,6 +6366,7 @@ window.switchFavTab = (tab) => {
 
             const avgRating = getStoreAverageRating(s);
             const reviewCount = getStoreReviewCount(s);
+            const budgetMeta = renderStoreBudgetMeta(s);
             const rawImgs = getStorePreviewImageEntries(s);
             const displayImgs = rawImgs.length ? rawImgs : ["https://placehold.co/200?text=No+Image"];
             const imagesHtml = displayImgs.map(src =>
@@ -5820,12 +6391,14 @@ window.switchFavTab = (tab) => {
                          <span style="margin:0 4px">•</span> 
                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-person-walking" viewBox="0 0 16 16"><path d="M9.5 1.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0M6.44 3.752A.75.75 0 0 1 7 3.5h1.445c.742 0 1.32.643 1.243 1.38l-.43 4.083a1.8 1.8 0 0 1-.088.395l-.318.906.213.242a.8.8 0 0 1 .114.175l2 4.25a.75.75 0 1 1-1.357.638l-1.956-4.154-1.68-1.921A.75.75 0 0 1 6 8.96l.138-2.613-.435.489-.464 2.786a.75.75 0 1 1-1.48-.246l.5-3a.75.75 0 0 1 .18-.375l2-2.25Z"/><path d="M6.25 11.745v-1.418l1.204 1.375.261.524a.8.8 0 0 1-.12.231l-2.5 3.25a.75.75 0 1 1-1.19-.914zm4.22-4.215-.494-.494.205-1.843.006-.067 1.124 1.124h1.44a.75.75 0 0 1 0 1.5H11a.75.75 0 0 1-.531-.22Z"/></svg>
                          ${formatStoreDistanceText(s)}
+                         ${budgetMeta ? `<span style="margin:0 4px">•</span>${budgetMeta}` : ''}
                     </div>
                 </div>
                 
                 ${renderStoreActionGroup(s.id, isLiked, isDisliked, idx)}
             </div>
             <div class="store-img-scroll">${imagesHtml}</div>
+            ${renderStoreActivityMeta(s)}
         </div>`;
         }).join('');
     }
@@ -6158,6 +6731,7 @@ function renderRandomResult(s) {
     const cardIndex = Math.max(0, localStores.findIndex(x => x.id === s.id));
     const avgRating = getStoreAverageRating(s);
     const reviewCount = getStoreReviewCount(s);
+    const budgetMeta = renderStoreBudgetMeta(s);
     const rawImgs = getStorePreviewImageEntries(s);
     const displayImgs = rawImgs.length ? rawImgs : ["https://placehold.co/200?text=No+Image"];
     const imagesHtml = displayImgs.map(src =>
@@ -6182,11 +6756,13 @@ function renderRandomResult(s) {
                      <span style="margin:0 4px">•</span> 
                     <img src="images/walk.svg" style="width:10px; margin-right:3px;">
                      ${formatStoreDistanceText(s)}
+                     ${budgetMeta ? `<span style="margin:0 4px">•</span>${budgetMeta}` : ''}
                 </div>
             </div>
             ${renderStoreActionGroup(s.id, isLiked, isDisliked, cardIndex)}
         </div>
         <div class="store-img-scroll">${imagesHtml}</div>
+        ${renderStoreActivityMeta(s)}
     </div>`;
     lucide.createIcons();
 }
@@ -6455,24 +7031,26 @@ function buildActivitiesForUser(uid, userData = null) {
         const revs = Array.isArray(store.revs) ? store.revs : [];
         revs.forEach((rev) => {
             if (!isReviewMine(rev, aliases)) return;
-            const createdAt = Number(rev.createdAt) || Number(store.createdAt) || Date.now();
+            const createdAt = getReviewEffectiveTimestamp(rev) || Number(store.createdAt) || Date.now();
             const reviewText = typeof rev.text === 'string' ? rev.text.trim() : '';
             const reviewImages = Array.isArray(rev.images) ? rev.images.filter(Boolean) : [];
             const ratingNum = Number(rev.rating || store.rating || 0);
             const budgetNum = Number(rev.budget || store.budget || 0);
             const dayKey = getDayKeyFromTs(createdAt);
+            const isEdited = getTimestampValue(rev?.editedAt) > 0;
             activities.push({
                 store,
                 storeId: store.id,
                 createdAt,
                 dayKey,
-                dateMeta: formatActivityDate(createdAt),
+                dateMeta: formatActivityDate(createdAt, isEdited),
                 visits: storeVisitCounts.get(store.id) || 1,
                 reviewIndex: revs.indexOf(rev),
                 rating: Number.isFinite(ratingNum) ? ratingNum.toFixed(1) : '0.0',
                 review: reviewText,
                 images: reviewImages,
-                budget: Number.isFinite(budgetNum) ? budgetNum : 0
+                budget: Number.isFinite(budgetNum) ? budgetNum : 0,
+                isEdited
             });
         });
     });
@@ -6488,8 +7066,11 @@ function renderActivityCards(container, activities) {
         if (!a.store) return '';
         const s = a.store;
         const canDelete = !!currentUser && !isViewingFriendProfile() && Number.isInteger(a.reviewIndex) && a.reviewIndex >= 0;
-        const deleteBtn = canDelete
-            ? `<button class="review-delete-btn activity-delete-btn" onclick="deleteMyStoreReview('${s.id}', ${a.reviewIndex}); event.stopPropagation();">删除</button>`
+        const actionBtns = canDelete
+            ? `<div class="review-actions">
+                <button class="review-edit-btn activity-delete-btn" onclick="openEditReviewComposer('${s.id}', ${a.reviewIndex}, { source: 'profile-activity' }); event.stopPropagation();">编辑</button>
+                <button class="review-delete-btn activity-delete-btn" onclick="deleteMyStoreReview('${s.id}', ${a.reviewIndex}); event.stopPropagation();">删除</button>
+            </div>`
             : '';
 
         // 生成星星评分 (使用emoji)
@@ -6527,10 +7108,10 @@ function renderActivityCards(container, activities) {
             : '';
 
         return `
-        <div class="activity-card ${a.dateMeta.isToday ? 'today' : ''}">
+            <div class="activity-card ${a.dateMeta.isToday ? 'today' : ''}">
             <div class="activity-card-top">
                 <div class="activity-date">${a.dateMeta.label}</div>
-                ${deleteBtn}
+                ${actionBtns}
             </div>
             <div class="activity-store-row">
                 <div class="activity-store-name" onclick="openDetail('${s.id}', { mode: 'full', fromMap: false }); event.stopPropagation();">
@@ -6548,7 +7129,7 @@ function renderActivityCards(container, activities) {
     }).join('');
 }
 
-function formatActivityDate(ts) {
+function formatActivityDate(ts, isEdited = false) {
     const d = new Date(Number(ts) || Date.now());
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -6558,13 +7139,13 @@ function formatActivityDate(ts) {
     const mm = String(d.getMinutes()).padStart(2, '0');
 
     if (startOfTarget === startOfToday) {
-        return { label: `今天 ${hh}:${mm}`, isToday: true };
+        return { label: `${isEdited ? '编辑于 ' : ''}今天 ${hh}:${mm}`, isToday: true };
     }
     if (startOfTarget === startOfToday - oneDay) {
-        return { label: `昨天 ${hh}:${mm}`, isToday: false };
+        return { label: `${isEdited ? '编辑于 ' : ''}昨天 ${hh}:${mm}`, isToday: false };
     }
     return {
-        label: `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`,
+        label: `${isEdited ? '编辑于 ' : ''}${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`,
         isToday: false
     };
 }
@@ -6946,14 +7527,17 @@ window.openRecordDayView = (dayKey) => {
             </div>
         `;
         }).join('');
-        const deleteBtn = Number.isInteger(a.reviewIndex) && a.reviewIndex >= 0
-            ? `<button class="review-delete-btn activity-delete-btn" onclick="deleteMyStoreReview('${a.storeId}', ${a.reviewIndex}); event.stopPropagation();">删除</button>`
+        const actionBtns = Number.isInteger(a.reviewIndex) && a.reviewIndex >= 0
+            ? `<div class="review-actions">
+                <button class="review-edit-btn activity-delete-btn" onclick="openEditReviewComposer('${a.storeId}', ${a.reviewIndex}, { source: 'record-day', dayKey: '${dayKey}' }); event.stopPropagation();">编辑</button>
+                <button class="review-delete-btn activity-delete-btn" onclick="deleteMyStoreReview('${a.storeId}', ${a.reviewIndex}); event.stopPropagation();">删除</button>
+            </div>`
             : '';
         return `
             <div class="record-day-card">
                 <div class="record-day-head">
-                    <div class="record-day-time">${formatRecordDateTitle(dayKey)} ${hh}:${mm}</div>
-                    ${deleteBtn}
+                    <div class="record-day-time">${a.isEdited ? '编辑于 ' : ''}${formatRecordDateTitle(dayKey)} ${hh}:${mm}</div>
+                    ${actionBtns}
                 </div>
                 <div class="record-day-store" onclick="openDetail('${a.storeId}', { mode: 'full', fromMap: false }); event.stopPropagation();">${a.store?.name || '店铺'} <span>（吃过${a.visits}次）</span></div>
                 <div class="record-day-rating">
@@ -7436,6 +8020,7 @@ window.switchProfileFavTab = (tab) => {
 
             const avgRating = getStoreAverageRating(s);
             const reviewCount = getStoreReviewCount(s);
+            const budgetMeta = renderStoreBudgetMeta(s);
             const rawImgs = getStorePreviewImageEntries(s);
             const displayImgs = rawImgs.length ? rawImgs : ['https://placehold.co/200?text=No+Image'];
             const imagesHtml = displayImgs.map(src =>
@@ -7450,10 +8035,11 @@ window.switchProfileFavTab = (tab) => {
                         <div class="store-name-row">
                             <h3 class="store-name">${renderStoreNameWithStatus(s)}</h3>
                         </div>
-                        <div class="store-meta">${avgRating.toFixed(1)} · ${formatStoreDistanceText(s)}</div>
+                        <div class="store-meta">${avgRating.toFixed(1)} · ${formatStoreDistanceText(s)}${budgetMeta ? ` · ${budgetMeta}` : ''}</div>
                     </div>
                 </div>
                 <div class="store-img-scroll">${imagesHtml}</div>
+                ${renderStoreActivityMeta(s)}
             </div>`;
             }
 
@@ -7478,12 +8064,14 @@ window.switchProfileFavTab = (tab) => {
   <path d="M6.25 11.745v-1.418l1.204 1.375.261.524a.8.8 0 0 1-.12.231l-2.5 3.25a.75.75 0 1 1-1.19-.914zm4.22-4.215-.494-.494.205-1.843.006-.067 1.124 1.124h1.44a.75.75 0 0 1 0 1.5H11a.75.75 0 0 1-.531-.22Z"/>
 </svg>
                          ${formatStoreDistanceText(s)}
+                         ${budgetMeta ? `<span style="margin:0 4px">•</span>${budgetMeta}` : ''}
                     </div>
                 </div>
                 
                 ${renderStoreActionGroup(s.id, isLiked, isDisliked, idx)}
             </div>
             <div class="store-img-scroll">${imagesHtml}</div>
+            ${renderStoreActivityMeta(s)}
         </div>`;
         }).join('');
     }

@@ -108,6 +108,7 @@ header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
     margin-bottom: 12px;
 }
 
@@ -117,6 +118,21 @@ header {
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+.top-row-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.location-trigger-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
 .brand-logo-icon {
@@ -148,15 +164,20 @@ header {
     color: var(--text-main);
     font-weight: 500;
     background: transparent;
-    margin-right: 9px;
     cursor: pointer;
-    max-width: 172px;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.location-capsule > img {
+    flex: 0 0 auto;
 }
 
 #current-location-text {
-    display: inline-block;
+    display: block;
+    flex: 1 1 auto;
     min-width: 0;
-    max-width: 118px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -272,6 +293,7 @@ header {
     color: white;
     font-weight: bold;
     font-size: 12px;
+    flex: 0 0 auto;
 }
 
 /* --- Search Bar --- */
@@ -286,8 +308,45 @@ header {
     background: white;
     border: 1px solid #c4c4c4;
     border-radius: 100px;
-    padding: 0 44px 0 20px;
+    padding: 0 78px 0 20px;
     font-size: 14px;
+}
+
+.search-clear-btn {
+    position: absolute;
+    right: 48px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    border: 0;
+    border-radius: 50%;
+    background: #b9b9b9;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    color: transparent;
+    font-size: 0;
+    line-height: 0;
+    text-indent: -9999px;
+    overflow: hidden;
+}
+
+.search-clear-btn::before {
+    content: "×";
+    color: #fff;
+    font-size: 14px;
+    line-height: 1;
+    font-family: Arial, sans-serif;
+    text-indent: 0;
+    transform: translateY(1px);
+}
+
+.search-bar::placeholder {
+    color: #d2d2d2;
 }
 
 .search-icon {
@@ -296,6 +355,7 @@ header {
     top: 50%;
     transform: translateY(-50%);
     color: #b4b4b4;
+    pointer-events: none;
 }
 
 /* --- Filter Row --- */
@@ -750,6 +810,11 @@ header {
     gap: 2px;
 }
 
+.store-budget-meta {
+    color: inherit;
+    white-space: nowrap;
+}
+
 .rating-star {
     color: #ffce00;
 }
@@ -879,6 +944,32 @@ header {
 
 .store-img-scroll::-webkit-scrollbar {
     display: none;
+}
+
+.store-activity-meta {
+    margin-top: 8px;
+    font-size: 11px;
+    line-height: 1.35;
+    color: #b2bec3;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.store-activity-time {
+    color: #a5b0b5;
+}
+
+.store-activity-time.is-fresh {
+    color: #2db160;
+}
+.store-activity-friends {
+    color: #e63dbf;
+}
+
+.store-activity-divider {
+    color: #a5b0b5;
 }
 
 .store-img-item {
@@ -1026,6 +1117,31 @@ header {
 
 #view-add {
     position: relative;
+}
+
+#view-add.edit-overlay {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    max-width: 448px;
+    height: var(--app-height);
+    margin: 0 auto;
+    z-index: 1300;
+    background: #f4f4f4;
+    transform: translateX(100%);
+    transition: transform 0.28s ease;
+    box-shadow: -12px 0 28px rgba(0, 0, 0, 0.12);
+    padding: 24px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+#view-add.edit-overlay.is-open {
+    transform: translateX(0);
+}
+
+#view-add.edit-overlay #add-auth-mask {
+    top: 50%;
 }
 
 #view-add #add-auth-mask {
@@ -1828,6 +1944,11 @@ header {
     white-space: nowrap;
 }
 
+.add-chip-edit-btn.is-locked {
+    color: #9aa0a9;
+    cursor: not-allowed;
+}
+
 .add-rating-card,
 .add-input-card {
     background: #fff;
@@ -1923,6 +2044,14 @@ header {
     border-radius: 12px;
 }
 
+.add-edit-cancel-btn {
+    background: #fff;
+    color: #202224;
+    border: 1px solid #d7dbe0;
+    border-radius: 12px;
+    margin-bottom: 10px;
+}
+
 /* =========================================
    9. Map Sheet (Draggable Bottom Card)
    ========================================= */
@@ -1959,6 +2088,20 @@ header {
 .map-sheet.active {
     display: block;
     animation: sheetSlideUp 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.map-sheet.no-entry-animation,
+.map-sheet.active.no-entry-animation {
+    transition: none !important;
+    animation: none !important;
+}
+
+.map-sheet.active.no-entry-animation {
+    transform: translateY(0) !important;
+}
+
+.map-sheet.active.no-entry-animation.peek {
+    transform: translateY(30px) !important;
 }
 
 .map-sheet.half {
@@ -2621,6 +2764,23 @@ header {
     padding: 3px 10px;
     font-size: 11px;
     cursor: pointer;
+}
+
+.review-edit-btn {
+    border: 1px solid #e3e7ee;
+    background: #fff;
+    color: #6f7b89;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.review-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
 }
 
 .review-date {

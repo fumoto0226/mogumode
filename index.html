@@ -41,8 +41,8 @@
                         <img src="images/logo.svg" alt="MoguMode" class="brand-logo-icon"> MoguMode
                         <span id="build-version-tag" class="build-version-tag">v-</span>
                     </div>
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <div style="position: relative;">
+                    <div class="top-row-actions">
+                        <div class="location-trigger-wrap">
                             <div class="location-capsule" id="location-trigger" onclick="handleLocationTriggerClick()">
                                 <img id="current-location-icon" src="images/weizhih.svg" style="width: 14px;">
                                 <span id="current-location-text" title="正在定位...">正在定位...</span>
@@ -86,7 +86,8 @@
 
                 <!-- Search Bar -->
                 <div class="search-container">
-                    <input type="text" class="search-bar" id="home-search" placeholder="">
+                    <input type="text" class="search-bar" id="home-search" placeholder="输入店名或料理种类">
+                    <button type="button" class="search-clear-btn hidden" id="home-search-clear" aria-label="清空搜索"></button>
                     <i data-lucide="search" width="20" class="search-icon"></i>
                 </div>
 
@@ -99,21 +100,21 @@
                     <div class="sort-btn-container">
                         <button class="sort-btn" id="sort-toggle-btn" onclick="toggleSortMenu()">
                             <i data-lucide="align-left" width="14"></i>
-                            <span id="sort-btn-text">综合排序</span>
+                            <span id="sort-btn-text">最新发布</span>
                             <i data-lucide="chevron-down" width="12" color="#b2bec3"></i>
                         </button>
 
                         <div class="sort-menu" id="sort-menu">
-                            <div class="sort-menu-item active" onclick="selectSortOption('综合排序', 'default')">
-                                <i data-lucide="align-left" width="16"></i> 综合
+                            <div class="sort-menu-item active" data-sort-key="default" onclick="selectSortOption('最新', 'default')">
+                                <i data-lucide="align-left" width="16"></i> 最新
                             </div>
-                            <div class="sort-menu-item" onclick="selectSortOption('价格', 'price')">
+                            <div class="sort-menu-item" data-sort-key="price" onclick="selectSortOption('价格', 'price')">
                                 <i data-lucide="coins" width="16"></i> 价格
                             </div>
-                            <div class="sort-menu-item" onclick="selectSortOption('距离', 'distance')">
+                            <div class="sort-menu-item" data-sort-key="distance" onclick="selectSortOption('距离', 'distance')">
                                 <i data-lucide="footprints" width="16"></i> 距离
                             </div>
-                            <div class="sort-menu-item" onclick="selectSortOption('评价', 'rating')">
+                            <div class="sort-menu-item" data-sort-key="rating" onclick="selectSortOption('评价', 'rating')">
                                 <i data-lucide="heart" width="16"></i> 评价
                             </div>
                         </div>
@@ -450,7 +451,7 @@
                         <div class="add-picked-chip add-picked-chip-edit">
                             <span id="add-form-store-name">店铺名</span>
                             <img id="add-form-mogu" src="images/mogu.svg" class="add-picked-mogu hidden" alt="mogu">
-                            <button class="add-chip-edit-btn" onclick="editAddStoreSelection()">修改</button>
+                            <button id="add-chip-edit-btn" class="add-chip-edit-btn" onclick="editAddStoreSelection()">修改</button>
                         </div>
                     </div>
 
@@ -484,8 +485,10 @@
                         <textarea id="newReview" class="input-std" placeholder="在这里输入想说的" rows="4"></textarea>
                     </div>
 
+                    <button id="edit-cancel-btn" class="btn-submit add-edit-cancel-btn hidden" onclick="cancelEditReviewComposer()">取消修改</button>
+
                     <button id="post-btn" class="btn-submit add-post-btn" onclick="submitNew()">
-                        <span>发布记录</span>
+                        <span id="post-btn-text">发布记录</span>
                         <div class="spinner"></div>
                     </button>
                 </div>
