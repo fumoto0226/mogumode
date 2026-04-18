@@ -7169,8 +7169,12 @@ function setMainImageForDay(dayKey, src) {
 function getPrimaryImageForDay(dayActs) {
     if (!Array.isArray(dayActs) || !dayActs.length) return '';
     const main = getMainImageForDay(dayActs[0].dayKey);
-    if (main && dayActs.some(a => Array.isArray(a.images) && a.images.some((entry) => getImageAssetFullUrl(entry) === main))) {
-        return main;
+    if (main) {
+        for (const a of dayActs) {
+            if (!Array.isArray(a.images)) continue;
+            const matched = a.images.find((entry) => getImageAssetFullUrl(entry) === main);
+            if (matched) return getImageAssetThumbUrl(matched) || main;
+        }
     }
     for (const a of dayActs) {
         const src = Array.isArray(a.images) ? getImageAssetThumbUrl(a.images[0]) : '';
