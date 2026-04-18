@@ -1285,6 +1285,11 @@ window.renderMapCardFromDB = (store, opts = {}) => {
     setMapSheetMode(mode);
     setMapSheetBackdrop(true);
     if (window.switchSheetTab) window.switchSheetTab('reviews');
+    // 每次打开都滚回顶部，避免显示上次滚动位置
+    card.scrollTop = 0;
+    card.querySelectorAll('.sheet-tab-content, .reviews-list, .sheet-full-content').forEach(el => {
+        el.scrollTop = 0;
+    });
     if (window.lucide) window.lucide.createIcons();
     if (suppressAnimation) {
         requestAnimationFrame(() => {
