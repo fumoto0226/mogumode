@@ -158,8 +158,14 @@ function mountMapSheetToAppRoot() {
 function setMapSheetBackdrop(visible) {
     const backdrop = document.getElementById('map-sheet-backdrop');
     if (!backdrop) return;
-    // 地图页不使用灰色遮罩，避免影响看路线和地图交互
-    backdrop.classList.remove('active');
+    // 地图页不使用灰色遮罩，避免影响看路线和地图交互；
+    // 其他页面展示遮罩以拦截页面其他区域的交互，点击遮罩等同关闭弹窗。
+    const mapViewVisible = !document.getElementById('view-map')?.classList.contains('hidden');
+    if (visible && !mapViewVisible) {
+        backdrop.classList.add('active');
+    } else {
+        backdrop.classList.remove('active');
+    }
 }
 
 function setMapSheetMode(mode) {
@@ -692,9 +698,27 @@ function buildMapReviewItems(store, scope = 'all') {
     const revs = getSortedMapStoreReviews(store);
     const aliasMap = buildFriendAliasMap();
 
+    const allRevs = Array.isArray(store?.revs) ? store.revs : [];
+    const reviewCountByUser = new Map();
+    const reviewKeyFor = (r) => {
+        if (!r || typeof r !== 'object') return '';
+        const friend = resolveFriendFromReview(r, aliasMap);
+        if (friend?.id) return `uid:${String(friend.id).toLowerCase()}`;
+        if (r.uid) return `uid:${String(r.uid).toLowerCase()}`;
+        const name = String(r.user || r.displayName || '').toLowerCase();
+        return name ? `name:${name}` : '';
+    };
+    allRevs.forEach((r) => {
+        const key = reviewKeyFor(r);
+        if (!key) return;
+        reviewCountByUser.set(key, (reviewCountByUser.get(key) || 0) + 1);
+    });
+
     return revs.map((r, i) => {
         const userName = (typeof r === 'object' && (r.user || r.displayName)) ? (r.user || r.displayName) : 'User';
         const rating = Number((typeof r === 'object' && r.rating) || store?.rating || 0);
+        const budgetNum = Number(r?.budget);
+        const budget = Number.isFinite(budgetNum) && budgetNum > 0 ? budgetNum : 0;
         const text = typeof r?.text === 'string' ? r.text.trim() : '';
         const imgs = Array.isArray(r?.images) ? r.images.filter(Boolean) : [];
         const avatar = resolveMapReviewAvatar(r, i);
@@ -704,11 +728,14 @@ function buildMapReviewItems(store, scope = 'all') {
         const isMine = isMyMapReview(r);
         const friendUser = resolveFriendFromReview(r, aliasMap);
         const isFriend = !!friendUser?.id;
-        const originalIndex = (Array.isArray(store?.revs) ? store.revs : []).findIndex(item => item === r);
+        const originalIndex = allRevs.findIndex(item => item === r);
+        const userKey = reviewKeyFor(r);
+        const visitCount = userKey ? (reviewCountByUser.get(userKey) || 1) : 1;
         return {
             review: r,
             userName,
             rating,
+            budget,
             text,
             imgs,
             avatar,
@@ -716,7 +743,9 @@ function buildMapReviewItems(store, scope = 'all') {
             isMine,
             friendUser,
             isFriend,
-            originalIndex
+            originalIndex,
+            userKey,
+            visitCount
         };
     }).filter((item) => {
         if (scope === 'mine') return item.isMine;
@@ -735,6 +764,12 @@ function renderMapReviewCardHtml(store, item, opts = {}) {
         ? `onclick="openFriendProfileFromReview('${item.friendUser.id}'); event.stopPropagation();"`
         : '';
     const friendBadge = item.isFriend ? `<span class="review-friend-badge">好友</span>` : '';
+    const visitBadge = (item.visitCount && item.visitCount > 0)
+        ? `<span class="review-visit-count">（吃过${item.visitCount}次）</span>`
+        : '';
+    const budgetBadge = item.budget > 0
+        ? `<span class="review-budget">¥${item.budget}</span>`
+        : '';
     const actionBtns = (item.isMine && item.originalIndex >= 0)
         ? `<div class="review-actions">
             <button class="review-edit-btn" onclick="openEditReviewComposer('${store.id}', ${item.originalIndex}, { source: '${source}', reviewScope: '${reviewScope}' }); event.stopPropagation();">编辑</button>
@@ -747,7 +782,7 @@ function renderMapReviewCardHtml(store, item, opts = {}) {
             <div class="review-header">
                 <img src="${item.avatar}" class="review-avatar ${item.isFriend ? 'is-clickable' : ''}" ${openProfileAttr}>
                 <div class="review-user-info ${item.isFriend ? 'is-clickable' : ''}" ${openProfileAttr}>
-                    <div class="review-username">${item.userName}${friendBadge}</div>
+                    <div class="review-username">${item.userName}${friendBadge}${visitBadge}</div>
                     <div class="review-user-meta">${item.dateStr}</div>
                 </div>
                 ${actionBtns}
@@ -755,6 +790,7 @@ function renderMapReviewCardHtml(store, item, opts = {}) {
             <div class="review-rating-row" style="margin-bottom:${item.text ? '8px' : '0'};">
                 <b>${item.rating.toFixed(1)}</b>
                 <span style="display:inline-flex; align-items:center; gap:2px; margin-left:6px;">${renderMapReviewRatingIcons(item.rating)}</span>
+                ${budgetBadge}
             </div>
             ${item.text ? (typeof window.renderExpandableReviewText === 'function'
             ? window.renderExpandableReviewText(item.text, {
@@ -772,14 +808,130 @@ function renderMapReviewCardHtml(store, item, opts = {}) {
     `;
 }
 
+function buildReviewGroups(items) {
+    const groups = new Map();
+    items.forEach((item, idx) => {
+        const key = item.userKey || `anon:${idx}`;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(item);
+    });
+    return Array.from(groups.entries()).map(([key, list]) => ({
+        key,
+        list
+    }));
+}
+
+function renderReviewGroupHtml(store, group) {
+    const [latest, ...rest] = group.list;
+    const preview = rest.slice(0, 2);
+    const total = group.list.length;
+    const primaryHtml = renderMapReviewCardHtml(store, latest, { source: 'map' });
+    if (total <= 1) {
+        return `<div class="review-group" data-group-key="${encodeURIComponent(group.key)}">${primaryHtml}</div>`;
+    }
+    const moreHtml = preview.map(item => renderMapReviewCardHtml(store, item, { source: 'map' })).join('');
+    const hasMoreThanShown = total > (1 + preview.length);
+    const encKey = encodeURIComponent(group.key);
+    const encName = encodeURIComponent(latest.userName || '');
+    return `
+        <div class="review-group" data-group-key="${encKey}">
+            ${primaryHtml}
+            <div class="review-group-expand-row">
+                <button type="button" class="review-group-btn review-group-expand-btn" data-action="expand" data-group="${encKey}">展开更多 ▾</button>
+            </div>
+            <div class="review-group-more" data-group="${encKey}">
+                <div class="review-group-more-inner">
+                    ${moreHtml}
+                    <div class="review-group-foot-row">
+                        <button type="button" class="review-group-btn" data-action="collapse" data-group="${encKey}">收起 ▴</button>
+                        ${hasMoreThanShown ? `<button type="button" class="review-group-btn review-group-view-all" data-action="view-all" data-group="${encKey}" data-user-name="${encName}">查看全部(${total}) ›</button>` : ''}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function bindReviewGroupActions(container) {
+    if (!container || container.dataset.groupBound === '1') return;
+    container.dataset.groupBound = '1';
+    container.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn || !container.contains(btn)) return;
+        const action = btn.dataset.action;
+        const groupEl = container.querySelector(`.review-group[data-group-key="${btn.dataset.group}"]`);
+        if (!groupEl) return;
+        e.stopPropagation();
+        if (action === 'expand' || action === 'collapse') {
+            const isOpen = groupEl.classList.toggle('is-expanded');
+            const more = groupEl.querySelector('.review-group-more');
+            if (more) {
+                if (isOpen) {
+                    const h = more.scrollHeight;
+                    more.style.maxHeight = h + 'px';
+                    more.addEventListener('transitionend', function onEnd() {
+                        more.removeEventListener('transitionend', onEnd);
+                        if (groupEl.classList.contains('is-expanded')) more.style.maxHeight = 'none';
+                    });
+                } else {
+                    more.style.maxHeight = more.scrollHeight + 'px';
+                    requestAnimationFrame(() => { more.style.maxHeight = '0px'; });
+                }
+            }
+        } else if (action === 'view-all') {
+            const userKey = decodeURIComponent(btn.dataset.group || '');
+            const userName = decodeURIComponent(btn.dataset.userName || '');
+            if (typeof window.openMapReviewSubpage === 'function') {
+                window.openMapReviewSubpage('user', { userKey, userName });
+            }
+        }
+    });
+}
+
+function renderVisitRankingHtml(reviewItems) {
+    if (!Array.isArray(reviewItems) || !reviewItems.length) return '';
+    const byUser = new Map();
+    reviewItems.forEach((item) => {
+        const key = item.userKey || `name:${String(item.userName || '').toLowerCase()}`;
+        if (!key) return;
+        if (!byUser.has(key)) {
+            byUser.set(key, { userName: item.userName || 'User', visitCount: item.visitCount || 1 });
+        }
+    });
+    const list = Array.from(byUser.values())
+        .filter(u => (u.visitCount || 0) >= 1)
+        .sort((a, b) => (b.visitCount || 0) - (a.visitCount || 0))
+        .slice(0, 3);
+    if (!list.length) return '';
+    const medalClasses = ['gold', 'silver', 'bronze'];
+    const rows = list.map((u, i) => `
+        <div class="visit-rank-row">
+            <span class="visit-rank-medal visit-rank-medal-${medalClasses[i]}">${i + 1}</span>
+            <span class="visit-rank-name">${escapeHtml(u.userName)}</span>
+            <span class="visit-rank-count">（吃过${u.visitCount}次）</span>
+        </div>
+    `).join('');
+    return `<div class="visit-ranking-title">最爱吃这家店的人</div>${rows}`;
+}
+
+function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 function renderMapReviewsAndAlbum(store) {
     const revs = getSortedMapStoreReviews(store);
     const reviewItems = buildMapReviewItems(store, 'all');
 
+    const rankingEl = document.getElementById('mp-visit-ranking');
+    if (rankingEl) {
+        rankingEl.innerHTML = renderVisitRankingHtml(reviewItems);
+    }
+
     const reviewsList = document.getElementById('mp-reviews-list');
     if (reviewsList) {
-        const reviewCards = reviewItems.length
-            ? reviewItems.map(item => renderMapReviewCardHtml(store, item, { source: 'map' })).join('')
+        const groups = buildReviewGroups(reviewItems);
+        const reviewCards = groups.length
+            ? groups.map(g => renderReviewGroupHtml(store, g)).join('')
             : '';
         const reviewPlaceholderText = revs.length ? '没有更多评论了～' : '还没有评论';
         reviewsList.innerHTML = `
@@ -787,6 +939,7 @@ function renderMapReviewsAndAlbum(store) {
             <div class="sheet-list-placeholder">${reviewPlaceholderText}</div>
         `;
         bindReviewWheelProxy(reviewsList);
+        bindReviewGroupActions(reviewsList);
     }
 
     const previewEntries = (typeof window.getStorePreviewImageEntries === 'function')
@@ -834,11 +987,25 @@ function renderMapReviewSubpage(store, scope = 'mine') {
     const listEl = document.getElementById('map-review-subpage-list');
     if (!titleEl || !listEl) return;
 
-    const items = buildMapReviewItems(store, scope);
-    titleEl.innerText = scope === 'friends' ? '朋友评价' : '我的评价';
+    let items;
+    let title;
+    let emptyText;
+    if (scope === 'user') {
+        const card = document.getElementById('map-detail-card');
+        const userKey = card?.dataset?.reviewUserKey || '';
+        const userName = card?.dataset?.reviewUserName || '';
+        items = buildMapReviewItems(store, 'all').filter(it => it.userKey === userKey);
+        title = userName ? `${userName}的评价` : '用户评价';
+        emptyText = '暂无评价';
+    } else {
+        items = buildMapReviewItems(store, scope);
+        title = scope === 'friends' ? '朋友评价' : '我的评价';
+        emptyText = scope === 'friends' ? '这家店还没有好友评价' : '你还没有评价过这家店';
+    }
+    titleEl.innerText = title;
 
     if (!items.length) {
-        listEl.innerHTML = `<div class="sheet-subpage-empty">${scope === 'friends' ? '这家店还没有好友评价' : '你还没有评价过这家店'}</div>`;
+        listEl.innerHTML = `<div class="sheet-subpage-empty">${emptyText}</div>`;
         return;
     }
 
@@ -848,13 +1015,20 @@ function renderMapReviewSubpage(store, scope = 'mine') {
     })).join('');
 }
 
-window.openMapReviewSubpage = (scope = 'mine') => {
+window.openMapReviewSubpage = (scope = 'mine', opts = {}) => {
     const card = document.getElementById('map-detail-card');
     const storeId = card?.dataset?.storeId || '';
     const store = (window.localStores || []).find(s => s.id === storeId);
     const overlay = document.getElementById('map-review-overlay');
     if (!card || !store || !overlay) return;
     card.dataset.reviewScope = scope;
+    if (scope === 'user') {
+        card.dataset.reviewUserKey = String(opts?.userKey || '');
+        card.dataset.reviewUserName = String(opts?.userName || '');
+    } else {
+        delete card.dataset.reviewUserKey;
+        delete card.dataset.reviewUserName;
+    }
     renderMapReviewSubpage(store, scope);
     overlay.classList.remove('hidden');
     requestAnimationFrame(() => overlay.classList.add('is-open'));
@@ -1282,6 +1456,7 @@ window.renderMapCardFromDB = (store, opts = {}) => {
     card.classList.remove('peek', 'full', 'half');
     card.classList.toggle('no-entry-animation', !!suppressAnimation);
     card.classList.add('active');
+    card.dataset.openedAt = String(Date.now());
     setMapSheetMode(mode);
     setMapSheetBackdrop(true);
     if (window.switchSheetTab) window.switchSheetTab('reviews');
@@ -1734,27 +1909,58 @@ window.copyMapStoreName = () => {
  * 关闭地图详情卡片
  */
 window.closeMapCard = (opts = {}) => {
+    const { immediate = false } = opts || {};
     stopMapFocusAnimation();
     stopMapFriendPreviewRotation();
     if (typeof window.closeMapReviewSubpage === 'function') window.closeMapReviewSubpage();
     const card = document.getElementById('map-detail-card');
-    if (card) {
-        card.classList.remove('active', 'peek', 'half', 'full');
-        delete card.dataset.storeId;
-        delete card.dataset.reviewScope;
-        delete card.dataset.sourceView;
-        delete card.dataset.fromMap;
+
+    const finalize = () => {
+        if (card) {
+            card.classList.remove('active', 'peek', 'half', 'full', 'closing');
+            delete card.dataset.storeId;
+            delete card.dataset.reviewScope;
+            delete card.dataset.sourceView;
+            delete card.dataset.fromMap;
+            delete card.dataset.closing;
+        }
+        setMapSheetBackdrop(false);
+        const fullDetail = document.getElementById('full-detail-page');
+        if (fullDetail) fullDetail.classList.remove('open', 'half', 'from-map');
+        if (routePolyline) routePolyline.setMap(null);
+        if (marker) marker.setMap(null);
+        marker = null;
+        activePinnedStoreId = "";
+        window.renderMarkers();
+    };
+
+    if (!card || !card.classList.contains('active') || immediate) {
+        finalize();
+        return;
     }
-    setMapSheetBackdrop(false);
-    const fullDetail = document.getElementById('full-detail-page');
-    if (fullDetail) fullDetail.classList.remove('open', 'half', 'from-map');
-    // 清除路线
-    if (routePolyline) routePolyline.setMap(null);
-    // 清除搜索标记
-    if (marker) marker.setMap(null);
-    marker = null;
-    activePinnedStoreId = "";
-    window.renderMarkers();
+
+    if (card.dataset.closing === '1') return;
+    card.dataset.closing = '1';
+    card.classList.add('closing');
+    const backdrop = document.getElementById('map-sheet-backdrop');
+    if (backdrop && backdrop.classList.contains('active')) {
+        backdrop.classList.add('closing');
+    }
+
+    let settled = false;
+    const done = () => {
+        if (settled) return;
+        settled = true;
+        card.removeEventListener('animationend', onAnimEnd);
+        if (backdrop) backdrop.classList.remove('closing');
+        finalize();
+    };
+    const onAnimEnd = (ev) => {
+        if (ev.target !== card) return;
+        done();
+    };
+    card.addEventListener('animationend', onAnimEnd);
+    setTimeout(done, 260);
 };
 
 window.restoreMapSelectionContext = ({ storeId, mode = 'half', reviewScope = '', suppressAnimation = false } = {}) => {
@@ -1957,7 +2163,35 @@ function initSheetDrag() {
 document.addEventListener('DOMContentLoaded', () => {
     mountMapSheetToAppRoot();
     initSheetDrag();
+    bindMapSheetOutsideClick();
 });
+
+function bindMapSheetOutsideClick() {
+    if (document.body.dataset.mapSheetOutsideBound === '1') return;
+    document.body.dataset.mapSheetOutsideBound = '1';
+    document.addEventListener('click', (e) => {
+        const card = document.getElementById('map-detail-card');
+        if (!card || !card.classList.contains('active')) return;
+        if (card.dataset.closing === '1') return;
+        // 避免打开弹窗的那次 click 事件冒泡到 document 立即触发关闭
+        const openedAt = Number(card.dataset.openedAt || 0);
+        if (openedAt && Date.now() - openedAt < 300) return;
+        if (e.target.closest('#map-detail-card')) return;
+        if (e.target.closest('#map-sheet-backdrop')) return;
+        if (e.target.closest('.map-pin')) return;
+        if (e.target.closest('#map-review-overlay')) return;
+        const mapViewVisible = !document.getElementById('view-map')?.classList.contains('hidden');
+        if (mapViewVisible) {
+            // 地图页：只有 full 占比缩回 half，half/peek 不变
+            if (card.classList.contains('full')) {
+                setMapSheetMode('half');
+            }
+        } else {
+            // 其他页面：点击外部区域直接关闭（带动画）
+            window.closeMapCard();
+        }
+    });
+}
 
 // ==========================================
 // Google Maps 加载回调

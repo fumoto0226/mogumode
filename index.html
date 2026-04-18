@@ -69,15 +69,15 @@
                         <div style="font-weight:800; margin-top:10px;">位置读取中...</div>
                     </div>
                 </div>
-                <div id="loc-confirm-modal" class="modal-overlay">
+                <div id="loc-confirm-modal" class="modal-overlay" onclick="if(event.target===this) closeLocModals()">
                     <div class="loc-confirm-box">
                         <div id="mini-map-confirm" style="height:200px; background:#eee;"></div>
                         <div style="padding-top:20px;">
                             <h3 style="margin:0 0 10px 0; font-size:18px;">你在这里吗？</h3>
                             <div id="loc-confirm-current" class="loc-confirm-current">当前位置：读取中...</div>
                             <div class="loc-actions">
-                                <button class="action-btn btn-cancel" onclick="startFetchLocation()">重新读取</button>
                                 <button class="action-btn btn-cancel" onclick="closeLocModals()">取消</button>
+                                <button class="action-btn btn-reread" onclick="startFetchLocation()">重新读取</button>
                                 <button class="action-btn btn-save" onclick="confirmGPSLocation()">使用位置</button>
                             </div>
                         </div>
@@ -108,19 +108,19 @@
                             <div class="sort-menu-item active" data-sort-key="default" onclick="selectSortOption('最新', 'default')">
                                 <i data-lucide="align-left" width="16"></i> 最新
                             </div>
-                            <div class="sort-menu-item" data-sort-key="price" onclick="selectSortOption('价格', 'price')">
-                                <i data-lucide="coins" width="16"></i> 价格
+                            <div class="sort-menu-item" data-sort-key="rating" onclick="selectSortOption('评价', 'rating')">
+                                <i data-lucide="heart" width="16"></i> 评价
                             </div>
                             <div class="sort-menu-item" data-sort-key="distance" onclick="selectSortOption('距离', 'distance')">
                                 <i data-lucide="footprints" width="16"></i> 距离
                             </div>
-                            <div class="sort-menu-item" data-sort-key="rating" onclick="selectSortOption('评价', 'rating')">
-                                <i data-lucide="heart" width="16"></i> 评价
+                            <div class="sort-menu-item" data-sort-key="price" onclick="selectSortOption('价格', 'price')">
+                                <i data-lucide="coins" width="16"></i> 价格
                             </div>
                         </div>
                     </div>
 
-                    <div class="filter-btn-container">
+                    <div class="filter-btn-container" style="display:none;">
                         <button class="filter-btn" id="filter-master-btn" onclick="toggleFilterPanel()">
                             <i data-lucide="filter" width="14"></i>
                             <span id="filter-btn-text">筛选</span>
@@ -318,10 +318,10 @@
                     </div>
 
                     <!-- 朋友评价 -->
-                    <div class="sheet-section">
+                    <div class="sheet-section sheet-section-clickable" onclick="openMapReviewSubpage('friends')">
                         <div class="sheet-section-header">
                             <button type="button" class="sheet-section-link"
-                                onclick="openMapReviewSubpage('friends')">朋友评价 &gt;</button>
+                                onclick="event.stopPropagation();openMapReviewSubpage('friends')">朋友评价 &gt;</button>
                             <div class="sheet-friend-avatars">
                                 <img src="images/avatar-placeholder.svg" class="f-avatar">
                                 <img src="images/avatar-placeholder.svg" class="f-avatar">
@@ -373,6 +373,7 @@
                             </div>
                             <span class="review-label">平均评分</span>
                         </div>
+                        <div id="mp-visit-ranking" class="visit-ranking"></div>
                         <div id="mp-reviews-list" class="reviews-list"></div>
                     </div>
 
@@ -809,87 +810,12 @@
                 <!-- 随机结果卡片区域 -->
                 <div id="random-result-wrap" class="random-result-container" style="display:none;"></div>
 
-                <!-- 筛选面板+触发 -->
-                <div class="rf-wrap">
-                    <div id="random-filter-panel" class="rf-panel">
-                        <div class="rf-panel-inner">
-                            <!-- 范围选择 -->
-                            <div class="rf-section">
-                                <div class="rf-label">范围<span class="rf-hint">(可多选)</span></div>
-                                <div class="rf-options">
-                                    <div class="rf-pill" id="rf-opt-none" onclick="toggleRfOption(this, 'none')">未收藏
-                                    </div>
-                                    <div class="rf-pill selected want" id="rf-opt-want"
-                                        onclick="toggleRfOption(this, 'want')">
-                                        <img src="images/bookmark-g.svg" width="9"> 想吃
-                                    </div>
-                                    <div class="rf-pill selected like" id="rf-opt-like"
-                                        onclick="toggleRfOption(this, 'like')">
-                                        <img src="images/like-g.svg" width="12"> 好吃
-                                    </div>
-                                    <div class="rf-pill dislike" id="rf-opt-dislike"
-                                        onclick="toggleRfOption(this, 'dislike')">
-                                        <img src="images/dislike-g.svg" width="12"> 难吃
-                                    </div>
-                                </div>
-                                <label class="rf-checkbox" style="margin-top:8px;">
-                                    <input type="checkbox" id="rf-include-friends" checked>
-                                    <span>（包含朋友收藏）</span>
-                                </label>
-                            </div>
-
-                            <!-- 价格选择 -->
-                            <div class="rf-section">
-                                <div class="rf-label">价格</div>
-                                <div style="display:flex; align-items:center; gap:8px;">
-                                    <input type="text" class="rf-input" id="rf-price-min" placeholder="最低">
-                                    <span>-</span>
-                                    <input type="text" class="rf-input" id="rf-price-max" placeholder="最高">
-                                </div>
-                            </div>
-
-                            <!-- 距离选择 -->
-                            <div class="rf-section">
-                                <div class="rf-label">距离</div>
-                                <div class="rf-options">
-                                    <div class="rf-pill rf-dist-opt selected" id="rf-dist-any"
-                                        onclick="toggleRfDistance(this, null)">
-                                        不限
-                                    </div>
-                                    <div class="rf-pill rf-dist-opt distance" id="rf-dist-50"
-                                        onclick="toggleRfDistance(this, 50)">
-                                        50m内
-                                    </div>
-                                    <div class="rf-pill rf-dist-opt distance" id="rf-dist-100"
-                                        onclick="toggleRfDistance(this, 100)">
-                                        100m内</div>
-                                    <div class="rf-pill rf-dist-opt distance" id="rf-dist-200"
-                                        onclick="toggleRfDistance(this, 200)">
-                                        200m内</div>
-                                    <div class="rf-pill rf-dist-opt distance" id="rf-dist-500"
-                                        onclick="toggleRfDistance(this, 500)">
-                                        500m内</div>
-                                </div>
-                                <div style="display:flex; align-items:center; gap:8px; margin-top:8px;">
-                                    <input type="text" class="rf-input" id="rf-dist-custom" placeholder="自定义"
-                                        style="width:80px;">
-                                    <span style="color:#666; font-size: 11px;">m以内</span>
-                                </div>
-                            </div>
-
-                            <div
-                                style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px; border-top:1px solid #eee; padding-top:10px;">
-                                <button class="rf-btn cancel" onclick="toggleRandomFilterPanel()">取消</button>
-                                <button class="rf-btn save" onclick="saveRandomFilter()">保存</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="random-filter-trigger" onclick="toggleRandomFilterPanel()" class="rf-trigger-btn">
-                        <i data-lucide="align-left" width="14"></i>
-                        <span id="rf-summary-text">筛选：未收藏·想吃·好吃(包含朋友收藏)</span>
-                        <i data-lucide="chevron-down" width="12"></i>
-                    </div>
+                <!-- 简单筛选：步行15分钟以内 -->
+                <div class="rf-simple-wrap" style="display:flex; justify-content:center; margin:12px 0;">
+                    <label class="rf-checkbox" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; color:#2d3436; cursor:pointer;">
+                        <input type="checkbox" id="rf-walk-15" checked>
+                        <span>步行15分钟以内</span>
+                    </label>
                 </div>
 
                 <button id="btn-do-random" class="btn-random-main" onclick="doRandomPick()">

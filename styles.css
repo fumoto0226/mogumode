@@ -279,6 +279,23 @@ header {
     padding: 0 10px;
     font-size: 12px;
     text-align: center;
+    border-radius: 999px;
+    border: none;
+}
+
+.loc-actions .btn-cancel {
+    background: #f1f2f6;
+    color: #2d3436;
+}
+
+.loc-actions .btn-reread {
+    background: #2c7be5;
+    color: #fff;
+}
+
+.loc-actions .btn-save {
+    background: #1a1a1a;
+    color: #fff;
 }
 
 /* --- User Circle --- */
@@ -2133,6 +2150,29 @@ header {
     }
 }
 
+.map-sheet.active.closing {
+    animation: sheetSlideDown 0.22s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+@keyframes sheetSlideDown {
+    from {
+        transform: translateY(0);
+    }
+
+    to {
+        transform: translateY(100%);
+    }
+}
+
+.map-sheet-backdrop.active {
+    opacity: 1;
+    transition: opacity 0.22s ease-out;
+}
+
+.map-sheet-backdrop.active.closing {
+    opacity: 0;
+}
+
 /* Drag Handle */
 .sheet-drag-handle {
     padding: 12px 0 8px;
@@ -2287,7 +2327,11 @@ header {
     background: transparent;
     padding: 0;
     font-size: 11px;
-    color: #b2bec3;
+    color: #636e72;
+    cursor: pointer;
+}
+
+.sheet-section.sheet-section-clickable {
     cursor: pointer;
 }
 
@@ -2666,6 +2710,67 @@ header {
     margin-bottom: 16px;
 }
 
+.visit-ranking {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+
+.visit-ranking:empty {
+    display: none;
+}
+
+.visit-ranking-title {
+    font-size: 12px;
+    color: #636e72;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.visit-rank-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+    font-size: 13px;
+    color: #2d3436;
+}
+
+.visit-rank-medal {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.visit-rank-medal-gold {
+    background: #f5c518;
+}
+
+.visit-rank-medal-silver {
+    background: #b0b7bd;
+}
+
+.visit-rank-medal-bronze {
+    background: #cd7f32;
+}
+
+.visit-rank-name {
+    font-weight: 500;
+}
+
+.visit-rank-count {
+    color: #999;
+    font-size: 11px;
+}
+
 .review-avg {
     font-size: 28px;
     font-weight: 900;
@@ -2794,7 +2899,21 @@ header {
     color: #2d3436;
     white-space: pre-wrap;
     word-break: break-word;
-    padding-bottom: 3px;
+    padding-bottom: 0;
+}
+
+.review-visit-count {
+    margin-left: 4px;
+    font-size: 11px;
+    color: #999;
+    font-weight: 400;
+}
+
+.review-budget {
+    margin-left: 10px;
+    font-size: 11px;
+    color: #999;
+    font-weight: 400;
 }
 
 .review-rating-row {
@@ -2828,7 +2947,7 @@ header {
     padding: 0;
     border: 0;
     background: transparent;
-    color: #1f8fff;
+    color: #1776d6;
     font-size: 12px;
     font-weight: 400;
     line-height: 1.2;
@@ -2838,6 +2957,63 @@ header {
 .review-images {
     display: flex;
     gap: 6px;
+    margin-top: 10px;
+}
+
+.review-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.review-group-more {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.review-group-more-inner {
+    padding-top: 4px;
+}
+
+.review-group-expand-row,
+.review-group-foot-row {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    padding: 2px 0 4px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.review-group.is-expanded .review-group-expand-row {
+    display: none;
+}
+
+.review-group:not(.is-expanded) > .review-card {
+    border-bottom: none;
+}
+
+.review-group-more-inner > .review-card:has(+ .review-group-foot-row) {
+    border-bottom: none;
+}
+
+.review-group-btn {
+    border: none;
+    background: transparent;
+    color: #1776d6;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 400;
+    padding: 4px 12px;
+    cursor: pointer;
+    border-radius: 999px;
+}
+
+.review-group-btn:hover {
+    background: rgba(31, 143, 255, 0.1);
+}
+
+.review-group-view-all {
+    color: #2d3436;
 }
 
 .review-images img {
@@ -2945,7 +3121,7 @@ header {
 .mp-route-btn {
     /* margin-left: auto; */
     margin-left: 5px;
-    background: #5895c1;
+    background: #1776d6;
     color: white;
     border: none;
     padding: 4px 12px;

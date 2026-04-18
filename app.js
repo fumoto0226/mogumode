@@ -33,7 +33,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v26";
+const APP_BUILD_VERSION = "v27";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 const LOCATION_CACHE_STORAGE_KEY = "mogumode:last-origin-v2";
 
@@ -5358,7 +5358,14 @@ function applyFilters() {
     source.sort((a, b) => {
         let result = 0;
         if (currentSortKey === 'price') {
-            result = (parseInt(a.budget) || 0) - (parseInt(b.budget) || 0);  // 默认低价->高价
+            // 使用店铺详情页显示的中位数价格；无价格的店铺始终排到最后（不随反转改变）
+            const pa = getStoreMedianBudget(a);
+            const pb = getStoreMedianBudget(b);
+            const hasA = Number.isFinite(pa) && pa > 0;
+            const hasB = Number.isFinite(pb) && pb > 0;
+            if (hasA !== hasB) return hasA ? -1 : 1;
+            if (!hasA && !hasB) return 0;
+            result = pa - pb; // 默认低->高，反转时高->低
         } else if (currentSortKey === 'distance') {
             const dA = getStoreLinearDistanceMeters(a) ?? 99999;
             const dB = getStoreLinearDistanceMeters(b) ?? 99999;
@@ -6465,224 +6472,40 @@ window.submitReview = async () => {
    "今天吃什么"随机选择器
    ========================================= */
 
-// 随机抽选的筛选条件
-let randomFilter = {
-    types: new Set(['want', 'like']),  // 默认从: 想吃、好吃 中抽选
-    distance: null,                     // 距离限制 (米)
-    includeFriends: true,               // 是否包含朋友收藏
-    priceMin: '',
-    priceMax: '',
-    distCustom: ''
-};
+// 随机抽选仅保留"步行15分钟以内"一个简单开关（默认开启）
+// 步行速度：80 米/分钟 → 15 分钟 ≈ 1200m
+const RANDOM_WALK_LIMIT_METERS = 15 * 80;
 
-/**
- * 打开随机抽选弹窗
- */
 window.openRandomModal = () => {
     document.getElementById('layer-random').classList.add('open');
     document.getElementById('random-state-empty').style.display = 'flex';
     document.getElementById('random-result-wrap').style.display = 'none';
     document.getElementById('btn-random-text').innerText = "随机抽选";
     document.getElementById('random-title').innerText = "今天吃什么？";
-    const panel = document.getElementById('random-filter-panel');
-    if (panel) panel.style.display = 'none';
-    syncRandomFilterUI();
-    updateRandomSummary();
 };
 
-/**
- * 关闭随机抽选弹窗
- */
 window.closeRandomPanel = () => {
     const layer = document.getElementById('layer-random');
-    const panel = document.getElementById('random-filter-panel');
     if (layer) layer.classList.remove('open');
-    if (panel) panel.style.display = 'none';
 };
 
-/**
- * 切换随机抽选筛选面板
- */
-window.toggleRandomFilterPanel = () => {
-    const panel = document.getElementById('random-filter-panel');
-    if (panel.style.display === 'block') {
-        panel.style.display = 'none';
-    } else {
-        panel.style.display = 'block';
-    }
-};
-
-function syncRandomFilterUI() {
-    const typeMap = {
-        none: 'rf-opt-none',
-        want: 'rf-opt-want',
-        like: 'rf-opt-like',
-        dislike: 'rf-opt-dislike'
-    };
-    Object.entries(typeMap).forEach(([type, id]) => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        el.classList.toggle('selected', randomFilter.types.has(type));
-    });
-    syncRandomTypeIcons();
-    document.querySelectorAll('.rf-pill.rf-dist-opt').forEach(p => p.classList.remove('selected'));
-    if (randomFilter.distance) {
-        const distEl = document.getElementById(`rf-dist-${randomFilter.distance}`);
-        if (distEl) distEl.classList.add('selected');
-    } else {
-        const anyEl = document.getElementById('rf-dist-any');
-        if (anyEl) anyEl.classList.add('selected');
-    }
-    const friendsEl = document.getElementById('rf-include-friends');
-    if (friendsEl) friendsEl.checked = !!randomFilter.includeFriends;
-    const pMin = document.getElementById('rf-price-min');
-    const pMax = document.getElementById('rf-price-max');
-    const dCustom = document.getElementById('rf-dist-custom');
-    if (pMin) pMin.value = randomFilter.priceMin || '';
-    if (pMax) pMax.value = randomFilter.priceMax || '';
-    if (dCustom) dCustom.value = randomFilter.distCustom || '';
-}
-
-function syncRandomTypeIcons() {
-    const iconMap = {
-        want: { id: 'rf-opt-want', base: 'bookmark' },
-        like: { id: 'rf-opt-like', base: 'like' },
-        dislike: { id: 'rf-opt-dislike', base: 'dislike' }
-    };
-    Object.entries(iconMap).forEach(([type, conf]) => {
-        const el = document.getElementById(conf.id);
-        const img = el ? el.querySelector('img') : null;
-        if (!img) return;
-        const active = randomFilter.types.has(type);
-        img.src = `images/${conf.base}-${active ? 'f' : 'g'}.svg`;
-    });
-}
-
-/**
- * 切换随机抽选筛选选项
- * @param {Element} el - 被点击的选项元素  
- * @param {string} type - 选项类型
- */
-window.toggleRfOption = (el, type) => {
-    if (randomFilter.types.has(type)) {
-        randomFilter.types.delete(type);
-        el.classList.remove('selected');
-    } else {
-        randomFilter.types.add(type);
-        el.classList.add('selected');
-    }
-    syncRandomTypeIcons();
-};
-
-/**
- * 切换距离选项（单选）
- */
-window.toggleRfDistance = (el, dist) => {
-    // 清除其他距离选中状态
-    document.querySelectorAll('.rf-pill.rf-dist-opt').forEach(p => p.classList.remove('selected'));
-    el.classList.add('selected');
-    randomFilter.distCustom = '';
-    const customInput = document.getElementById('rf-dist-custom');
-    if (customInput) customInput.value = '';
-    randomFilter.distance = dist;
-};
-
-/**
- * 保存筛选并更新摘要
- */
-window.saveRandomFilter = () => {
-    randomFilter.includeFriends = document.getElementById('rf-include-friends').checked;
-    randomFilter.priceMin = (document.getElementById('rf-price-min')?.value || '').trim();
-    randomFilter.priceMax = (document.getElementById('rf-price-max')?.value || '').trim();
-    randomFilter.distCustom = (document.getElementById('rf-dist-custom')?.value || '').trim();
-    if (randomFilter.distCustom) {
-        const customNum = Number(randomFilter.distCustom);
-        if (Number.isFinite(customNum) && customNum > 0) {
-            randomFilter.distance = customNum;
-            document.querySelectorAll('.rf-pill.rf-dist-opt').forEach(p => p.classList.remove('selected'));
-        }
-    } else {
-        const hasPresetSelected = !!document.querySelector('.rf-pill.rf-dist-opt.selected');
-        if (!hasPresetSelected) randomFilter.distance = null;
-    }
-    updateRandomSummary();
-    toggleRandomFilterPanel();
-};
-
-/**
- * 更新随机抽选筛选摘要
- */
-function updateRandomSummary() {
-    const typeNames = {
-        'none': '未收藏',
-        'want': '想吃',
-        'like': '好吃',
-        'dislike': '难吃'
-    };
-    const selectedTypes = Array.from(randomFilter.types).map(t => typeNames[t] || t);
-    let summary = '筛选：' + (selectedTypes.length > 0 ? selectedTypes.join('·') : '无');
-    if (randomFilter.includeFriends) {
-        summary += '(包含朋友收藏)';
-    }
-    document.getElementById('rf-summary-text').innerText = summary;
-}
-
-/**
- * 执行随机抽选
- */
 window.doRandomPick = async () => {
-    if (randomFilter.includeFriends && myFriends.length > 0 && !allUsersCache.length) {
-        await ensureAllUsersLoaded();
-    }
     const btn = document.getElementById('btn-do-random');
-    const myAndFriendsFav = new Set(myFavIds);
-    const myAndFriendsLike = new Set(Array.from(localLikes));
-    const myAndFriendsDislike = new Set(Array.from(localDislikes));
-    if (randomFilter.includeFriends && myFriends.length > 0) {
-        allUsersCache
-            .filter(u => myFriends.includes(u.id))
-            .forEach(u => {
-                (u.favorites || []).forEach(id => myAndFriendsFav.add(id));
-                (u.likes || []).forEach(id => myAndFriendsLike.add(id));
-                (u.dislikes || []).forEach(id => myAndFriendsDislike.add(id));
-            });
-    }
+    const walkOnly = !!document.getElementById('rf-walk-15')?.checked;
 
-    const minPrice = Number(randomFilter.priceMin);
-    const maxPrice = Number(randomFilter.priceMax);
-    const hasMinPrice = Number.isFinite(minPrice) && minPrice >= 0 && String(randomFilter.priceMin).trim() !== '';
-    const hasMaxPrice = Number.isFinite(maxPrice) && maxPrice >= 0 && String(randomFilter.priceMax).trim() !== '';
-    const maxDistance = Number(randomFilter.distance);
-    const hasDistance = Number.isFinite(maxDistance) && maxDistance > 0;
-
-    // 根据筛选条件过滤店铺
     const pool = localStores.filter(s => {
         if (isStorePermanentlyClosed(s)) return false;
-        const isFav = myAndFriendsFav.has(s.id);
-        const isLike = myAndFriendsLike.has(s.id);
-        const isDislike = myAndFriendsDislike.has(s.id);
-        const isNone = !isFav && !isLike && !isDislike;  // 未收藏
-
-        let typeMatch = false;
-        if (randomFilter.types.has('want') && isFav) typeMatch = true;
-        if (randomFilter.types.has('like') && isLike) typeMatch = true;
-        if (randomFilter.types.has('dislike') && isDislike) typeMatch = true;
-        if (randomFilter.types.has('none') && isNone) typeMatch = true;
-        if (!typeMatch) return false;
-
-        const budgetRaw = Number(String(s.budget ?? '').replace(/[^\d.]/g, ''));
-        const hasBudget = Number.isFinite(budgetRaw) && budgetRaw > 0;
-        if (hasMinPrice && (!hasBudget || budgetRaw < minPrice)) return false;
-        if (hasMaxPrice && (!hasBudget || budgetRaw > maxPrice)) return false;
-
-        const distRaw = Number(getStoreLinearDistanceMeters(s));
-        const hasStoreDist = Number.isFinite(distRaw) && distRaw > 0;
-        if (hasDistance && (!hasStoreDist || distRaw > maxDistance)) return false;
-
+        if (walkOnly) {
+            const distRaw = Number(getStoreLinearDistanceMeters(s));
+            if (!Number.isFinite(distRaw) || distRaw <= 0) return false;
+            if (distRaw > RANDOM_WALK_LIMIT_METERS) return false;
+        }
         return true;
     });
 
-    if (pool.length === 0) return alert("没有符合条件的店铺，请调整筛选！");
+    if (pool.length === 0) return alert(walkOnly
+        ? "步行15分钟以内没有可选的店铺，试试取消勾选？"
+        : "没有可抽选的店铺！");
 
     btn.innerHTML = `<div class="spinner"></div> 抽选中...`;
 
