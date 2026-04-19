@@ -760,8 +760,12 @@ function renderMapReviewCardHtml(store, item, opts = {}) {
     const reviewGalleryKey = typeof window.registerActivityImageGallery === 'function'
         ? window.registerActivityImageGallery(item.imgs.map(img => window.getImageAssetFullUrl ? window.getImageAssetFullUrl(img) : img).filter(Boolean))
         : '';
-    const openProfileAttr = item.isFriend
-        ? `onclick="openFriendProfileFromReview('${item.friendUser.id}'); event.stopPropagation();"`
+    const profileUid = item.isFriend
+        ? item.friendUser.id
+        : (item.review && item.review.uid ? item.review.uid : '');
+    const canOpenProfile = !!profileUid && !item.isMine;
+    const openProfileAttr = canOpenProfile
+        ? `onclick="openFriendProfileFromReview('${profileUid}'); event.stopPropagation();"`
         : '';
     const friendBadge = item.isFriend ? `<span class="review-friend-badge">好友</span>` : '';
     const visitBadge = (item.visitCount && item.visitCount > 0)
@@ -780,8 +784,8 @@ function renderMapReviewCardHtml(store, item, opts = {}) {
     return `
         <div class="review-card">
             <div class="review-header">
-                <img src="${item.avatar}" class="review-avatar ${item.isFriend ? 'is-clickable' : ''}" ${openProfileAttr}>
-                <div class="review-user-info ${item.isFriend ? 'is-clickable' : ''}" ${openProfileAttr}>
+                <img src="${item.avatar}" class="review-avatar ${canOpenProfile ? 'is-clickable' : ''}" ${openProfileAttr}>
+                <div class="review-user-info ${canOpenProfile ? 'is-clickable' : ''}" ${openProfileAttr}>
                     <div class="review-username">${item.userName}${friendBadge}${visitBadge}</div>
                     <div class="review-user-meta">${item.dateStr}</div>
                 </div>
@@ -888,14 +892,56 @@ function bindReviewGroupActions(container) {
     });
 }
 
+function appendNextReviewPage(reviewsList) {
+    const state = reviewsList?._reviewPagination;
+    if (!state) return;
+    const { store, groups, rendered, pageSize } = state;
+    if (rendered >= groups.length) return;
+    const end = Math.min(groups.length, rendered + pageSize);
+    const html = groups.slice(rendered, end).map(g => renderReviewGroupHtml(store, g)).join('');
+    const placeholder = reviewsList.querySelector('.sheet-list-placeholder');
+    if (placeholder) placeholder.insertAdjacentHTML('beforebegin', html);
+    else reviewsList.insertAdjacentHTML('beforeend', html);
+    state.rendered = end;
+    if (end >= groups.length && placeholder) {
+        placeholder.textContent = groups.length ? '没有更多评论了～' : '还没有评论';
+    }
+}
+
+function bindReviewListInfiniteScroll(reviewsList) {
+    const scroller = reviewsList.closest('.sheet-tab-content')
+        || reviewsList.closest('.map-sheet.full')
+        || reviewsList.closest('.map-sheet');
+    if (!scroller || scroller.dataset.reviewInfiniteBound === '1') return;
+    scroller.dataset.reviewInfiniteBound = '1';
+    scroller.addEventListener('scroll', () => {
+        const currentList = scroller.querySelector('#mp-reviews-list');
+        if (!currentList || !currentList._reviewPagination) return;
+        if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 120) {
+            appendNextReviewPage(currentList);
+        }
+    });
+}
+
 function renderVisitRankingHtml(reviewItems) {
     if (!Array.isArray(reviewItems) || !reviewItems.length) return '';
     const byUser = new Map();
     reviewItems.forEach((item) => {
         const key = item.userKey || `name:${String(item.userName || '').toLowerCase()}`;
         if (!key) return;
+        const rating = Number(item.rating);
         if (!byUser.has(key)) {
-            byUser.set(key, { userName: item.userName || 'User', visitCount: item.visitCount || 1 });
+            byUser.set(key, {
+                userName: item.userName || 'User',
+                visitCount: item.visitCount || 1,
+                ratingSum: 0,
+                ratingCount: 0
+            });
+        }
+        const u = byUser.get(key);
+        if (Number.isFinite(rating) && rating > 0) {
+            u.ratingSum += rating;
+            u.ratingCount += 1;
         }
     });
     const list = Array.from(byUser.values())
@@ -904,13 +950,20 @@ function renderVisitRankingHtml(reviewItems) {
         .slice(0, 3);
     if (!list.length) return '';
     const medalClasses = ['gold', 'silver', 'bronze'];
-    const rows = list.map((u, i) => `
+    const rows = list.map((u, i) => {
+        const avg = u.ratingCount > 0 ? (u.ratingSum / u.ratingCount) : 0;
+        const avgHtml = avg > 0
+            ? `<span class="visit-rank-avg">${avg.toFixed(1)}<img src="images/mogu.svg" class="visit-rank-avg-icon"></span>`
+            : '';
+        return `
         <div class="visit-rank-row">
             <span class="visit-rank-medal visit-rank-medal-${medalClasses[i]}">${i + 1}</span>
             <span class="visit-rank-name">${escapeHtml(u.userName)}</span>
             <span class="visit-rank-count">（吃过${u.visitCount}次）</span>
+            ${avgHtml}
         </div>
-    `).join('');
+        `;
+    }).join('');
     return `<div class="visit-ranking-title">最爱吃这家店的人</div>${rows}`;
 }
 
@@ -930,16 +983,17 @@ function renderMapReviewsAndAlbum(store) {
     const reviewsList = document.getElementById('mp-reviews-list');
     if (reviewsList) {
         const groups = buildReviewGroups(reviewItems);
-        const reviewCards = groups.length
-            ? groups.map(g => renderReviewGroupHtml(store, g)).join('')
-            : '';
-        const reviewPlaceholderText = revs.length ? '没有更多评论了～' : '还没有评论';
-        reviewsList.innerHTML = `
-            ${reviewCards}
-            <div class="sheet-list-placeholder">${reviewPlaceholderText}</div>
-        `;
+        const pageSize = 20;
+        const initial = Math.min(pageSize, groups.length);
+        const reviewCards = groups.slice(0, initial).map(g => renderReviewGroupHtml(store, g)).join('');
+        const capText = initial >= groups.length
+            ? (revs.length ? '没有更多评论了～' : '还没有评论')
+            : '下拉加载更多';
+        reviewsList.innerHTML = `${reviewCards}<div class="sheet-list-placeholder">${capText}</div>`;
+        reviewsList._reviewPagination = { store, groups, rendered: initial, pageSize };
         bindReviewWheelProxy(reviewsList);
         bindReviewGroupActions(reviewsList);
+        bindReviewListInfiniteScroll(reviewsList);
     }
 
     const previewEntries = (typeof window.getStorePreviewImageEntries === 'function')
@@ -1032,6 +1086,78 @@ window.openMapReviewSubpage = (scope = 'mine', opts = {}) => {
     renderMapReviewSubpage(store, scope);
     overlay.classList.remove('hidden');
     requestAnimationFrame(() => overlay.classList.add('is-open'));
+    bindMapReviewOverlaySwipe(overlay);
+};
+
+function bindMapReviewOverlaySwipe(overlay) {
+    bindSwipeBackToClose(overlay, {
+        isOpen: () => overlay.classList.contains('is-open'),
+        onClose: () => { if (typeof window.closeMapReviewSubpage === 'function') window.closeMapReviewSubpage(); }
+    });
+}
+
+window.bindSwipeBackToClose = function bindSwipeBackToClose(el, opts = {}) {
+    if (!el || el.dataset.swipeBound === '1') return;
+    el.dataset.swipeBound = '1';
+    const isOpen = typeof opts.isOpen === 'function' ? opts.isOpen : () => true;
+    const onClose = typeof opts.onClose === 'function' ? opts.onClose : () => {};
+    const onDrag = typeof opts.onDrag === 'function' ? opts.onDrag : null;
+    const onReset = typeof opts.onReset === 'function' ? opts.onReset : null;
+    const onSettleClose = typeof opts.onSettleClose === 'function' ? opts.onSettleClose : null;
+    let startX = 0, startY = 0, dx = 0, dragging = false, locked = false;
+    const width = () => el.getBoundingClientRect().width || 400;
+    const onDown = (e) => {
+        if (!isOpen()) return;
+        const t = e.touches ? e.touches[0] : e;
+        startX = t.clientX; startY = t.clientY;
+        dx = 0; dragging = true; locked = false;
+    };
+    const onMove = (e) => {
+        if (!dragging) return;
+        const t = e.touches ? e.touches[0] : e;
+        const deltaX = t.clientX - startX;
+        const deltaY = t.clientY - startY;
+        if (!locked) {
+            if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) return;
+            if (Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+                locked = true;
+                el.style.transition = 'none';
+            } else {
+                dragging = false;
+                return;
+            }
+        }
+        dx = Math.max(0, deltaX);
+        el.style.transform = `translateX(${dx}px)`;
+        if (onDrag) onDrag(dx, width());
+        if (e.cancelable) e.preventDefault();
+    };
+    const onUp = () => {
+        if (!dragging) return;
+        const wasLocked = locked;
+        dragging = false; locked = false;
+        el.style.transition = '';
+        if (!wasLocked) { el.style.transform = ''; return; }
+        const w = width();
+        if (dx > w * 0.3) {
+            el.style.transform = `translateX(${w}px)`;
+            if (onSettleClose) onSettleClose();
+            onClose();
+            setTimeout(() => { el.style.transform = ''; if (onReset) onReset(); }, 300);
+        } else {
+            el.style.transform = '';
+            if (onReset) onReset();
+        }
+        dx = 0;
+    };
+    el.addEventListener('touchstart', onDown, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onUp);
+    el.addEventListener('touchcancel', onUp);
+    el.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') onDown(e); });
+    el.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && dragging) onMove(e); });
+    el.addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse') onUp(e); });
+    el.addEventListener('pointercancel', (e) => { if (e.pointerType === 'mouse') onUp(e); });
 };
 
 window.closeMapReviewSubpage = (opts = {}) => {
@@ -2164,7 +2290,98 @@ document.addEventListener('DOMContentLoaded', () => {
     mountMapSheetToAppRoot();
     initSheetDrag();
     bindMapSheetOutsideClick();
+    bindHomePullToRefresh();
 });
+
+function bindHomePullToRefresh() {
+    const list = document.getElementById('store-list');
+    const indicator = document.getElementById('home-pull-indicator');
+    const textEl = indicator?.querySelector('.home-pull-text');
+    if (!list || !indicator || !textEl) return;
+    const THRESHOLD = 60;
+    const MAX = 100;
+    let startY = 0, dy = 0, dragging = false, locked = false, refreshing = false;
+    let swallowUntil = 0;
+    list.addEventListener('click', (e) => {
+        if (Date.now() < swallowUntil) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+    }, true);
+    const setHeight = (h) => { indicator.style.height = h + 'px'; };
+    const onDown = (e) => {
+        if (refreshing) return;
+        if (list.scrollTop > 0) return;
+        const t = e.touches ? e.touches[0] : e;
+        startY = t.clientY; dy = 0;
+        dragging = true; locked = false;
+    };
+    const onMove = (e) => {
+        if (!dragging) return;
+        const t = e.touches ? e.touches[0] : e;
+        const deltaY = t.clientY - startY;
+        if (!locked) {
+            if (deltaY < 8) { if (deltaY < -8) dragging = false; return; }
+            if (list.scrollTop > 0) { dragging = false; return; }
+            locked = true;
+            indicator.classList.add('is-pulling');
+        }
+        dy = Math.min(MAX, deltaY * 0.5);
+        setHeight(dy);
+        textEl.innerText = dy >= THRESHOLD ? '松开刷新位置' : '下拉刷新位置';
+        if (e.cancelable) e.preventDefault();
+    };
+    const onUp = () => {
+        if (!dragging) return;
+        const wasLocked = locked;
+        dragging = false; locked = false;
+        if (!wasLocked) return;
+        swallowUntil = Date.now() + 500;
+        indicator.classList.remove('is-pulling');
+        if (dy >= THRESHOLD) {
+            refreshing = true;
+            indicator.classList.add('is-refreshing');
+            indicator.style.height = '';
+            textEl.innerText = '正在刷新...';
+            const startedAt = Date.now();
+            const done = () => {
+                const elapsed = Date.now() - startedAt;
+                const holdMs = Math.max(0, 700 - elapsed);
+                setTimeout(() => {
+                    refreshing = false;
+                    indicator.classList.remove('is-refreshing');
+                    indicator.style.height = '';
+                    textEl.innerText = '下拉刷新位置';
+                }, holdMs);
+            };
+            const tasks = [];
+            try {
+                if (typeof window.startFetchLocation === 'function') {
+                    window.startFetchLocation({ showConfirm: false, silentError: true, showLoading: false, force: true });
+                }
+                if (typeof window.refreshStoresFromFirestore === 'function') {
+                    const r2 = window.refreshStoresFromFirestore();
+                    if (r2 && typeof r2.then === 'function') tasks.push(r2.catch(() => {}));
+                }
+                const timeout = new Promise((resolve) => setTimeout(resolve, 5000));
+                if (tasks.length) Promise.race([Promise.all(tasks), timeout]).finally(done);
+                else done();
+            } catch (_) { done(); }
+        } else {
+            indicator.style.height = '';
+        }
+        dy = 0;
+    };
+    list.addEventListener('dragstart', (e) => e.preventDefault());
+    list.addEventListener('touchstart', onDown, { passive: true });
+    list.addEventListener('touchmove', onMove, { passive: false });
+    list.addEventListener('touchend', onUp);
+    list.addEventListener('touchcancel', onUp);
+    list.addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') onDown(e); });
+    list.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && dragging) onMove(e); });
+    list.addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse') onUp(e); });
+    list.addEventListener('pointercancel', (e) => { if (e.pointerType === 'mouse') onUp(e); });
+}
 
 function bindMapSheetOutsideClick() {
     if (document.body.dataset.mapSheetOutsideBound === '1') return;
@@ -2180,6 +2397,8 @@ function bindMapSheetOutsideClick() {
         if (e.target.closest('#map-sheet-backdrop')) return;
         if (e.target.closest('.map-pin')) return;
         if (e.target.closest('#map-review-overlay')) return;
+        if (e.target.closest('#view-profile.friend-profile-overlay')) return;
+        if (document.getElementById('view-profile')?.classList.contains('friend-profile-overlay')) return;
         const mapViewVisible = !document.getElementById('view-map')?.classList.contains('hidden');
         if (mapViewVisible) {
             // 地图页：只有 full 占比缩回 half，half/peek 不变

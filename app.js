@@ -17,7 +17,7 @@
 // ==========================================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithRedirect, updateProfile } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, query, orderBy, setDoc, where, deleteDoc, getDoc, increment } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, query, orderBy, setDoc, where, deleteDoc, getDoc, getDocs, increment } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 
 /* =========================================
@@ -33,7 +33,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v27";
+const APP_BUILD_VERSION = "v28";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 const LOCATION_CACHE_STORAGE_KEY = "mogumode:last-origin-v2";
 
@@ -75,6 +75,7 @@ let viewingFriendUid = "";
 let friendProfileFavTab = 'want';
 let viewingFriendData = null;
 let friendProfileReturnToFriends = false;
+let friendProfileLoadToken = 0;
 let pendingDeleteFriendUid = "";
 let pendingDeleteReviewAction = null;
 let postSuccessState = null;
@@ -556,8 +557,7 @@ function updateUIForAuth(user) {
         setProfileIdentity(username, user.photoURL || '');
         els.headerAvatar.innerText = user.email[0].toUpperCase();
         els.headerAvatar.style.background = "#2d3436";
-        viewingFriendUid = "";
-        viewingFriendData = null;
+        resetViewingFriendProfileState();
         updateProfileHeaderMode();
         // 允许添加店铺
         els.addMask.classList.add('hidden');
@@ -591,8 +591,7 @@ function updateUIForAuth(user) {
         window.allUsersCache = allUsersCache;
         stopPublicUsersListener();
         stopFriendRequestListeners();
-        viewingFriendUid = "";
-        viewingFriendData = null;
+        resetViewingFriendProfileState();
         updateProfileHeaderMode();
         const friendsPage = document.getElementById('friends-page');
         if (friendsPage) friendsPage.classList.add('hidden');
@@ -2076,74 +2075,110 @@ function refreshVisibleStoreCardPreferenceVisuals() {
  * 渲染店铺列表
  * @param {Array} list - 要渲染的店铺数组
  */
-window.renderStores = (list) => {
-    const el = document.getElementById('store-list');
-
-    // 如果没有店铺，显示空状态
-    if (!list.length) {
-        return el.innerHTML = "<div style='text-align:center;margin-top:40px;color:#ccc'>No spots found</div>";
+window.refreshStoresFromFirestore = async () => {
+    try {
+        const snap = await getDocs(query(collection(db, "stores"), orderBy("createdAt", "desc")));
+        localStores = [];
+        snap.forEach(d => localStores.push({ id: d.id, ...d.data() }));
+        window.localStores = localStores;
+        if (typeof applyFilters === 'function') applyFilters();
+        if (window.renderMarkers) window.renderMarkers();
+    } catch (err) {
+        console.warn("刷新店铺数据失败:", err);
     }
+};
 
-    // 遍历店铺数组，生成HTML
-    el.innerHTML = list.map((s, idx) => {
-        // 检查当前店铺的收藏状态
-        const isFav = myFavIds.includes(s.id);        // 是否在"想吃"列表
-        const isLiked = localLikes.has(s.id);         // 是否标记为"好吃"
-        const isDisliked = localDislikes.has(s.id);   // 是否标记为"难吃"
+const STORE_PAGE_SIZE = 20;
+let storeListPagination = { list: [], rendered: 0 };
 
-        // 根据状态决定卡片边框颜色
-        // 优先级：难吃(蓝) > 好吃(红) > 想吃(黄) > 默认
-        let statusClass = "";
-        if (isDisliked) statusClass = "status-disliked";
-        else if (isLiked) statusClass = "status-liked";
-        else if (isFav) statusClass = "status-fav";
-
-        const avgRating = getStoreAverageRating(s);
-        const reviewCount = getStoreReviewCount(s);
-        const budgetMeta = renderStoreBudgetMeta(s);
-        const rawImgs = getStorePreviewImageEntries(s);
-        const displayImgs = rawImgs.length ? rawImgs : ["https://placehold.co/200?text=No+Image"];
-        const imagesHtml = displayImgs.map(src =>
-            `<img src="${getImageAssetThumbUrl(src)}" class="store-img-item" loading="lazy" decoding="async">`
-        ).join('');
-
-        // 返回店铺卡片的HTML
-        return `
-        <div class="store-card ${statusClass}" id="card-${s.id}" data-store-id="${s.id}" onclick="openDetail('${s.id}')">
-            <!-- 卡片头部：店名、收藏按钮、评分、步行时间 -->
-            <div class="card-header-row">
-                <div class="info-col">
-                    <!-- 店名和收藏按钮 -->
-                    <div class="store-name-row">
-                        <h3 class="store-name">${renderStoreNameWithStatus(s)}</h3>
-                        <div onclick="toggleFav('${s.id}'); event.stopPropagation();">
-                            <img src="${isFav ? 'images/bookmark-f.svg' : 'images/bookmark.svg'}"
-                                 class="bookmark-icon-btn"
-                                 alt="want">
-                        </div>
-                    </div>
-                    <!-- 评分和步行时间 -->
-                    <div class="store-meta">
-                         ${avgRating.toFixed(1)} <span class="rating-star" style="display:inline-flex;align-items:center;"><img src="images/pingfen.svg" style="width:12px;"></span>
-                         <span>(${reviewCount})</span>
-                         <span style="margin:0 4px">•</span> 
-                        <img src="images/walk.svg" style="width:10px; margin-right:3px;">
-                         ${formatStoreDistanceText(s)}
-                         ${budgetMeta ? `<span style="margin:0 4px">•</span>${budgetMeta}` : ''}
+function renderSingleStoreCardHtml(s, idx) {
+    const isFav = myFavIds.includes(s.id);
+    const isLiked = localLikes.has(s.id);
+    const isDisliked = localDislikes.has(s.id);
+    let statusClass = "";
+    if (isDisliked) statusClass = "status-disliked";
+    else if (isLiked) statusClass = "status-liked";
+    else if (isFav) statusClass = "status-fav";
+    const avgRating = getStoreAverageRating(s);
+    const reviewCount = getStoreReviewCount(s);
+    const budgetMeta = renderStoreBudgetMeta(s);
+    const rawImgs = getStorePreviewImageEntries(s);
+    const displayImgs = rawImgs.length ? rawImgs : ["https://placehold.co/200?text=No+Image"];
+    const imagesHtml = displayImgs.map(src =>
+        `<img src="${getImageAssetThumbUrl(src)}" class="store-img-item" loading="lazy" decoding="async">`
+    ).join('');
+    return `
+    <div class="store-card ${statusClass}" id="card-${s.id}" data-store-id="${s.id}" onclick="openDetail('${s.id}')">
+        <div class="card-header-row">
+            <div class="info-col">
+                <div class="store-name-row">
+                    <h3 class="store-name">${renderStoreNameWithStatus(s)}</h3>
+                    <div onclick="toggleFav('${s.id}'); event.stopPropagation();">
+                        <img src="${isFav ? 'images/bookmark-f.svg' : 'images/bookmark.svg'}"
+                             class="bookmark-icon-btn"
+                             alt="want">
                     </div>
                 </div>
-                
-                ${renderStoreActionGroup(s.id, isLiked, isDisliked, idx)}
+                <div class="store-meta">
+                     ${avgRating.toFixed(1)} <span class="rating-star" style="display:inline-flex;align-items:center;"><img src="images/pingfen.svg" style="width:12px;"></span>
+                     <span>(${reviewCount})</span>
+                     <span style="margin:0 4px">•</span>
+                    <img src="images/walk.svg" style="width:10px; margin-right:3px;">
+                     ${formatStoreDistanceText(s)}
+                     ${budgetMeta ? `<span style="margin:0 4px">•</span>${budgetMeta}` : ''}
+                </div>
             </div>
-            <!-- 店铺图片横向滚动区域 -->
-            <div class="store-img-scroll">${imagesHtml}</div>
-            ${renderStoreActivityMeta(s)}
-        </div>`;
-    }).join('') + `
-        <div class="store-list-endcap" aria-hidden="true">已经到底了</div>
-    `;
+            ${renderStoreActionGroup(s.id, isLiked, isDisliked, idx)}
+        </div>
+        <div class="store-img-scroll">${imagesHtml}</div>
+        ${renderStoreActivityMeta(s)}
+    </div>`;
+}
 
-    // 重新初始化 Lucide 图标
+function appendNextStorePage() {
+    const el = document.getElementById('store-list');
+    if (!el) return;
+    const { list, rendered } = storeListPagination;
+    if (rendered >= list.length) return;
+    const end = Math.min(list.length, rendered + STORE_PAGE_SIZE);
+    const html = list.slice(rendered, end).map((s, i) => renderSingleStoreCardHtml(s, rendered + i)).join('');
+    const endcap = el.querySelector('.store-list-endcap');
+    if (endcap) endcap.insertAdjacentHTML('beforebegin', html);
+    else el.insertAdjacentHTML('beforeend', html);
+    storeListPagination.rendered = end;
+    if (end >= list.length) {
+        const cap = el.querySelector('.store-list-endcap');
+        if (cap) cap.textContent = '已经到底了';
+    }
+    if (window.lucide?.createIcons) lucide.createIcons();
+}
+
+function bindStoreListInfiniteScroll() {
+    const el = document.getElementById('store-list');
+    if (!el || el.dataset.infiniteBound === '1') return;
+    el.dataset.infiniteBound = '1';
+    el.addEventListener('scroll', () => {
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 120) {
+            appendNextStorePage();
+        }
+    });
+}
+
+window.renderStores = (list) => {
+    const el = document.getElementById('store-list');
+    if (!el) return;
+    if (!list.length) {
+        storeListPagination = { list: [], rendered: 0 };
+        el.innerHTML = "<div style='text-align:center;margin-top:40px;color:#ccc'>No spots found</div>";
+        return;
+    }
+    storeListPagination = { list, rendered: 0 };
+    const initialCount = Math.min(STORE_PAGE_SIZE, list.length);
+    const initialHtml = list.slice(0, initialCount).map((s, i) => renderSingleStoreCardHtml(s, i)).join('');
+    const capText = initialCount >= list.length ? '已经到底了' : '下拉加载更多';
+    el.innerHTML = initialHtml + `<div class="store-list-endcap" aria-hidden="true">${capText}</div>`;
+    storeListPagination.rendered = initialCount;
+    bindStoreListInfiniteScroll();
     lucide.createIcons();
 };
 
@@ -5841,22 +5876,22 @@ async function getGeolocationPermissionState() {
 
 function toggleLocationLoadingModal(visible) {
     const modal = document.getElementById('loc-loading-modal');
-    const fabBtn = document.querySelector('.fab-dice-btn');
+    const fabBtns = document.querySelectorAll('.home-fab-btn, .fab-dice-btn');
     if (!modal) return;
     modal.style.display = visible ? 'flex' : 'none';
-    if (fabBtn) {
-        fabBtn.classList.toggle('loc-modal-hidden', visible || document.getElementById('loc-confirm-modal')?.style.display === 'flex');
-    }
+    fabBtns.forEach((btn) => {
+        btn.classList.toggle('loc-modal-hidden', visible || document.getElementById('loc-confirm-modal')?.style.display === 'flex');
+    });
 }
 
 function toggleLocationConfirmModal(visible) {
     const modal = document.getElementById('loc-confirm-modal');
-    const fabBtn = document.querySelector('.fab-dice-btn');
+    const fabBtns = document.querySelectorAll('.home-fab-btn, .fab-dice-btn');
     if (!modal) return;
     modal.style.display = visible ? 'flex' : 'none';
-    if (fabBtn) {
-        fabBtn.classList.toggle('loc-modal-hidden', visible || document.getElementById('loc-loading-modal')?.style.display === 'flex');
-    }
+    fabBtns.forEach((btn) => {
+        btn.classList.toggle('loc-modal-hidden', visible || document.getElementById('loc-loading-modal')?.style.display === 'flex');
+    });
 }
 
 /**
@@ -6073,6 +6108,26 @@ function resetFriendProfileOverlayState() {
     }
 }
 
+function invalidateFriendProfileLoad() {
+    friendProfileLoadToken += 1;
+}
+
+function resetViewingFriendProfileState() {
+    invalidateFriendProfileLoad();
+    viewingFriendUid = "";
+    viewingFriendData = null;
+    friendProfileFavTab = 'want';
+}
+
+function restoreOwnProfileIdentity() {
+    if (!currentUser) return;
+    setProfileIdentity(
+        currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : '用户'),
+        currentUser.photoURL || ''
+    );
+    loadUserAvatar(currentUser.uid);
+}
+
 function closeFriendProfileOverlay() {
     const profileView = document.getElementById('view-profile');
     if (!profileView) return;
@@ -6083,9 +6138,7 @@ function closeFriendProfileOverlay() {
         profileView.classList.add('hidden');
         profileView.classList.remove('friend-profile-overlay');
         friendProfileOverlayHideTimer = null;
-        viewingFriendUid = "";
-        viewingFriendData = null;
-        friendProfileFavTab = 'want';
+        resetViewingFriendProfileState();
     }, 280);
 }
 
@@ -6193,6 +6246,12 @@ function scrollActiveViewToTop() {
     scrollTarget.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+window.scrollHomeToTop = () => {
+    const homeView = document.getElementById('view-home');
+    if (!homeView || homeView.classList.contains('hidden')) return;
+    scrollActiveViewToTop();
+};
+
 function shouldIgnoreTopTap(target) {
     return !!target.closest(
         'button, a, input, textarea, select, label, summary, [role="button"], [contenteditable="true"], .user-circle, .location-capsule, .profile-menu-popover'
@@ -6281,19 +6340,14 @@ window.switchView = (v) => {
         const guestInfo = document.getElementById('guest-info');
         const profileView = document.getElementById('view-profile');
         if (friendsPage) resetFriendsPageState();
-        viewingFriendUid = "";
-        viewingFriendData = null;
+        resetViewingFriendProfileState();
         if (currentUser) {
             if (profileView) profileView.classList.remove('profile-guest-mode');
             if (userInfo) userInfo.classList.remove('hidden');
             if (guestInfo) guestInfo.classList.add('hidden');
             if (userInfo) userInfo.style.display = '';
             if (guestInfo) guestInfo.style.display = 'none';
-            setProfileIdentity(
-                currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : '用户'),
-                currentUser.photoURL || ''
-            );
-            loadUserAvatar(currentUser.uid);
+            restoreOwnProfileIdentity();
         } else {
             if (profileView) profileView.classList.add('profile-guest-mode');
             if (userInfo) userInfo.classList.add('hidden');
@@ -6486,7 +6540,12 @@ window.openRandomModal = () => {
 
 window.closeRandomPanel = () => {
     const layer = document.getElementById('layer-random');
-    if (layer) layer.classList.remove('open');
+    if (!layer || !layer.classList.contains('open')) return;
+    layer.classList.add('closing');
+    setTimeout(() => {
+        layer.classList.remove('open');
+        layer.classList.remove('closing');
+    }, 220);
 };
 
 window.doRandomPick = async () => {
@@ -6530,7 +6589,7 @@ window.doRandomPick = async () => {
             document.getElementById('random-state-empty').style.display = 'none';
             document.getElementById('random-result-wrap').style.display = 'block';
             document.getElementById('random-title').innerText = "今天吃这个";
-            btn.innerHTML = `🎲<span>再次随机</span>`;
+            btn.innerHTML = `🎲<span>随机抽选</span>`;
         }
     }, 80);
 };
@@ -6631,6 +6690,11 @@ let currentProfileFavTab = 'want';
 
 function isViewingFriendProfile() {
     return !!(viewingFriendUid && viewingFriendUid !== (currentUser && currentUser.uid));
+}
+
+function isViewingStrangerProfile() {
+    if (!isViewingFriendProfile()) return false;
+    return !(Array.isArray(myFriends) && myFriends.includes(viewingFriendUid));
 }
 
 function updateProfileHeaderMode() {
@@ -6756,11 +6820,32 @@ window.switchProfileTab = (tab) => {
     updateProfileHeaderMode();
     if (isViewingFriendProfile()) updateFriendActionButton();
 
-    // 更新标签样式
+    const tabsWrap = document.querySelector('.profile-tabs');
+    const stranger = isViewingStrangerProfile();
+    if (tabsWrap) tabsWrap.classList.toggle('hidden', stranger);
+
+    const activityEl = document.getElementById('profile-content-activity');
+    const favoritesEl = document.getElementById('profile-content-favorites');
+    let activityListEl = document.getElementById('profile-activity-list');
+    if (activityEl && !activityListEl) {
+        activityEl.innerHTML = `<div id="profile-activity-list" class="profile-activity-list"></div>`;
+        activityListEl = document.getElementById('profile-activity-list');
+    }
+
+    if (stranger) {
+        if (favoritesEl) favoritesEl.style.display = 'none';
+        if (activityEl) {
+            activityEl.style.display = 'block';
+        }
+        if (activityListEl) {
+            activityListEl.innerHTML = `<div class="profile-stranger-gate">添加好友即可查看该用户动态</div>`;
+        }
+        return;
+    }
+
     document.getElementById('profile-tab-activity').classList.toggle('active', tab === 'activity');
     document.getElementById('profile-tab-favorites').classList.toggle('active', tab === 'favorites');
 
-    // 移动指示器
     const indicator = document.getElementById('profile-tab-indicator');
     if (tab === 'favorites') {
         indicator.style.transform = 'translateX(100%)';
@@ -6768,11 +6853,9 @@ window.switchProfileTab = (tab) => {
         indicator.style.transform = 'translateX(0)';
     }
 
-    // 切换内容
-    document.getElementById('profile-content-activity').style.display = tab === 'activity' ? 'block' : 'none';
-    document.getElementById('profile-content-favorites').style.display = tab === 'favorites' ? 'flex' : 'none';
+    if (activityEl) activityEl.style.display = tab === 'activity' ? 'block' : 'none';
+    if (favoritesEl) favoritesEl.style.display = tab === 'favorites' ? 'flex' : 'none';
 
-    // 渲染对应内容
     if (tab === 'activity') {
         renderProfileActivity();
     } else {
@@ -6784,7 +6867,13 @@ window.switchProfileTab = (tab) => {
  * 渲染个人页动态列表
  */
 function renderProfileActivity() {
-    const container = document.getElementById('profile-activity-list');
+    let container = document.getElementById('profile-activity-list');
+    if (!container) {
+        const activityEl = document.getElementById('profile-content-activity');
+        if (!activityEl) return;
+        activityEl.innerHTML = `<div id="profile-activity-list" class="profile-activity-list"></div>`;
+        container = document.getElementById('profile-activity-list');
+    }
     if (!container) return;
     if (!currentUser) {
         container.innerHTML = `<div style="text-align:center; padding:40px; color:#ccc;">请先登录</div>`;
@@ -7391,6 +7480,29 @@ window.openRecordDayView = (dayKey) => {
         if (favView) favView.classList.add('record-day-active');
         view.classList.add('is-open');
     });
+    if (typeof window.bindSwipeBackToClose === 'function') {
+        const recordPage = favView?.querySelector('.record-page');
+        window.bindSwipeBackToClose(view, {
+            isOpen: () => view.classList.contains('is-open'),
+            onClose: () => window.closeRecordDayView(),
+            onDrag: (dx, w) => {
+                if (!recordPage) return;
+                recordPage.style.transition = 'none';
+                const offset = -100 + (dx / w) * 100;
+                recordPage.style.transform = `translateX(${offset}%)`;
+            },
+            onSettleClose: () => {
+                if (!recordPage) return;
+                recordPage.style.transition = 'transform 0.26s ease';
+                recordPage.style.transform = 'translateX(0)';
+            },
+            onReset: () => {
+                if (!recordPage) return;
+                recordPage.style.transition = '';
+                recordPage.style.transform = '';
+            }
+        });
+    }
 };
 
 window.closeRecordDayView = () => {
@@ -7942,12 +8054,22 @@ window.openFriendsPage = async () => {
 /**
  * 关闭好友列表页面，返回我的主页
  */
-window.closeFriendsPage = () => {
+window.closeFriendsPage = (opts = {}) => {
+    const { restoreOwnProfile = true } = opts || {};
     const friendsPage = document.getElementById('friends-page');
     const profileView = document.getElementById('view-profile');
     if (!friendsPage) return;
     friendsPage.classList.remove('is-open');
     if (profileView) profileView.classList.remove('friends-page-active');
+    if (restoreOwnProfile) {
+        friendProfileReturnToFriends = false;
+    }
+    if (restoreOwnProfile && currentUser) {
+        resetViewingFriendProfileState();
+        restoreOwnProfileIdentity();
+        updateProfileHeaderMode();
+        switchProfileTab('activity');
+    }
     if (friendsPageHideTimer) clearTimeout(friendsPageHideTimer);
     friendsPageHideTimer = setTimeout(() => {
         friendsPage.classList.add('hidden');
@@ -8233,6 +8355,7 @@ window.doFriendSearch = (opts = {}) => {
         const emailFull = String(u.email || '').trim().toLowerCase();
         if (uid && currentUid && uid === currentUid) return false;
         if (emailFull && currentEmail && emailFull === currentEmail) return false;
+        if (Array.isArray(myFriends) && myFriends.includes(u.id)) return false;
         const name = getFriendSearchName(u).toLowerCase();
         const emailLocal = getFriendSearchEmailLocal(u);
         return name.includes(keyword) || emailLocal.includes(keyword);
@@ -8264,26 +8387,22 @@ window.doFriendSearch = (opts = {}) => {
     results.innerHTML = renderList.map(u => {
         const name = getFriendSearchName(u) || '好友';
         const avatar = u.avatarUrl || DEFAULT_AVATAR_URL;
-        const isFriend = Array.isArray(myFriends) && myFriends.includes(u.id);
         const isPending = Array.isArray(mySentFriendRequests) && mySentFriendRequests.includes(u.id);
-        const friendTagHtml = isFriend ? `<span class="friend-tag friend-tag-friend">好友</span>` : ``;
         let actionHtml = '';
-        if (isFriend) {
-            actionHtml = `<button class="friend-btn primary" onclick="openFriendProfile('${u.id}')">查看主页</button>`;
-        } else if (isPending) {
+        if (isPending) {
             actionHtml = `<button class="friend-btn secondary disabled" disabled>已发送好友申请</button>`;
         } else {
             actionHtml = `<button class="friend-btn primary approve" onclick="addFriend('${u.id}')">发送好友申请</button>`;
         }
         return `
         <div class="friend-search-item">
-            <div class="friend-search-main">
+            <div class="friend-search-main" onclick="openFriendProfile('${u.id}')" style="cursor:pointer;">
                 <img src="${avatar}" alt="${name}" class="friend-avatar">
                 <div class="friend-info">
-                    <div class="friend-name">${name}${friendTagHtml}</div>
+                    <div class="friend-name">${name}</div>
                 </div>
             </div>
-            <div class="friend-actions">
+            <div class="friend-actions" onclick="event.stopPropagation();">
                 ${actionHtml}
             </div>
         </div>`;
@@ -8374,6 +8493,7 @@ window.confirmDeleteFriend = async () => {
 window.openFriendProfile = async (uid, opts = {}) => {
     if (!currentUser || !uid || uid === currentUser.uid) return;
     const overlay = !!opts?.overlay;
+    const loadToken = ++friendProfileLoadToken;
     friendProfileReturnToFriends = !overlay && !!(document.getElementById('friends-page') && !document.getElementById('friends-page').classList.contains('hidden'));
     closeFriendSearch();
     try {
@@ -8397,6 +8517,7 @@ window.openFriendProfile = async (uid, opts = {}) => {
                 dislikes: sanitized.dislikes
             };
         }
+        if (loadToken !== friendProfileLoadToken) return;
         viewingFriendUid = uid;
         viewingFriendData = target;
         friendProfileFavTab = 'want';
@@ -8429,7 +8550,7 @@ window.openFriendProfile = async (uid, opts = {}) => {
         updateProfileHeaderMode();
         updateFriendActionButton();
         switchProfileTab('activity');
-        if (!overlay) closeFriendsPage();
+        if (!overlay) closeFriendsPage({ restoreOwnProfile: false });
     } catch (err) {
         console.error("加载好友信息失败:", err);
         alert("加载好友信息失败: " + err.message);
@@ -8446,14 +8567,8 @@ window.backFromFriendProfile = () => {
         closeFriendProfileOverlay();
         return;
     }
-    viewingFriendUid = "";
-    viewingFriendData = null;
-    friendProfileFavTab = 'want';
-    setProfileIdentity(
-        currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : '用户'),
-        currentUser.photoURL || ''
-    );
-    loadUserAvatar(currentUser.uid);
+    resetViewingFriendProfileState();
+    restoreOwnProfileIdentity();
     updateProfileHeaderMode();
     switchProfileTab('activity');
     if (friendProfileReturnToFriends) {

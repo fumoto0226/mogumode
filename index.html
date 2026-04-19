@@ -212,9 +212,17 @@
                 </div>
             </header>
 
+            <div id="home-pull-indicator" class="home-pull-indicator">
+                <span class="home-pull-text">下拉刷新位置</span>
+            </div>
             <div id="store-list" class="store-list">
                 <p style="text-align:center; color:#ccc; margin-top:40px;">Loading...</p>
             </div>
+
+            <button class="home-fab-btn fab-top-btn" onclick="scrollHomeToTop()" aria-label="返回顶部">
+                <img src="images/jiantou.svg" class="home-fab-icon" alt="">
+                <span class="home-fab-text">返回顶部</span>
+            </button>
 
             <button class="fab-dice-btn" onclick="openRandomModal()">
                 <span class="fab-dice-icon">🎲</span>
@@ -572,6 +580,7 @@
                             <button id="profile-edit-name-btn" class="profile-edit-name-btn"
                                 onclick="editUsername()">修改</button>
                         </div>
+                        <button id="profile-friend-action-btn" class="profile-friend-action-btn hidden"></button>
                     </div>
                 </div>
 
@@ -793,7 +802,7 @@
         <!-- =========================================
              RANDOM PICK PANEL
              ========================================= -->
-        <div id="layer-random" class="random-panel-layer">
+        <div id="layer-random" class="random-panel-layer" onclick="if(event.target===this) closeRandomPanel()">
             <div class="random-card-body">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                     <h2 id="random-title" style="margin:0; font-size:20px;">今天吃什么？</h2>
@@ -1079,8 +1088,8 @@
     <!-- =========================================
          JAVASCRIPT FILES
          ========================================= -->
-    <script type="module" src="app.js?v=23-location5"></script>
-    <script src="map.js?v=23-location5"></script>
+    <script type="module" src="app.js?v=32-friend-btn1"></script>
+    <script src="map.js?v=32-friend-btn1"></script>
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvqupW6XZ7A61lutSD8_GlV31Xdc5ZTLw&callback=initGoogleMap&libraries=geometry">
         </script>

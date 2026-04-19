@@ -719,6 +719,43 @@ header {
     padding-bottom: 20px;
 }
 
+.store-list img {
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+
+.store-list {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.home-pull-indicator {
+    position: relative;
+    height: 0;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: #8e8e93;
+    pointer-events: none;
+    transition: height 0.22s ease;
+    flex-shrink: 0;
+}
+
+.home-pull-indicator.is-pulling {
+    transition: none;
+}
+
+.home-pull-indicator.is-refreshing {
+    height: 40px;
+}
+
+.home-pull-text {
+    padding: 8px 0;
+}
+
 .store-list-endcap {
     min-height: calc(var(--bottom-nav-total) + 1px);
     padding: 14px 0 calc(var(--safe-bottom) + 1px);
@@ -1007,8 +1044,8 @@ header {
     bottom: 0;
     left: 0;
     right: 0;
-    height: var(--bottom-nav-total);
-    padding-bottom: calc(var(--safe-bottom) + var(--nav-bottom-extra));
+    height: calc(var(--bottom-nav-total) + 8px);
+    padding-bottom: calc(var(--safe-bottom) + var(--nav-bottom-extra) + 8px);
     max-width: 448px;
     margin: 0 auto;
     background: white;
@@ -1043,8 +1080,8 @@ header {
 }
 
 .add-btn-circle {
-    width: 56px;
-    height: 56px;
+    width: 59px;
+    height: 59px;
     background: #1a1a1a;
     border-radius: 50%;
     display: flex;
@@ -1052,7 +1089,7 @@ header {
     justify-content: center;
     color: #ffffff;
     border: 4px solid white;
-    transform: translateY(-2px);
+    transform: translateY(-4px);
 }
 
 /* =========================================
@@ -1096,6 +1133,13 @@ header {
 
 #view-fav {
     overflow: hidden;
+}
+
+.profile-stranger-gate {
+    padding: 60px 24px;
+    text-align: center;
+    color: #8e8e93;
+    font-size: 14px;
 }
 
 #view-profile.friend-profile-overlay {
@@ -2136,7 +2180,7 @@ header {
 }
 
 .map-sheet.full {
-    height: calc(100vh - 60px);
+    height: calc(100vh - 52px);
     overflow-y: auto;
 }
 
@@ -2769,6 +2813,20 @@ header {
 .visit-rank-count {
     color: #999;
     font-size: 11px;
+}
+
+.visit-rank-avg {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 12px;
+    color: #2d3436;
+    margin-left: 2px;
+}
+
+.visit-rank-avg-icon {
+    width: 13px;
+    height: 13px;
 }
 
 .review-avg {
@@ -3412,10 +3470,9 @@ header {
 /* =========================================
    11. FAB Dice Button & Random Panel
    ========================================= */
+.home-fab-btn,
 .fab-dice-btn {
     position: fixed;
-    bottom: 90px;
-    /* Position relative to centered 448px container */
     right: calc(50% - 224px + 20px);
     width: 60px;
     height: 60px;
@@ -3433,9 +3490,25 @@ header {
     transition: transform 0.2s;
 }
 
+.fab-top-btn {
+    bottom: 90px;
+}
+
+.fab-dice-btn {
+    bottom: 160px;
+}
+
+.home-fab-btn.loc-modal-hidden,
 .fab-dice-btn.loc-modal-hidden {
     opacity: 0;
     pointer-events: none;
+}
+
+.home-fab-icon {
+    width: 20px;
+    height: 20px;
+    object-fit: contain;
+    display: block;
 }
 
 .fab-dice-icon {
@@ -3446,15 +3519,18 @@ header {
 
 /* For mobile screens smaller than 448px */
 @media (max-width: 448px) {
+    .home-fab-btn,
     .fab-dice-btn {
         right: 20px;
     }
 }
 
+.home-fab-btn:active,
 .fab-dice-btn:active {
     transform: scale(0.9);
 }
 
+.home-fab-text,
 .fab-dice-text {
     font-size: 10px;
     color: #2d3436;
@@ -3820,7 +3896,7 @@ header {
     right: 0;
     max-height: 78vh;
     border-radius: 24px 24px 0 0;
-    padding: 20px;
+    padding: 20px 20px 40px;
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2);
     animation: slideUpSheet 0.3s ease-out;
     overflow-y: auto;
@@ -3834,6 +3910,29 @@ header {
     to {
         transform: translateY(0);
     }
+}
+
+@keyframes slideDownSheet {
+    from {
+        transform: translateY(0);
+    }
+
+    to {
+        transform: translateY(100%);
+    }
+}
+
+.random-panel-layer {
+    transition: background 0.22s ease, backdrop-filter 0.22s ease;
+}
+
+.random-panel-layer.closing {
+    background: rgba(0, 0, 0, 0);
+    backdrop-filter: blur(0);
+}
+
+.random-panel-layer.closing .random-card-body {
+    animation: slideDownSheet 0.22s ease-in forwards;
 }
 
 /* Random Question Box */
@@ -4930,7 +5029,6 @@ header {
     background: #f4f4f4;
     display: flex;
     flex-direction: column;
-    padding-bottom: 70px;
     z-index: 20;
     transform: translateX(-100%);
     transition: transform 0.26s ease;
