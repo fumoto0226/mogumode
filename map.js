@@ -263,8 +263,11 @@ function renderCurrentOriginMarker() {
     if (currentOriginMarker) currentOriginMarker.setMap(null);
 
     const { origin, type } = getCurrentOriginState();
-    const iconUrl = type === 'gps' ? 'images/weizhih.svg' : 'images/weizhilan.svg';
-    const iconSize = new google.maps.Size(30, 30);
+    const isGpsOrigin = type === 'gps';
+    const iconUrl = isGpsOrigin ? 'images/current-location-google-pin.svg' : 'images/weizhilan.svg';
+    const iconSize = isGpsOrigin
+        ? new google.maps.Size(29, 38)
+        : new google.maps.Size(30, 30);
 
     currentOriginMarker = new google.maps.Marker({
         map,
@@ -275,7 +278,10 @@ function renderCurrentOriginMarker() {
         draggable: false,
         icon: {
             url: iconUrl,
-            scaledSize: iconSize
+            scaledSize: iconSize,
+            anchor: isGpsOrigin
+                ? new google.maps.Point(Math.round(iconSize.width / 2), iconSize.height)
+                : new google.maps.Point(Math.round(iconSize.width / 2), Math.round(iconSize.height / 2))
         }
     });
 }
@@ -543,6 +549,20 @@ function refreshMapFriendSection(store) {
                 track.style.transform = `translateY(-${currentIndex * 34}px)`;
             }, 2600);
         }
+    }
+}
+
+function refreshMapReviewSectionCounts(store) {
+    const myReviewCountEl = document.getElementById('mp-my-review-count');
+    const friendReviewCountEl = document.getElementById('mp-friend-review-count');
+    const myCount = buildMapReviewItems(store, 'mine').length;
+    const friendCount = buildMapReviewItems(store, 'friends').length;
+
+    if (myReviewCountEl) {
+        myReviewCountEl.innerText = myCount > 0 ? `(${myCount})` : '';
+    }
+    if (friendReviewCountEl) {
+        friendReviewCountEl.innerText = friendCount > 0 ? `(${friendCount})` : '';
     }
 }
 
@@ -1556,12 +1576,14 @@ window.renderMapCardFromDB = (store, opts = {}) => {
 
     mapCardState.friendSocial = computeMapFriendSocial(store.id || "");
     refreshMapSocialButtonsUI();
+    refreshMapReviewSectionCounts(store);
     refreshMapFriendSection(store);
     if (!Array.isArray(window.allUsersCache) || !window.allUsersCache.length) {
         if (typeof window.ensureAllUsersLoaded === 'function') {
             window.ensureAllUsersLoaded().then(() => {
                 mapCardState.friendSocial = computeMapFriendSocial(store.id || "");
                 refreshMapSocialButtonsUI();
+                refreshMapReviewSectionCounts(store);
                 refreshMapFriendSection(store);
             }).catch(() => { });
         }

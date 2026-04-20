@@ -87,7 +87,8 @@
                 <!-- Search Bar -->
                 <div class="search-container">
                     <input type="text" class="search-bar" id="home-search" placeholder="输入店名或料理种类">
-                    <button type="button" class="search-clear-btn hidden" id="home-search-clear" aria-label="清空搜索"></button>
+                    <button type="button" class="search-clear-btn hidden" id="home-search-clear"
+                        aria-label="清空搜索"></button>
                     <i data-lucide="search" width="20" class="search-icon"></i>
                 </div>
 
@@ -99,19 +100,22 @@
 
                     <div class="sort-btn-container">
                         <button class="sort-btn" id="sort-toggle-btn" onclick="toggleSortMenu()">
-                            <i data-lucide="align-left" width="14"></i>
+                            <i id="sort-btn-icon" data-lucide="align-left" width="14"></i>
                             <span id="sort-btn-text">最新发布</span>
                             <i data-lucide="chevron-down" width="12" color="#b2bec3"></i>
                         </button>
 
                         <div class="sort-menu" id="sort-menu">
-                            <div class="sort-menu-item active" data-sort-key="default" onclick="selectSortOption('最新', 'default')">
+                            <div class="sort-menu-item active" data-sort-key="default"
+                                onclick="selectSortOption('最新', 'default')">
                                 <i data-lucide="align-left" width="16"></i> 最新
                             </div>
-                            <div class="sort-menu-item" data-sort-key="rating" onclick="selectSortOption('评价', 'rating')">
+                            <div class="sort-menu-item" data-sort-key="rating"
+                                onclick="selectSortOption('评价', 'rating')">
                                 <i data-lucide="heart" width="16"></i> 评价
                             </div>
-                            <div class="sort-menu-item" data-sort-key="distance" onclick="selectSortOption('距离', 'distance')">
+                            <div class="sort-menu-item" data-sort-key="distance"
+                                onclick="selectSortOption('距离', 'distance')">
                                 <i data-lucide="footprints" width="16"></i> 距离
                             </div>
                             <div class="sort-menu-item" data-sort-key="price" onclick="selectSortOption('价格', 'price')">
@@ -291,8 +295,9 @@
                     <!-- 我的评价 -->
                     <div class="sheet-section">
                         <div class="sheet-section-header">
-                            <button type="button" class="sheet-section-link" onclick="openMapReviewSubpage('mine')">我的评价
-                                &gt;</button>
+                            <button type="button" class="sheet-section-link"
+                                onclick="openMapReviewSubpage('mine')"><span>我的评价</span><span
+                                    id="mp-my-review-count"></span><span>&nbsp;&gt;</span></button>
                         </div>
                         <div class="sheet-my-rating">
                             <div class="my-rating-left">
@@ -329,7 +334,8 @@
                     <div class="sheet-section sheet-section-clickable" onclick="openMapReviewSubpage('friends')">
                         <div class="sheet-section-header">
                             <button type="button" class="sheet-section-link"
-                                onclick="event.stopPropagation();openMapReviewSubpage('friends')">朋友评价 &gt;</button>
+                                onclick="event.stopPropagation();openMapReviewSubpage('friends')"><span>朋友评价</span><span
+                                    id="mp-friend-review-count"></span><span>&nbsp;&gt;</span></button>
                             <div class="sheet-friend-avatars">
                                 <img src="images/avatar-placeholder.svg" class="f-avatar">
                                 <img src="images/avatar-placeholder.svg" class="f-avatar">
@@ -460,7 +466,8 @@
                         <div class="add-picked-chip add-picked-chip-edit">
                             <span id="add-form-store-name">店铺名</span>
                             <img id="add-form-mogu" src="images/mogu.svg" class="add-picked-mogu hidden" alt="mogu">
-                            <button id="add-chip-edit-btn" class="add-chip-edit-btn" onclick="editAddStoreSelection()">修改</button>
+                            <button id="add-chip-edit-btn" class="add-chip-edit-btn"
+                                onclick="editAddStoreSelection()">修改</button>
                         </div>
                     </div>
 
@@ -480,6 +487,11 @@
                         </div>
                     </div>
 
+                    <div class="add-input-card">
+                        <div class="add-input-label">日期<span style="color:#8f8f8f; font-size:12px;">（选填）</span></div>
+                        <input type="date" id="newMealDate" class="input-std">
+                    </div>
+
                     <div class="upload-box" onclick="document.getElementById('fileInput').click()">
                         <input type="file" id="fileInput" hidden multiple accept="image/*" onchange="previewImg(this)">
                         <div id="preview-list" class="preview-list hidden"></div>
@@ -494,7 +506,8 @@
                         <textarea id="newReview" class="input-std" placeholder="在这里输入想说的" rows="4"></textarea>
                     </div>
 
-                    <button id="edit-cancel-btn" class="btn-submit add-edit-cancel-btn hidden" onclick="cancelEditReviewComposer()">取消修改</button>
+                    <button id="edit-cancel-btn" class="btn-submit add-edit-cancel-btn hidden"
+                        onclick="cancelEditReviewComposer()">取消修改</button>
 
                     <button id="post-btn" class="btn-submit add-post-btn" onclick="submitNew()">
                         <span id="post-btn-text">发布记录</span>
@@ -510,6 +523,15 @@
         <section id="view-fav" class="hidden page-content" style="padding: 0; background: #f4f4f4;">
             <div class="record-page">
                 <div class="record-year-row">
+                    <div class="record-year-nav">
+                        <button type="button" class="record-year-arrow" id="record-year-prev"
+                            onclick="changeRecordCalendarYear(-1)" aria-label="上一年">&lt;</button>
+                        <div class="record-year-display" id="record-year-display">2026</div>
+                        <button type="button" class="record-year-arrow" id="record-year-next"
+                            onclick="changeRecordCalendarYear(1)" aria-label="下一年">&gt;</button>
+                    </div>
+                    <button type="button" class="record-jump-btn hidden" id="record-jump-btn"
+                        onclick="jumpRecordCalendarFocus()">回到今天</button>
                     <select id="record-year-select" class="record-year-select"
                         onchange="renderRecordCalendar()"></select>
                 </div>
@@ -541,11 +563,6 @@
                         <button class="profile-menu-btn" onclick="toggleProfileMenu(event)">
                             <i data-lucide="menu" width="24"></i>
                         </button>
-                        <div id="profile-menu" class="profile-menu-popover">
-                            <button class="profile-menu-item danger" onclick="logoutFromMenu()">
-                                退出登录
-                            </button>
-                        </div>
                     </div>
                     <div class="profile-header-right">
                         <button class="profile-friends-btn" onclick="openFriendsPage()">
@@ -562,12 +579,42 @@
                         </button>
                     </div>
                 </div>
+                <div id="profile-menu" class="profile-menu-overlay" onclick="closeProfileMenu(event)">
+                    <div class="profile-menu-sheet" onclick="event.stopPropagation()">
+                        <div class="profile-menu-sheet-header">
+                            <div class="profile-menu-sheet-title">菜单</div>
+                            <button class="profile-menu-close-btn" onclick="closeProfileMenu()">
+                                <i data-lucide="x" width="20"></i>
+                            </button>
+                        </div>
+                        <div class="profile-menu-section">
+                            <button class="profile-menu-item is-unavailable" onclick="handleFakeLanguageSwitch()"
+                                aria-disabled="true">
+                                <span class="profile-menu-item-icon">
+                                    <i data-lucide="languages" width="18"></i>
+                                </span>
+                                <span class="profile-menu-item-text">
+                                    <span class="profile-menu-item-title">切换语言</span>
+                                </span>
+                                <span class="profile-menu-item-badge">即将上线</span>
+                            </button>
+                            <button class="profile-menu-item danger" onclick="logoutFromMenu()">
+                                <span class="profile-menu-item-icon">
+                                    <i data-lucide="log-out" width="18"></i>
+                                </span>
+                                <span class="profile-menu-item-text">
+                                    <span class="profile-menu-item-title">退出登录</span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- User Info -->
                 <div class="profile-user-info">
                     <div class="profile-avatar-wrap">
                         <div class="profile-avatar" id="profile-avatar-img">
-                            <img src="images/Group 48.png" alt="avatar" id="profile-avatar-display">
+                            <img src="images/avatar-placeholder.svg" alt="avatar" id="profile-avatar-display">
                         </div>
                         <div class="profile-avatar-camera">
                             <i data-lucide="camera" width="14" color="white"></i>
@@ -606,8 +653,8 @@
                         </button>
                     </div>
                     <div class="friends-toolbar">
-                        <input id="friends-filter-input" class="friends-filter-input" placeholder="搜索好友名字或邮箱"
-                            oninput="filterFriendsList()">
+                        <!-- <input id="friends-filter-input" class="friends-filter-input" placeholder="搜索好友名字或邮箱"
+                            oninput="filterFriendsList()"> -->
                     </div>
                     <div id="friends-pending-list" class="friends-pending-list hidden"></div>
                     <div id="friends-list" class="friends-list"></div>
@@ -643,7 +690,8 @@
             <div id="guest-info" class="login-page">
                 <!-- Logo区域 -->
                 <div class="login-header">
-                    <div class="login-logo"><img src="images/logo.svg" alt="MoguMode" class="brand-logo-icon"> MoguMode</div>
+                    <div class="login-logo"><img src="images/logo.svg" alt="MoguMode" class="brand-logo-icon"> MoguMode
+                    </div>
                 </div>
 
                 <!-- 首屏登录入口 -->
@@ -794,7 +842,10 @@
             </div>
             <div class="nav-icon" id="nav-profile" onclick="switchView('profile')">
                 <!-- <i data-lucide="user" width="24"></i> -->
-                <img src="images/my-g.svg" alt="my" width="22">
+                <div class="nav-icon-badge-wrap">
+                    <img src="images/my-g.svg" alt="my" width="22">
+                    <span id="nav-profile-friends-dot" class="nav-friends-dot hidden">0</span>
+                </div>
                 <span class="nav-text">个人</span>
             </div>
         </nav>
@@ -821,7 +872,8 @@
 
                 <!-- 简单筛选：步行15分钟以内 -->
                 <div class="rf-simple-wrap" style="display:flex; justify-content:center; margin:12px 0;">
-                    <label class="rf-checkbox" style="display:inline-flex; align-items:center; gap:6px; font-size:13px; color:#2d3436; cursor:pointer;">
+                    <label class="rf-checkbox"
+                        style="display:inline-flex; align-items:center; gap:6px; font-size:13px; color:#2d3436; cursor:pointer;">
                         <input type="checkbox" id="rf-walk-15" checked>
                         <span>步行15分钟以内</span>
                     </label>
@@ -1005,20 +1057,23 @@
                 <div id="activity-image-stage" class="activity-image-stage"
                     onmousedown="handleActivityImageMouseDown(event)"
                     ontouchstart="handleActivityImageTouchStart(event)"
-                    ontouchmove="handleActivityImageTouchMove(event)"
-                    ontouchend="handleActivityImageTouchEnd(event)"
+                    ontouchmove="handleActivityImageTouchMove(event)" ontouchend="handleActivityImageTouchEnd(event)"
                     ontouchcancel="handleActivityImageTouchEnd(event)">
                     <div id="activity-image-track" class="activity-image-track">
                         <div class="activity-image-panel">
-                            <img id="activity-image-modal-img-prev" class="activity-image-modal-img activity-image-side-img" src="" alt="previous activity image" draggable="false">
+                            <img id="activity-image-modal-img-prev"
+                                class="activity-image-modal-img activity-image-side-img" src=""
+                                alt="previous activity image" draggable="false">
                         </div>
                         <div class="activity-image-panel">
-                            <img id="activity-image-modal-img" class="activity-image-modal-img" src="" alt="activity image"
-                                draggable="false"
-                                onclick="handleActivityImageClick(event)" ondblclick="toggleActivityImageZoom(event)">
+                            <img id="activity-image-modal-img" class="activity-image-modal-img" src=""
+                                alt="activity image" draggable="false" onclick="handleActivityImageClick(event)"
+                                ondblclick="toggleActivityImageZoom(event)">
                         </div>
                         <div class="activity-image-panel">
-                            <img id="activity-image-modal-img-next" class="activity-image-modal-img activity-image-side-img" src="" alt="next activity image" draggable="false">
+                            <img id="activity-image-modal-img-next"
+                                class="activity-image-modal-img activity-image-side-img" src=""
+                                alt="next activity image" draggable="false">
                         </div>
                     </div>
                 </div>

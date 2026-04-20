@@ -33,7 +33,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v28";
+const APP_BUILD_VERSION = "v29";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 const LOCATION_CACHE_STORAGE_KEY = "mogumode:last-origin-v2";
 
@@ -88,6 +88,7 @@ let activityImageGallerySeed = 0;
 const activityImageGalleryRegistry = new Map();
 let recordMainImageByDay = loadRecordMainImageMap();
 let recordAutoFocusPending = false;
+let recordCalendarResizeBound = false;
 let currentUserAvatarUrl = "";
 let hasLoadedStoresSnapshot = false;
 let isRepairingCurrentUserPreferences = false;
@@ -96,6 +97,7 @@ let friendsFilterKeyword = "";
 let friendProfileOverlayActive = false;
 let friendProfileOverlayHideTimer = null;
 let friendsPageHideTimer = null;
+let friendsPageRestoreTimer = null;
 let recordDayViewHideTimer = null;
 let locationLoadingShowTimer = null;
 let isFetchingCurrentLocation = false;
@@ -110,6 +112,21 @@ function getCurrentUserAvatarUrl() {
 }
 
 window.getCurrentUserAvatarUrl = getCurrentUserAvatarUrl;
+
+function renderHeaderAvatar(avatarUrl = "") {
+    const headerAvatar = document.getElementById('header-avatar');
+    if (!headerAvatar) return;
+    const url = avatarUrl || DEFAULT_AVATAR_URL;
+    headerAvatar.style.background = "#b2bec3";
+    headerAvatar.innerHTML = `<img src="${url}" alt="avatar" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+}
+
+function renderGuestHeaderAvatar() {
+    const headerAvatar = document.getElementById('header-avatar');
+    if (!headerAvatar) return;
+    headerAvatar.style.background = "#b2bec3";
+    headerAvatar.textContent = "?";
+}
 
 function escapeHtml(raw) {
     return String(raw || '')
@@ -555,8 +572,7 @@ function updateUIForAuth(user) {
         const username = user.displayName || user.email.split('@')[0];
         if (user.photoURL) currentUserAvatarUrl = user.photoURL;
         setProfileIdentity(username, user.photoURL || '');
-        els.headerAvatar.innerText = user.email[0].toUpperCase();
-        els.headerAvatar.style.background = "#2d3436";
+        renderHeaderAvatar(user.photoURL || '');
         resetViewingFriendProfileState();
         updateProfileHeaderMode();
         // 允许添加店铺
@@ -572,8 +588,7 @@ function updateUIForAuth(user) {
         els.addMask.classList.remove('hidden');
         els.addForm.classList.add('hidden');
         if (els.addView) els.addView.classList.add('add-guest-centered');
-        els.headerAvatar.innerText = "?";
-        els.headerAvatar.style.background = "#b2bec3";
+        renderGuestHeaderAvatar();
 
         // 未登录时默认回到「谷歌登录/邮箱登录」入口页
         const authEntry = document.getElementById('auth-entry');
@@ -731,10 +746,7 @@ window.uploadAvatar = async (input) => {
         if (avatarImg) avatarImg.src = url;
 
         // 更新header头像
-        const headerAvatar = document.getElementById('header-avatar');
-        if (headerAvatar) {
-            headerAvatar.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
-        }
+        renderHeaderAvatar(url);
     } catch (err) {
         console.error('头像上传失败:', err);
         alert('上传失败: ' + err.message);
@@ -754,11 +766,9 @@ async function loadUserAvatar(uid) {
             currentUserAvatarUrl = url;
             const avatarImg = document.getElementById('profile-avatar-display');
             if (avatarImg) avatarImg.src = url;
-
-            const headerAvatar = document.getElementById('header-avatar');
-            if (headerAvatar) {
-                headerAvatar.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
-            }
+            renderHeaderAvatar(url);
+        } else {
+            renderHeaderAvatar();
         }
     } catch (err) {
         console.log('加载头像失败:', err);
@@ -773,32 +783,21 @@ window.toggleProfileMenu = (event) => {
     event?.stopPropagation?.();
     const menu = document.getElementById('profile-menu');
     if (!menu) return;
-    const willOpen = !menu.classList.contains('open');
-    if (willOpen) {
-        const btn = event?.currentTarget || document.querySelector('.profile-menu-btn');
-        const appRoot = document.getElementById('app');
-        const rect = btn?.getBoundingClientRect?.();
-        const appRect = appRoot?.getBoundingClientRect?.();
-        if (rect && appRect) {
-            const menuWidth = 132;
-            const gap = 8;
-            let top = Math.round(rect.top - 2);
-            let left = Math.round(rect.right + gap);
-            const maxLeft = Math.round(appRect.right - menuWidth - 12);
-            const minLeft = Math.round(appRect.left + 12);
-            if (left > maxLeft) left = maxLeft;
-            if (left < minLeft) left = minLeft;
-            if (top < Math.round(appRect.top + 12)) top = Math.round(appRect.top + 12);
-            menu.style.top = `${top}px`;
-            menu.style.left = `${left}px`;
-        }
-    }
     menu.classList.toggle('open');
 };
 
-window.logoutFromMenu = () => {
+window.closeProfileMenu = (event) => {
+    if (event?.target && event.target !== event.currentTarget) return;
     const menu = document.getElementById('profile-menu');
     if (menu) menu.classList.remove('open');
+};
+
+window.handleFakeLanguageSwitch = () => {
+    return;
+};
+
+window.logoutFromMenu = () => {
+    closeProfileMenu();
     logout();
 };
 
@@ -839,10 +838,14 @@ function updateFriendsCount() {
 }
 
 function updateFriendRequestDot() {
-    const dot = document.getElementById('profile-friends-dot');
-    if (!dot) return;
-    dot.classList.toggle('hidden', !incomingFriendRequests.length);
-    dot.innerText = incomingFriendRequests.length > 9 ? '9+' : String(incomingFriendRequests.length);
+    const requestCount = incomingFriendRequests.length;
+    const displayText = requestCount > 9 ? '9+' : String(requestCount);
+    ['profile-friends-dot', 'nav-profile-friends-dot'].forEach((id) => {
+        const dot = document.getElementById(id);
+        if (!dot) return;
+        dot.classList.toggle('hidden', !requestCount);
+        dot.innerText = displayText;
+    });
 }
 
 function getAliasesForUid(targetUid, userData = null) {
@@ -2966,12 +2969,14 @@ window.submitNew = async () => {
         const budgetVal = document.getElementById('newBudget').value;
         const budgetNum = Number(budgetVal);
         const addRating = Number(document.getElementById('add-rating-slider')?.value || 3.8);
+        const mealDateValue = normalizeDayKeyInput(document.getElementById('newMealDate')?.value) || getTodayDayKey();
         const reviewText = (document.getElementById('newReview').value || '').trim();
         const newReview = {
             text: reviewText,
             user: currentUser.displayName || currentUser.email.split('@')[0],
             uid: currentUser.uid,
             createdAt: Date.now(),
+            mealDate: mealDateValue,
             rating: addRating,
             budget: Number.isFinite(budgetNum) && budgetNum > 0 ? budgetNum : 0,
             images: reviewImageUrls
@@ -3001,6 +3006,7 @@ window.submitNew = async () => {
                     text: newReview.text,
                     rating: Number(newReview.rating || store?.rating || 3.8),
                     budget: newReview.budget,
+                    mealDate: newReview.mealDate,
                     images: nextReviewImages,
                     editedAt: repostedAt
                 }
@@ -3045,6 +3051,9 @@ window.submitNew = async () => {
             applyFilters();
             renderRecordCalendar();
             renderProfileActivity();
+            if (addComposerReturnContext?.source === 'record-day') {
+                addComposerReturnContext.dayKey = newReview.mealDate;
+            }
             const mapSheet = document.getElementById('map-detail-card');
             const isSameStoreSheetOpen = !!(mapSheet
                 && mapSheet.classList.contains('active')
@@ -3647,6 +3656,16 @@ function setAddNearbySearchButtonLoading(loading) {
     btn.innerText = loading ? '读取附近店铺中...' : '搜索附近店铺';
 }
 
+function getAddMapToggleClosedLabel() {
+    return addNearbySearchOrigin ? '在地图上查看附近店铺' : '在地图上查看';
+}
+
+function updateAddMapToggleLabel(isOpen = false) {
+    const toggleLink = document.getElementById('add-map-toggle-link');
+    if (!toggleLink) return;
+    toggleLink.innerText = isOpen ? '收起地图' : getAddMapToggleClosedLabel();
+}
+
 function updateAddSearchClearButton() {
     const input = document.getElementById('add-search-input');
     const btn = document.getElementById('add-search-clear-btn');
@@ -3665,7 +3684,7 @@ window.clearAddSearchInput = () => {
     }
     if (toggleLink) {
         toggleLink.classList.add('hidden');
-        toggleLink.innerText = '在地图上查看';
+        updateAddMapToggleLabel(false);
     }
     addSearchLatestItems = [];
     addSearchLatestQuery = "";
@@ -3862,16 +3881,18 @@ function resetAddComposerFlow(opts = {}) {
     const mapToggleLink = document.getElementById('add-map-toggle-link');
     if (mapToggleLink) {
         mapToggleLink.classList.add('hidden');
-        mapToggleLink.innerText = '在地图上查看';
+        updateAddMapToggleLabel(false);
     }
     const hiddenName = document.getElementById('newName');
     const budget = document.getElementById('newBudget');
+    const mealDate = document.getElementById('newMealDate');
     const review = document.getElementById('newReview');
     const file = document.getElementById('fileInput');
     const previewList = document.getElementById('preview-list');
     const uploadPlaceholder = document.getElementById('upload-placeholder');
     if (hiddenName) hiddenName.value = "";
     if (budget) budget.value = "";
+    if (mealDate) mealDate.value = getTodayDayKey();
     if (review) review.value = "";
     if (file) file.value = "";
     const searchInput = document.getElementById('add-search-input');
@@ -4038,12 +4059,14 @@ window.openEditReviewComposer = (storeId, reviewIndex, opts = {}) => {
         addComposerExistingImageEntries = Array.isArray(targetRev.images) ? [...targetRev.images] : [];
 
         const budgetInput = document.getElementById('newBudget');
+        const mealDateInput = document.getElementById('newMealDate');
         const reviewInput = document.getElementById('newReview');
         const fileInput = document.getElementById('fileInput');
         if (budgetInput) {
             const budgetNum = Number(targetRev?.budget);
             budgetInput.value = Number.isFinite(budgetNum) && budgetNum > 0 ? String(budgetNum) : '';
         }
+        if (mealDateInput) mealDateInput.value = getReviewMealDayKey(targetRev, getReviewEffectiveTimestamp(targetRev) || Date.now());
         if (reviewInput) reviewInput.value = String(targetRev?.text || '');
         if (fileInput) fileInput.value = '';
         setAddRatingValue(Number(targetRev?.rating || store?.rating || 3.8));
@@ -4113,9 +4136,7 @@ function hideAddSearchMap() {
         mapWrap.style.height = '';
     }
     if (mapEl) mapEl.style.height = '';
-    if (toggleLink && !toggleLink.classList.contains('hidden')) {
-        toggleLink.innerText = '在地图上查看';
-    }
+    if (toggleLink && !toggleLink.classList.contains('hidden')) updateAddMapToggleLabel(false);
 }
 
 function clearAddSearchMapMarkers() {
@@ -4474,6 +4495,7 @@ function applyAddSearchResults(items, listEl, queryText, opts = {}) {
     if (toggleLink) {
         const shouldShow = addSearchLatestQuery.length >= 2 || !!opts.forceMapToggle;
         toggleLink.classList.toggle('hidden', !shouldShow);
+        if (shouldShow) updateAddMapToggleLabel(false);
     }
 
     const mapWrap = document.getElementById('add-search-map-wrap');
@@ -4489,7 +4511,7 @@ function openAddSearchMap(opts = {}) {
     if (!mapWrap || !toggleLink) return;
     const hadMap = !!addSearchMap;
     mapWrap.classList.remove('hidden');
-    toggleLink.innerText = '收起地图';
+    updateAddMapToggleLabel(true);
     hideAddSearchResultList();
     refreshAddSearchMapMarkers(addSearchLatestItems, { preserveView: preserveView && hadMap });
     requestAnimationFrame(() => {
@@ -4506,7 +4528,7 @@ window.toggleAddSearchMap = () => {
         openAddSearchMap();
     } else {
         mapWrap.classList.add('hidden');
-        toggleLink.innerText = '在地图上查看';
+        updateAddMapToggleLabel(false);
     }
 };
 
@@ -4590,6 +4612,7 @@ window.searchStoreForAdd = async (queryText = null, opts = {}) => {
     list.classList.add('active');
 
     const mapBounds = opts?.mapBounds || null;
+    if (!mapBounds && q) addNearbySearchOrigin = null;
     // 先从我们库里搜索，按关联度排序
     const localMatches = localStores.map(s => {
         const score = scoreLocalAddSearch(q, s);
@@ -4691,7 +4714,7 @@ window.searchNearbyAddStores = async () => {
             const toggleLink = document.getElementById('add-map-toggle-link');
             if (toggleLink) {
                 toggleLink.classList.add('hidden');
-                toggleLink.innerText = '在地图上查看';
+                updateAddMapToggleLabel(false);
             }
             list.innerHTML = "<div style='padding:10px'>100米内没有 Google 地图店铺</div>";
             hideAddSearchMap();
@@ -4861,10 +4884,11 @@ function initAutoSuggestInputs() {
                     list.classList.remove('active');
                     list.innerHTML = "";
                 }
+                addNearbySearchOrigin = null;
                 const toggleLink = document.getElementById('add-map-toggle-link');
                 if (toggleLink) {
                     toggleLink.classList.add('hidden');
-                    toggleLink.innerText = '在地图上查看';
+                    updateAddMapToggleLabel(false);
                 }
                 addSearchLatestItems = [];
                 addSearchLatestQuery = "";
@@ -4998,6 +5022,7 @@ window.toggleSortMenu = () => {
  */
 window.selectSortOption = (text, sortKey) => {
     const btnText = document.getElementById('sort-btn-text');
+    const btnIcon = document.getElementById('sort-btn-icon');
     if (btnText) {
         const labelMap = {
             default: '最新发布',
@@ -5006,6 +5031,16 @@ window.selectSortOption = (text, sortKey) => {
             rating: '评价排序'
         };
         btnText.innerText = labelMap[sortKey] || (String(text || '').includes('排序') ? text : `${text}排序`);
+    }
+    if (btnIcon) {
+        const iconMap = {
+            default: 'align-left',
+            price: 'coins',
+            distance: 'footprints',
+            rating: 'heart'
+        };
+        btnIcon.setAttribute('data-lucide', iconMap[sortKey] || 'align-left');
+        if (window.lucide?.createIcons) window.lucide.createIcons();
     }
     document.getElementById('sort-menu').classList.remove('active');
 
@@ -5042,11 +5077,13 @@ document.addEventListener('click', (e) => {
         menu.classList.remove('active');
     }
 
-    const profileMenuWrap = document.querySelector('.profile-header-left');
+    const profileMenuBtn = document.querySelector('.profile-menu-btn');
     const profileMenu = document.getElementById('profile-menu');
     if (profileMenu && profileMenu.classList.contains('open')) {
-        if (!profileMenuWrap || !profileMenuWrap.contains(e.target)) {
-            profileMenu.classList.remove('open');
+        const clickedInsideMenu = profileMenu.contains(e.target);
+        const clickedMenuBtn = profileMenuBtn?.contains(e.target);
+        if (!clickedInsideMenu && !clickedMenuBtn) {
+            closeProfileMenu();
         }
     }
 });
@@ -6149,14 +6186,60 @@ function resetFriendsPageState() {
         clearTimeout(friendsPageHideTimer);
         friendsPageHideTimer = null;
     }
+    if (friendsPageRestoreTimer) {
+        clearTimeout(friendsPageRestoreTimer);
+        friendsPageRestoreTimer = null;
+    }
     if (friendsPage) {
         friendsPage.classList.add('hidden');
-        friendsPage.classList.remove('is-open');
+        friendsPage.classList.remove('is-open', 'enter-from-right', 'exit-to-right');
     }
     if (profileView) profileView.classList.remove('friends-page-active');
     friendsFilterKeyword = "";
     const filterInput = document.getElementById('friends-filter-input');
     if (filterInput) filterInput.value = "";
+}
+
+function restoreFriendsPageView(opts = {}) {
+    const { animateFromLeft = false } = opts || {};
+    const friendsPage = document.getElementById('friends-page');
+    const profileView = document.getElementById('view-profile');
+    if (!friendsPage) return;
+    if (friendsPageHideTimer) {
+        clearTimeout(friendsPageHideTimer);
+        friendsPageHideTimer = null;
+    }
+    if (friendsPageRestoreTimer) {
+        clearTimeout(friendsPageRestoreTimer);
+        friendsPageRestoreTimer = null;
+    }
+    friendsPage.classList.remove('hidden');
+    friendsPage.classList.remove('enter-from-right', 'exit-to-right');
+    if (animateFromLeft) {
+        friendsPage.classList.remove('is-open');
+        if (profileView) profileView.classList.add('friends-page-active');
+        requestAnimationFrame(() => {
+            friendsPage.classList.add('is-open');
+        });
+        friendsPageRestoreTimer = setTimeout(() => {
+            const isFriendsPageVisible = friendsPage.classList.contains('is-open') && !friendsPage.classList.contains('hidden');
+            if (!isFriendsPageVisible) {
+                friendsPageRestoreTimer = null;
+                return;
+            }
+            resetViewingFriendProfileState();
+            if (currentUser) {
+                restoreOwnProfileIdentity();
+                updateProfileHeaderMode();
+                switchProfileTab('activity');
+            }
+            if (profileView) profileView.classList.remove('friends-page-active');
+            friendsPageRestoreTimer = null;
+        }, 260);
+        return;
+    }
+    friendsPage.classList.add('is-open');
+    if (profileView) profileView.classList.remove('friends-page-active');
 }
 
 function resetRecordDayViewState() {
@@ -6274,8 +6357,7 @@ document.addEventListener('click', (e) => {
  * @param {string} v - 视图名称：home/map/add/fav/profile
  */
 window.switchView = (v) => {
-    const profileMenu = document.getElementById('profile-menu');
-    if (profileMenu) profileMenu.classList.remove('open');
+    closeProfileMenu();
     closeRandomPanel();
     resetFriendProfileOverlayState();
     if (v !== 'profile') resetFriendsPageState();
@@ -6710,7 +6792,7 @@ function updateProfileHeaderMode() {
     const editNameBtn = document.getElementById('profile-edit-name-btn');
 
     if (menuBtn) menuBtn.classList.toggle('hidden', isFriendMode);
-    if (menu && isFriendMode) menu.classList.remove('open');
+    if (menu && isFriendMode) closeProfileMenu();
     if (backBtn) backBtn.classList.toggle('hidden', !isFriendMode);
     if (rightBox) rightBox.classList.toggle('hidden', isFriendMode);
     if (avatarWrap) {
@@ -6752,7 +6834,7 @@ function setProfileIdentity(name, avatarUrl) {
     const nameEl = document.getElementById('profile-username');
     const avatarImg = document.getElementById('profile-avatar-display');
     if (nameEl) nameEl.innerText = name || '用户';
-    if (avatarImg) avatarImg.src = avatarUrl || 'images/Group 48.png';
+    if (avatarImg) avatarImg.src = avatarUrl || DEFAULT_AVATAR_URL;
 }
 
 window.editUsername = () => {
@@ -6917,6 +6999,41 @@ function getDayKeyFromTs(ts) {
     return `${y}-${m}-${day}`;
 }
 
+function getTodayDayKey() {
+    return getDayKeyFromTs(Date.now());
+}
+
+function normalizeDayKeyInput(value) {
+    const raw = String(value || '').trim();
+    const match = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (!match) return '';
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return '';
+    if (month < 1 || month > 12 || day < 1 || day > 31) return '';
+    const candidate = new Date(year, month - 1, day);
+    if (
+        candidate.getFullYear() !== year
+        || candidate.getMonth() !== month - 1
+        || candidate.getDate() !== day
+    ) {
+        return '';
+    }
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function getDayTsFromDayKey(dayKey) {
+    const normalized = normalizeDayKeyInput(dayKey);
+    if (!normalized) return 0;
+    const [year, month, day] = normalized.split('-').map(Number);
+    return new Date(year, month - 1, day, 12, 0, 0, 0).getTime();
+}
+
+function getReviewMealDayKey(rev, fallbackTs = 0) {
+    return normalizeDayKeyInput(rev?.mealDate) || getDayKeyFromTs(fallbackTs || Date.now());
+}
+
 function buildMyActivities() {
     if (!currentUser) return [];
     return buildActivitiesForUser(currentUser.uid, {
@@ -6944,17 +7061,19 @@ function buildActivitiesForUser(uid, userData = null) {
         revs.forEach((rev) => {
             if (!isReviewMine(rev, aliases)) return;
             const createdAt = getReviewEffectiveTimestamp(rev) || Number(store.createdAt) || Date.now();
+            const mealDayKey = getReviewMealDayKey(rev, createdAt);
+            const mealDateTs = getDayTsFromDayKey(mealDayKey) || createdAt;
             const reviewText = typeof rev.text === 'string' ? rev.text.trim() : '';
             const reviewImages = Array.isArray(rev.images) ? rev.images.filter(Boolean) : [];
             const ratingNum = Number(rev.rating || store.rating || 0);
             const budgetNum = Number(rev.budget || store.budget || 0);
-            const dayKey = getDayKeyFromTs(createdAt);
             const isEdited = getTimestampValue(rev?.editedAt) > 0;
             activities.push({
                 store,
                 storeId: store.id,
                 createdAt,
-                dayKey,
+                mealDateTs,
+                dayKey: mealDayKey,
                 dateMeta: formatActivityDate(createdAt, isEdited),
                 visits: storeVisitCounts.get(store.id) || 1,
                 reviewIndex: revs.indexOf(rev),
@@ -7312,14 +7431,129 @@ window.navigateActivityImageModal = (direction) => {
     return false;
 };
 
-window.renderRecordCalendar = () => {
-    const wrap = document.getElementById('record-calendar-wrap');
-    const yearSelect = document.getElementById('record-year-select');
-    const dayView = document.getElementById('record-day-view');
-    const yearRow = yearSelect ? yearSelect.closest('.record-year-row') : null;
+function getRecordCalendarChrome() {
     const recordPage = document.querySelector('#view-fav .record-page');
+    const yearSelect = document.getElementById('record-year-select');
+    const yearRow = yearSelect ? yearSelect.closest('.record-year-row') : null;
+    return {
+        recordPage,
+        yearSelect,
+        yearRow,
+        yearDisplay: document.getElementById('record-year-display'),
+        prevButton: document.getElementById('record-year-prev'),
+        nextButton: document.getElementById('record-year-next'),
+        jumpButton: document.getElementById('record-jump-btn'),
+        wrap: document.getElementById('record-calendar-wrap')
+    };
+}
+
+function updateRecordYearHeader(years, selectedYear) {
+    const { yearDisplay, prevButton, nextButton } = getRecordCalendarChrome();
+    if (yearDisplay) yearDisplay.innerText = `${selectedYear}年`;
+    if (prevButton) prevButton.disabled = !years.includes(selectedYear - 1);
+    if (nextButton) nextButton.disabled = !years.includes(selectedYear + 1);
+}
+
+function getRecordTodayTarget() {
+    const { wrap } = getRecordCalendarChrome();
+    if (!wrap) return null;
+    return wrap.querySelector('.record-day-cell.is-today');
+}
+
+function getRecordTodayMonthBlock() {
+    const { wrap } = getRecordCalendarChrome();
+    if (!wrap) return null;
+    const todayMonth = new Date().getMonth() + 1;
+    return wrap.querySelector(`[data-record-month="${todayMonth}"]`);
+}
+
+function isRecordElementVisibleInPage(el) {
+    const { recordPage, yearRow } = getRecordCalendarChrome();
+    if (!el || !recordPage) return false;
+    const pageRect = recordPage.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const topBoundary = pageRect.top + (yearRow ? yearRow.offsetHeight : 0);
+    return elRect.bottom > topBoundary && elRect.top < pageRect.bottom;
+}
+
+function scrollRecordPageToElement(el, behavior = 'smooth') {
+    const { recordPage, yearRow } = getRecordCalendarChrome();
+    if (!recordPage || !el) return;
+    const pageRect = recordPage.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const stickyOffset = (yearRow ? yearRow.offsetHeight : 0) + 12;
+    const targetTop = recordPage.scrollTop + (elRect.top - pageRect.top) - stickyOffset;
+    recordPage.scrollTo({ top: Math.max(0, targetTop), behavior });
+}
+
+function updateRecordJumpButton() {
+    const { jumpButton, yearSelect } = getRecordCalendarChrome();
+    if (!jumpButton || !yearSelect || !currentUser) {
+        if (jumpButton) jumpButton.classList.add('hidden');
+        return;
+    }
+
+    const todayYear = new Date().getFullYear();
+    const selectedYear = Number(yearSelect.value || todayYear);
+    if (selectedYear !== todayYear) {
+        jumpButton.innerText = '回到今年';
+        jumpButton.classList.remove('hidden');
+        return;
+    }
+
+    const todayCell = getRecordTodayTarget();
+    const shouldShowJump = !!todayCell && !isRecordElementVisibleInPage(todayCell);
+    jumpButton.innerText = '回到今天';
+    jumpButton.classList.toggle('hidden', !shouldShowJump);
+}
+
+function bindRecordCalendarEvents() {
+    const { recordPage } = getRecordCalendarChrome();
+    if (recordPage && recordPage.dataset.recordCalendarBound !== '1') {
+        recordPage.dataset.recordCalendarBound = '1';
+        recordPage.addEventListener('scroll', () => {
+            window.requestAnimationFrame(updateRecordJumpButton);
+        });
+    }
+    if (!recordCalendarResizeBound) {
+        recordCalendarResizeBound = true;
+        window.addEventListener('resize', () => {
+            window.requestAnimationFrame(updateRecordJumpButton);
+        });
+    }
+}
+
+window.changeRecordCalendarYear = (step) => {
+    const { yearSelect, recordPage } = getRecordCalendarChrome();
+    if (!yearSelect) return;
+    const nextYear = Number(yearSelect.value || new Date().getFullYear()) + Number(step || 0);
+    const hasTargetYear = Array.from(yearSelect.options).some(option => Number(option.value) === nextYear);
+    if (!hasTargetYear) return;
+    yearSelect.value = String(nextYear);
+    if (recordPage) recordPage.scrollTop = 0;
+    renderRecordCalendar();
+};
+
+window.jumpRecordCalendarFocus = () => {
+    const { yearSelect, wrap } = getRecordCalendarChrome();
+    if (!yearSelect || !wrap) return;
+    const now = new Date();
+    const todayYear = now.getFullYear();
+    const selectedYear = Number(yearSelect.value || todayYear);
+    if (selectedYear !== todayYear) {
+        yearSelect.value = String(todayYear);
+        renderRecordCalendar();
+    }
+    const target = getRecordTodayMonthBlock() || getRecordTodayTarget() || wrap.querySelector(`[data-record-month="${now.getMonth() + 1}"]`);
+    if (target) scrollRecordPageToElement(target);
+};
+
+window.renderRecordCalendar = () => {
+    const { wrap, yearSelect, yearRow, recordPage } = getRecordCalendarChrome();
+    const dayView = document.getElementById('record-day-view');
     if (!wrap || !yearSelect) return;
     if (dayView) dayView.classList.add('hidden');
+    bindRecordCalendarEvents();
 
     if (!currentUser) {
         if (yearRow) yearRow.classList.add('hidden');
@@ -7344,7 +7578,7 @@ window.renderRecordCalendar = () => {
     const activities = buildMyActivities();
     const dayMap = getRecordActivitiesByDay(activities);
     const currentYear = new Date().getFullYear();
-    const activityYears = Array.from(new Set(activities.map(a => new Date(a.createdAt).getFullYear())));
+    const activityYears = Array.from(new Set(activities.map(a => new Date(a.mealDateTs || a.createdAt).getFullYear())));
     const minYear = Math.min(currentYear - 1, ...(activityYears.length ? activityYears : [currentYear]));
     const maxYear = Math.max(currentYear + 1, ...(activityYears.length ? activityYears : [currentYear]));
     const years = [];
@@ -7355,6 +7589,7 @@ window.renderRecordCalendar = () => {
         ? currentYear
         : (years.includes(prevYear) ? prevYear : years[0]);
     yearSelect.value = String(selectedYear);
+    updateRecordYearHeader(years, selectedYear);
 
     const uniqueMonths = Array.from({ length: 12 }, (_, i) => i + 1);
 
@@ -7377,7 +7612,7 @@ window.renderRecordCalendar = () => {
             const dayRecordCount = dayActs.length;
             const isToday = selectedYear === todayYear && month === todayMonth && day === todayDate;
             cells.push(`
-                <button class="record-day-cell ${dayActs.length ? 'has-data' : ''} ${isToday ? 'is-today' : ''}" ${dayActs.length ? `onclick="openRecordDayView('${dayKey}')"` : 'disabled'}>
+                <button class="record-day-cell ${dayActs.length ? 'has-data' : ''} ${isToday ? 'is-today' : ''}" data-record-day="${dayKey}" ${dayActs.length ? `onclick="openRecordDayView('${dayKey}')"` : 'disabled'}>
                     <div class="record-day-thumb">
                         ${primaryImg ? `<img src="${primaryImg}" alt="day-thumb">` : ''}
                         ${dayRecordCount > 0 ? `<span class="record-day-count-badge">${dayRecordCount}</span>` : ''}
@@ -7410,9 +7645,10 @@ window.renderRecordCalendar = () => {
 
     if (recordAutoFocusPending && selectedYear === todayYear) {
         const target = wrap.querySelector(`[data-record-month="${todayMonth}"]`);
-        if (target) target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        if (target) scrollRecordPageToElement(target);
     }
     recordAutoFocusPending = false;
+    window.requestAnimationFrame(updateRecordJumpButton);
 };
 
 window.openRecordDayView = (dayKey) => {
@@ -8033,11 +8269,16 @@ window.openFriendsPage = async () => {
     const profileView = document.getElementById('view-profile');
     if (friendsPage) {
         friendsPage.classList.remove('hidden');
-        friendsPage.classList.remove('is-open');
+        friendsPage.classList.remove('is-open', 'exit-to-right');
+        friendsPage.classList.add('enter-from-right');
     }
     if (friendsPageHideTimer) {
         clearTimeout(friendsPageHideTimer);
         friendsPageHideTimer = null;
+    }
+    if (friendsPageRestoreTimer) {
+        clearTimeout(friendsPageRestoreTimer);
+        friendsPageRestoreTimer = null;
     }
     const filterInput = document.getElementById('friends-filter-input');
     friendsFilterKeyword = "";
@@ -8046,7 +8287,6 @@ window.openFriendsPage = async () => {
     renderFriendsList();
     if (profileView) profileView.classList.remove('friends-page-active');
     requestAnimationFrame(() => {
-        if (profileView) profileView.classList.add('friends-page-active');
         friendsPage?.classList.add('is-open');
     });
 };
@@ -8055,12 +8295,24 @@ window.openFriendsPage = async () => {
  * 关闭好友列表页面，返回我的主页
  */
 window.closeFriendsPage = (opts = {}) => {
-    const { restoreOwnProfile = true } = opts || {};
+    const { restoreOwnProfile = true, revealProfileFromRight = false, exitToRight = true } = opts || {};
     const friendsPage = document.getElementById('friends-page');
     const profileView = document.getElementById('view-profile');
     if (!friendsPage) return;
+    if (friendsPageRestoreTimer) {
+        clearTimeout(friendsPageRestoreTimer);
+        friendsPageRestoreTimer = null;
+    }
+    friendsPage.classList.remove('enter-from-right');
     friendsPage.classList.remove('is-open');
-    if (profileView) profileView.classList.remove('friends-page-active');
+    friendsPage.classList.toggle('exit-to-right', !!exitToRight);
+    if (profileView) {
+        if (revealProfileFromRight) {
+            requestAnimationFrame(() => profileView.classList.remove('friends-page-active'));
+        } else {
+            profileView.classList.remove('friends-page-active');
+        }
+    }
     if (restoreOwnProfile) {
         friendProfileReturnToFriends = false;
     }
@@ -8073,6 +8325,8 @@ window.closeFriendsPage = (opts = {}) => {
     if (friendsPageHideTimer) clearTimeout(friendsPageHideTimer);
     friendsPageHideTimer = setTimeout(() => {
         friendsPage.classList.add('hidden');
+        friendsPage.classList.remove('enter-from-right', 'exit-to-right');
+        if (profileView) profileView.classList.remove('friends-page-active');
         friendsPageHideTimer = null;
     }, 260);
     friendsFilterKeyword = "";
@@ -8550,7 +8804,13 @@ window.openFriendProfile = async (uid, opts = {}) => {
         updateProfileHeaderMode();
         updateFriendActionButton();
         switchProfileTab('activity');
-        if (!overlay) closeFriendsPage({ restoreOwnProfile: false });
+        if (!overlay) {
+            if (profileView) {
+                profileView.classList.add('friends-page-active');
+                void profileView.offsetWidth;
+            }
+            closeFriendsPage({ restoreOwnProfile: false, revealProfileFromRight: true, exitToRight: false });
+        }
     } catch (err) {
         console.error("加载好友信息失败:", err);
         alert("加载好友信息失败: " + err.message);
@@ -8567,14 +8827,15 @@ window.backFromFriendProfile = () => {
         closeFriendProfileOverlay();
         return;
     }
+    if (friendProfileReturnToFriends) {
+        friendProfileReturnToFriends = false;
+        restoreFriendsPageView({ animateFromLeft: true });
+        return;
+    }
     resetViewingFriendProfileState();
     restoreOwnProfileIdentity();
     updateProfileHeaderMode();
     switchProfileTab('activity');
-    if (friendProfileReturnToFriends) {
-        friendProfileReturnToFriends = false;
-        openFriendsPage();
-    }
 };
 
 // === 新增：处理详情页点击"查看路线" ===
