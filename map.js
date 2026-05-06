@@ -32,7 +32,7 @@ let lastMapQuery = "";
 let activePinnedStoreId = "";
 let mapFocusAnimationFrame = 0;
 let mapFocusAnimationToken = 0;
-const MAP_PIN_SIZE = 32;
+const MAP_PIN_SIZE = 26;
 
 function getMapCenterFromOrigin() {
     const origin = window.mapOrigin || ORIGIN;
@@ -97,6 +97,8 @@ function getMapPinMarkup(type = 'default') {
                 <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#E5F795" stroke="white" stroke-width="9"/>
                 <path d="M80.3457 27.8963L80.3457 90.3616L60.2256 71.1149L40.1055 90.3616L40.1055 27.8963L80.3457 27.8963Z" fill="#B9A930"/>
             `);
+        case 'default-low':
+            return `<img src="images/pin-default02.svg" class="map-pin-svg" width="32" height="32" alt="" aria-hidden="true">`;
         case 'default':
         default:
             return wrap(`
@@ -111,6 +113,39 @@ function getMapPinMarkup(type = 'default') {
     }
 }
 
+function createSelectedPinOverlayClass() {
+    return class SelectedPinOverlay extends google.maps.OverlayView {
+        constructor(latlng) {
+            super();
+            this.latlng = latlng;
+            this.div = null;
+        }
+        onAdd() {
+            this.div = document.createElement('div');
+            this.div.className = 'map-pin-selected-overlay';
+            // 使用 Google Maps 经典红色水滴图标（位于 floatPane 顶层）
+            this.div.innerHTML = `<img src="images/current-location-google-pin.svg" width="29" height="38" alt="" draggable="false">`;
+            const panes = this.getPanes();
+            panes.floatPane.appendChild(this.div);
+        }
+        draw() {
+            if (!this.div) return;
+            const projection = this.getProjection();
+            const point = projection.fromLatLngToDivPixel(this.latlng);
+            if (!point) return;
+            const w = 29, h = 38;
+            this.div.style.left = Math.round(point.x - w / 2) + 'px';
+            this.div.style.top = Math.round(point.y - h) + 'px';
+        }
+        onRemove() {
+            if (this.div && this.div.parentNode) {
+                this.div.parentNode.removeChild(this.div);
+            }
+            this.div = null;
+        }
+    };
+}
+
 function setSelectedStorePin(store) {
     if (!map || !store?.lat || !store?.lng) return;
     const dest = { lat: Number(store.lat), lng: Number(store.lng) };
@@ -118,19 +153,11 @@ function setSelectedStorePin(store) {
     activePinnedStoreId = store.id || "";
     currentMapDest = dest;
     if (marker) marker.setMap(null);
-    const iconUrl = getSelectedStorePinUrl(store);
-    const finalW = 34;
-    const finalH = 46;
-    marker = new google.maps.Marker({
-        map,
-        position: dest,
-        optimized: false,
-        icon: {
-            url: iconUrl,
-            scaledSize: new google.maps.Size(finalW, finalH),
-            anchor: new google.maps.Point(Math.round(finalW / 2), finalH)
-        }
-    });
+    if (!window.SelectedPinOverlayClass) {
+        window.SelectedPinOverlayClass = createSelectedPinOverlayClass();
+    }
+    marker = new window.SelectedPinOverlayClass(new google.maps.LatLng(dest.lat, dest.lng));
+    marker.setMap(map);
     window.renderMarkers();
 }
 
@@ -264,11 +291,13 @@ function renderCurrentOriginMarker() {
 
     const { origin, type } = getCurrentOriginState();
     const isGpsOrigin = type === 'gps';
-    const iconUrl = isGpsOrigin ? 'images/current-location-google-pin.svg' : 'images/weizhilan.svg';
-    const iconSize = isGpsOrigin
-        ? new google.maps.Size(29, 38)
-        : new google.maps.Size(30, 30);
 
+    const iconUrl = isGpsOrigin ? 'images/weizhih.svg' : 'images/weizhilan.svg';
+    const iconSize = new google.maps.Size(30, 30);
+    // GPS 当前位置以图标中间最下方为锚点；其它（如 cocoon）以中心为锚点
+    const anchor = isGpsOrigin
+        ? new google.maps.Point(Math.round(iconSize.width / 2), iconSize.height)
+        : new google.maps.Point(Math.round(iconSize.width / 2), Math.round(iconSize.height / 2));
     currentOriginMarker = new google.maps.Marker({
         map,
         position: origin,
@@ -279,9 +308,7 @@ function renderCurrentOriginMarker() {
         icon: {
             url: iconUrl,
             scaledSize: iconSize,
-            anchor: isGpsOrigin
-                ? new google.maps.Point(Math.round(iconSize.width / 2), iconSize.height)
-                : new google.maps.Point(Math.round(iconSize.width / 2), Math.round(iconSize.height / 2))
+            anchor
         }
     });
 }
@@ -530,7 +557,7 @@ function refreshMapFriendSection(store) {
             const rating = Number(item.rev?.rating || 0);
             return `
                 <div class="sheet-friend-rating-frame${idx === 0 ? ' is-active' : ''}">
-                    <div class="friend-score">${Number.isFinite(rating) && rating > 0 ? rating.toFixed(1) : '--'}</div>
+                    <div class="friend-score">${Number.isFinite(rating) && rating > 0 ? rating.toFixed(1) : '--'}<img src="images/mogu.svg" class="friend-score-mogu" alt=""></div>
                     <div class="friend-comment-carousel">
                         <div class="friend-comment-item">${escapeMapHtml(text)}</div>
                     </div>
@@ -564,6 +591,9 @@ function refreshMapReviewSectionCounts(store) {
     if (friendReviewCountEl) {
         friendReviewCountEl.innerText = friendCount > 0 ? `(${friendCount})` : '';
     }
+    // 同步更新"再吃"按钮上的次数，与"我的评价(N)"保持一致
+    mapCardState.checkInCount = myCount;
+    updateCheckInBtnUI();
 }
 
 function refreshMapSocialButtonsUI() {
@@ -1261,6 +1291,9 @@ window.initMap = () => {
             this.div = document.createElement('div');
             this.div.className = `map-pin ${this.htmlClass}`;
             this.div.innerHTML = this.iconHtml;
+            // 根据纬度设置 z-index：纬度越低（越靠南/靠下）越在上层
+            const lat = (typeof this.latlng?.lat === 'function') ? this.latlng.lat() : 0;
+            this.div.style.zIndex = String(Math.round((90 - lat) * 1000000));
             // 绑定点击事件
             this.div.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -1282,6 +1315,11 @@ window.initMap = () => {
                 this.div.style.left = left + 'px';
                 this.div.style.top = top + 'px';
             }
+        }
+
+        setCompact(flag) {
+            if (!this.div) return;
+            this.div.classList.toggle('is-dot', !!flag);
         }
 
         // 当标记从地图移除时调用
@@ -1311,6 +1349,11 @@ window.initMap = () => {
 
     // 渲染店铺标记（如果数据已加载）
     window.renderMarkers();
+
+    // 缩放变化时切换图标紧凑模式（小白边圆点）
+    map.addListener('zoom_changed', () => {
+        applyMarkerCompactness();
+    });
 
     // ==========================================
     // 绑定搜索框事件
@@ -1398,9 +1441,13 @@ window.renderMarkers = () => {
         if (!store.lat || !store.lng) return;
         if (activePinnedStoreId && store.id === activePinnedStoreId) return;
 
-        // 默认样式
-        let pinClass = "pin-default";
-        let iconHtml = getMapPinMarkup('default');
+        // 默认样式：根据平均评分（>=3.5 显示 pin-default，<3.5 显示 pin-default02）
+        const avgRatingForPin = (typeof window.getStoreAverageRating === 'function')
+            ? Number(window.getStoreAverageRating(store)) || 0
+            : 0;
+        const isLowRated = avgRatingForPin > 0 && avgRatingForPin < 3.5;
+        let pinClass = isLowRated ? "pin-default-low" : "pin-default";
+        let iconHtml = getMapPinMarkup(isLowRated ? 'default-low' : 'default');
 
         // 根据状态设置不同颜色
         // 优先级：难吃(蓝) > 好吃(红) > 想吃(黄) > 默认
@@ -1434,7 +1481,20 @@ window.renderMarkers = () => {
         marker.setMap(map);
         storeMarkers.push(marker);
     });
+
+    // 渲染完成后立即应用一次紧凑模式
+    applyMarkerCompactness();
 };
+
+// 根据当前缩放级别决定是否使用紧凑（小圆点）模式
+function applyMarkerCompactness() {
+    if (!map) return;
+    const zoom = Number(map.getZoom() || 15);
+    const compact = zoom <= 13;
+    storeMarkers.forEach(m => {
+        if (m && typeof m.setCompact === 'function') m.setCompact(compact);
+    });
+}
 
 /* =========================================
    3. 渲染地图详情卡片（从数据库数据）
@@ -2003,12 +2063,31 @@ window.toggleMapCheckIn = () => {
  * 更新打卡按钮UI
  */
 function updateCheckInBtnUI() {
+    // 始终以"我的评价"实际条数为准，避免缓存的 mapCardState.checkInCount 过期
+    const card = document.getElementById('map-detail-card');
+    const storeId = card?.dataset?.storeId || '';
+    let count = Number(mapCardState.checkInCount) || 0;
+    if (storeId && Array.isArray(window.localStores)) {
+        const store = window.localStores.find(s => s.id === storeId);
+        if (store) {
+            const revs = Array.isArray(store.revs) ? store.revs : [];
+            count = revs.filter(r => isMyMapReview(r)).length;
+            mapCardState.checkInCount = count;
+        }
+    }
     const txt = document.getElementById('txt-checkin-count');
     const label = document.querySelector('.sheet-checkin-btn .checkin-label');
-    if (txt && mapCardState.checkInCount > 0) {
-        txt.innerText = `(吃过${mapCardState.checkInCount}次)`;
-        if (label) label.innerText = "再吃";
+    if (txt) {
+        txt.innerText = formatCheckInCountLabel(count);
     }
+    if (label) label.innerText = count > 0 ? '再吃' : '记录';
+}
+
+function formatCheckInCountLabel(count) {
+    const normalizedCount = Number.isFinite(Number(count)) ? Number(count) : 0;
+    if (normalizedCount <= 0) return '(还没吃过)';
+    const displayCount = normalizedCount > 99 ? '99+' : String(normalizedCount);
+    return `(吃过${displayCount}次)`;
 }
 
 /**
@@ -2421,6 +2500,10 @@ function bindMapSheetOutsideClick() {
         if (e.target.closest('#map-review-overlay')) return;
         if (e.target.closest('#view-profile.friend-profile-overlay')) return;
         if (document.getElementById('view-profile')?.classList.contains('friend-profile-overlay')) return;
+        // 图片放大弹窗打开期间的所有点击都不应关闭店铺弹窗
+        const imgModal = document.getElementById('activity-image-modal');
+        if (imgModal && imgModal.classList.contains('open')) return;
+        if (e.target.closest('#activity-image-modal')) return;
         const mapViewVisible = !document.getElementById('view-map')?.classList.contains('hidden');
         if (mapViewVisible) {
             // 地图页：只有 full 占比缩回 half，half/peek 不变

@@ -223,11 +223,6 @@
                 <p style="text-align:center; color:#ccc; margin-top:40px;">Loading...</p>
             </div>
 
-            <button class="home-fab-btn fab-top-btn" onclick="scrollHomeToTop()" aria-label="返回顶部">
-                <img src="images/jiantou.svg" class="home-fab-icon" alt="">
-                <span class="home-fab-text">返回顶部</span>
-            </button>
-
             <button class="fab-dice-btn" onclick="openRandomModal()">
                 <span class="fab-dice-icon">🎲</span>
                 <span class="fab-dice-text">吃什么？</span>
@@ -489,7 +484,13 @@
 
                     <div class="add-input-card">
                         <div class="add-input-label">日期<span style="color:#8f8f8f; font-size:12px;">（选填）</span></div>
-                        <input type="date" id="newMealDate" class="input-std">
+                        <div class="custom-date-wrap">
+                            <button type="button" class="custom-date-button" id="newMealDateButton" onclick="openMealDatePicker()">
+                                <span class="custom-date-text is-empty" id="newMealDateText">点击选择日期</span>
+                                <i data-lucide="calendar" width="18" class="custom-date-icon"></i>
+                            </button>
+                            <input type="date" id="newMealDate" class="custom-date-native">
+                        </div>
                     </div>
 
                     <div class="upload-box" onclick="document.getElementById('fileInput').click()">
@@ -582,7 +583,6 @@
                 <div id="profile-menu" class="profile-menu-overlay" onclick="closeProfileMenu(event)">
                     <div class="profile-menu-sheet" onclick="event.stopPropagation()">
                         <div class="profile-menu-sheet-header">
-                            <div class="profile-menu-sheet-title">菜单</div>
                             <button class="profile-menu-close-btn" onclick="closeProfileMenu()">
                                 <i data-lucide="x" width="20"></i>
                             </button>
@@ -597,6 +597,14 @@
                                     <span class="profile-menu-item-title">切换语言</span>
                                 </span>
                                 <span class="profile-menu-item-badge">即将上线</span>
+                            </button>
+                            <button id="profile-menu-install-btn" class="profile-menu-item hidden" onclick="installPwaFromMenu()">
+                                <span class="profile-menu-item-icon">
+                                    <i data-lucide="download" width="18"></i>
+                                </span>
+                                <span class="profile-menu-item-text">
+                                    <span class="profile-menu-item-title">添加到桌面</span>
+                                </span>
                             </button>
                             <button class="profile-menu-item danger" onclick="logoutFromMenu()">
                                 <span class="profile-menu-item-icon">
@@ -692,6 +700,35 @@
                 <div class="login-header">
                     <div class="login-logo"><img src="images/logo.svg" alt="MoguMode" class="brand-logo-icon"> MoguMode
                     </div>
+                </div>
+
+                <!-- iOS 添加到桌面引导弹窗 -->
+                <div id="install-ios-guide" class="install-ios-guide hidden" onclick="if(event.target===this) closeInstallIosGuide()">
+                    <div class="install-ios-guide-card">
+                        <div class="install-ios-guide-title">添加到主屏幕</div>
+                        <div class="install-ios-guide-step">
+                            <span class="install-ios-step-num">1</span>
+                            点击底部分享按钮 <img src="images/share-ios.svg" alt="分享" onerror="this.style.display='none'" style="height:18px;vertical-align:middle">
+                        </div>
+                        <div class="install-ios-guide-step">
+                            <span class="install-ios-step-num">2</span>
+                            选择「添加到主屏幕」
+                        </div>
+                        <div class="install-ios-guide-step">
+                            <span class="install-ios-step-num">3</span>
+                            点击「添加」即可在桌面打开
+                        </div>
+                        <button class="install-ios-guide-close" onclick="closeInstallIosGuide()">知道了</button>
+                    </div>
+                </div>
+
+                <!-- 内嵌浏览器（微信/QQ等）提示：登录可能失败，建议复制链接到外部浏览器打开 -->
+                <div id="inapp-browser-notice" class="inapp-browser-notice hidden">
+                    <div class="inapp-browser-notice-text">
+                        检测到你正在微信或其他 App 内置浏览器中打开本站，登录可能无法完成。请复制下方网址，到 Safari / Chrome 等浏览器中打开。
+                    </div>
+                    <div class="inapp-browser-notice-url" id="inapp-browser-notice-url"></div>
+                    <button class="inapp-browser-notice-btn" onclick="copyCurrentSiteUrl()">复制网址</button>
                 </div>
 
                 <!-- 首屏登录入口 -->
@@ -870,12 +907,14 @@
                 <!-- 随机结果卡片区域 -->
                 <div id="random-result-wrap" class="random-result-container" style="display:none;"></div>
 
-                <!-- 简单筛选：步行15分钟以内 -->
-                <div class="rf-simple-wrap" style="display:flex; justify-content:center; margin:12px 0;">
-                    <label class="rf-checkbox"
-                        style="display:inline-flex; align-items:center; gap:6px; font-size:13px; color:#2d3436; cursor:pointer;">
-                        <input type="checkbox" id="rf-walk-15" checked>
-                        <span>步行15分钟以内</span>
+                <!-- 简单筛选：步行X分钟以内 -->
+                <div class="rf-simple-wrap">
+                    <label class="rf-checkbox random-walk-filter">
+                        <input type="checkbox" id="rf-walk-15" checked onchange="updateRandomPoolHint()">
+                        <span>步行</span>
+                        <input type="number" id="rf-walk-minutes" class="rf-minute-input" value="15" min="1"
+                            inputmode="numeric" oninput="updateRandomPoolHint()" onchange="updateRandomPoolHint()">
+                        <span>分钟以内</span>
                     </label>
                 </div>
 
@@ -1143,8 +1182,8 @@
     <!-- =========================================
          JAVASCRIPT FILES
          ========================================= -->
-    <script type="module" src="app.js?v=32-friend-btn1"></script>
-    <script src="map.js?v=32-friend-btn1"></script>
+    <script type="module" src="app.js?v=66-friend-mogu"></script>
+    <script src="map.js?v=66-friend-mogu"></script>
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvqupW6XZ7A61lutSD8_GlV31Xdc5ZTLw&callback=initGoogleMap&libraries=geometry">
         </script>
@@ -1249,9 +1288,7 @@
             </div>
             <div class="delete-review-modal-actions">
                 <button class="delete-review-action delete-review-action-danger"
-                    onclick="confirmDeleteReviewRecord('full')">删除全部</button>
-                <button class="delete-review-action delete-review-action-dark"
-                    onclick="confirmDeleteReviewRecord('content-only')">只删除文字和照片</button>
+                    onclick="confirmDeleteReviewRecord('full')">删除</button>
                 <button class="delete-review-action delete-review-action-cancel"
                     onclick="closeDeleteReviewRecordModal()">取消</button>
             </div>

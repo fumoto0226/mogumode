@@ -972,6 +972,13 @@ header {
     height: 24px;
     display: block;
     object-fit: contain;
+    opacity: 0.7;
+}
+
+/* 选中（已标记好吃/难吃）时恢复正常颜色 */
+.action-item.active-like .action-icon,
+.action-item.active-dislike .action-icon {
+    opacity: 1;
 }
 
 @media (max-width: 390px) {
@@ -2052,6 +2059,69 @@ header {
     margin-bottom: 10px;
 }
 
+/* 拖动蘑菇评分时禁止文字被选中 */
+.add-rating-card,
+.add-rating-card * {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}
+
+/* 自定义日期选择按钮（替代各设备样式不一致的原生 <input type=date>） */
+.custom-date-wrap {
+    position: relative;
+}
+
+.custom-date-button {
+    width: 100%;
+    background: #fff;
+    border: 1px solid #dfe6e9;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 15px;
+    color: #2d3436;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    box-sizing: border-box;
+}
+
+.custom-date-button:active {
+    background: #f7f8fa;
+}
+
+.custom-date-text {
+    flex: 1;
+    color: #2d3436;
+}
+
+.custom-date-text.is-empty {
+    color: #b2b7be;
+}
+
+.custom-date-icon {
+    flex: 0 0 18px;
+    color: #6c7a89;
+}
+
+.custom-date-native {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    pointer-events: none;
+    border: 0;
+    padding: 0;
+    margin: 0;
+}
+
 .add-card-title {
     font-size: 16px;
     /* font-weight: 800; */
@@ -2482,10 +2552,13 @@ header {
     color: white;
     border: none;
     border-radius: 12px;
+    width: 84px;
     padding: 8px 12px;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 2px;
     cursor: pointer;
     margin-left: auto;
@@ -2493,8 +2566,12 @@ header {
 }
 
 .checkin-count {
+    display: block;
+    width: 100%;
     font-size: 10px;
     opacity: 0.7;
+    text-align: center;
+    white-space: nowrap;
 }
 
 .checkin-label {
@@ -2525,6 +2602,15 @@ header {
 .friend-score {
     font-size: 22px;
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.friend-score-mogu {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
 }
 
 .friend-comment-carousel-track {
@@ -3395,8 +3481,8 @@ header {
 
 /* Map Pin */
 .map-pin {
-    width: 32px;
-    height: 32px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -3412,10 +3498,10 @@ header {
 
 .map-pin img,
 .map-pin svg {
-    width: 32px;
-    height: 32px;
+    width: 26px;
+    height: 26px;
     display: block;
-    flex: 0 0 32px;
+    flex: 0 0 26px;
     image-rendering: auto;
     shape-rendering: geometricPrecision;
     text-rendering: geometricPrecision;
@@ -3425,6 +3511,168 @@ header {
 
 .map-pin svg {
     overflow: visible;
+}
+
+/* 紧凑模式：缩放较小时把图标变成带白色描边的小圆点（类似 Google Maps） */
+.map-pin.is-dot {
+    width: 26px;
+    height: 26px;
+    align-items: center;
+    justify-content: center;
+}
+
+.map-pin.is-dot img,
+.map-pin.is-dot svg {
+    display: none !important;
+}
+
+.map-pin.is-dot::before {
+    content: '';
+    display: block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    background: #FF6666;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.map-pin.is-dot.pin-default::before { background: #FF6666; }
+.map-pin.is-dot.pin-default-low::before { background: #b2bec3; }
+.map-pin.is-dot.pin-like::before { background: #FF6ECB; }
+.map-pin.is-dot.pin-dislike::before { background: #4099FF; }
+.map-pin.is-dot.pin-fav::before { background: #B9A930; }
+
+/* iOS 添加到桌面引导弹窗 */
+.install-ios-guide {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 11000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.install-ios-guide.hidden {
+    display: none;
+}
+
+.install-ios-guide-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 22px 22px 18px;
+    width: 100%;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.18);
+}
+
+.install-ios-guide-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #111827;
+    text-align: center;
+}
+
+.install-ios-guide-step {
+    font-size: 14px;
+    color: #2d3436;
+    line-height: 1.55;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.install-ios-step-num {
+    flex: 0 0 22px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #1f8fff;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.install-ios-guide-close {
+    margin-top: 6px;
+    background: #1f8fff;
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 10px 0;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* 内嵌浏览器（微信等）登录提示横幅 */
+.inapp-browser-notice {
+    margin: 16px 20px 0;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: #fff7e0;
+    border: 1px solid #ffd680;
+    color: #5a3b00;
+    font-size: 13px;
+    line-height: 1.55;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.inapp-browser-notice.hidden {
+    display: none;
+}
+
+.inapp-browser-notice-text {
+    font-weight: 600;
+}
+
+.inapp-browser-notice-url {
+    font-size: 12px;
+    color: #8a5a00;
+    word-break: break-all;
+    background: rgba(255, 255, 255, 0.7);
+    padding: 6px 8px;
+    border-radius: 8px;
+    user-select: all;
+    -webkit-user-select: all;
+}
+
+.inapp-browser-notice-btn {
+    align-self: flex-start;
+    background: #1f8fff;
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* 选中店铺的红色定位图标（独立于 SimpleMarker，置于 floatPane 顶层） */
+.map-pin-selected-overlay {
+    position: absolute;
+    pointer-events: none;
+    width: 28px;
+    height: 40px;
+    z-index: 999999999;
+}
+
+.map-pin-selected-overlay svg {
+    display: block;
+    width: 28px;
+    height: 40px;
+    filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.32));
 }
 
 /* =========================================
@@ -3504,7 +3752,6 @@ header {
 /* =========================================
    11. FAB Dice Button & Random Panel
    ========================================= */
-.home-fab-btn,
 .fab-dice-btn {
     position: fixed;
     right: calc(50% - 224px + 20px);
@@ -3524,25 +3771,13 @@ header {
     transition: transform 0.2s;
 }
 
-.fab-top-btn {
-    bottom: 100px;
-}
-
 .fab-dice-btn {
-    bottom: 170px;
+    bottom: 120px;
 }
 
-.home-fab-btn.loc-modal-hidden,
 .fab-dice-btn.loc-modal-hidden {
     opacity: 0;
     pointer-events: none;
-}
-
-.home-fab-icon {
-    width: 20px;
-    height: 20px;
-    object-fit: contain;
-    display: block;
 }
 
 .fab-dice-icon {
@@ -3554,18 +3789,15 @@ header {
 /* For mobile screens smaller than 448px */
 @media (max-width: 448px) {
 
-    .home-fab-btn,
     .fab-dice-btn {
         right: 20px;
     }
 }
 
-.home-fab-btn:active,
 .fab-dice-btn:active {
     transform: scale(0.9);
 }
 
-.home-fab-text,
 .fab-dice-text {
     font-size: 10px;
     color: #2d3436;
@@ -4032,6 +4264,34 @@ header {
     font-size: 80px;
     color: #dfe6e9;
     font-weight: 900;
+    line-height: 1;
+}
+
+.random-empty-inline {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 0 16px;
+    text-align: center;
+}
+
+.random-pool-hint {
+    font-size: 13px;
+    color: #2d3436;
+    line-height: 1.5;
+}
+
+.random-pool-hint.random-pool-empty {
+    color: #636e72;
+}
+
+.random-pool-count {
+    color: #ff6fa3;
+    font-weight: 700;
+    margin: 0 3px;
 }
 
 /* Random Result Container */
@@ -4182,6 +4442,44 @@ header {
     font-size: 11px;
     color: #666;
     cursor: pointer;
+}
+
+.rf-simple-wrap {
+    display: flex;
+    justify-content: center;
+    margin: 12px 0;
+}
+
+.random-walk-filter {
+    gap: 6px;
+    font-size: 13px;
+    color: #2d3436;
+}
+
+.rf-minute-input {
+    width: 42px;
+    height: 28px;
+    padding: 4px 6px;
+    border: 1px solid #dfe6e9;
+    border-radius: 6px;
+    background: #fff;
+    font-size: 13px;
+    color: #2d3436;
+    text-align: center;
+    outline: none;
+    appearance: textfield;
+    -webkit-appearance: none;
+    -moz-appearance: textfield;
+}
+
+.rf-minute-input:focus {
+    border-color: #1d74d7;
+}
+
+.rf-minute-input::-webkit-outer-spin-button,
+.rf-minute-input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
 }
 
 /* .rf-checkbox input {
@@ -4574,28 +4872,27 @@ header {
 }
 
 .profile-menu-overlay {
-    position: absolute;
+    position: fixed;
     inset: 0;
-    background: rgba(17, 24, 39, 0.18);
+    background: transparent;
     z-index: 10050;
     display: flex;
     align-items: stretch;
     justify-content: flex-start;
     overflow: hidden;
-    opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transition: opacity 0.24s ease;
+    transition: visibility 0s linear 0.28s;
 }
 
 .profile-menu-overlay.open {
-    opacity: 1;
     visibility: visible;
     pointer-events: auto;
+    transition: visibility 0s linear 0s;
 }
 
 .profile-menu-sheet {
-    width: min(72%, 300px);
+    width: 280px;
     height: 100%;
     background: #ffffff;
     box-shadow: 18px 0 42px rgba(15, 23, 42, 0.14);
@@ -4611,6 +4908,18 @@ header {
 
 .profile-menu-overlay.open .profile-menu-sheet {
     transform: translateX(0);
+}
+
+/* 打开侧栏时，整个页面（个人页 + 底部导航）一起向右平移露出菜单 */
+body.profile-menu-active #view-profile,
+body.profile-menu-active .nav-bar {
+    transform: translateX(280px);
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#view-profile,
+.nav-bar {
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .profile-menu-sheet-header {
@@ -5273,12 +5582,23 @@ header {
     transform: translateX(0);
 }
 
+/* 关闭好友页：从左往右滑出（回到右边的来路） */
+.friends-page.exit-to-right {
+    transform: translateX(100%);
+}
+
 #view-profile #user-info> :not(#friends-page) {
     transform: translateX(0);
     transition: transform 0.26s ease;
     will-change: transform;
 }
 
+/* 打开好友列表时，主页内容跟随好友列表一起整体向左滑动（同步过渡，类似记录页面打开每日页面） */
+#view-profile.friends-page-pushing #user-info> :not(#friends-page) {
+    transform: translateX(-100%);
+}
+
+/* 进入好友主页或从好友主页返回好友列表时，内容滑出/滑入右侧（覆盖 pushing） */
 #view-profile.friends-page-active #user-info> :not(#friends-page) {
     transform: translateX(100%);
 }

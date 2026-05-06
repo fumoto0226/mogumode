@@ -16,7 +16,7 @@
 // 这些是 Firebase 提供的功能模块
 // ==========================================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithRedirect, updateProfile } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithRedirect, updateProfile, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, query, orderBy, setDoc, where, deleteDoc, getDoc, getDocs, increment } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 
@@ -33,13 +33,17 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v29";
+const APP_BUILD_VERSION = "v30";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 const LOCATION_CACHE_STORAGE_KEY = "mogumode:last-origin-v2";
 
 // 初始化 Firebase 服务
 const app = initializeApp(firebaseConfig);           // 初始化 Firebase 应用
 const auth = getAuth(app);                           // 获取认证服务
+// 使用 localStorage 持久化登录状态，避免某些浏览器（webview/隐身模式）sessionStorage 不可用导致登录失败
+setPersistence(auth, browserLocalPersistence).catch((err) => {
+    console.warn('setPersistence(browserLocal) failed:', err);
+});
 const db = getFirestore(app);                        // 获取数据库服务
 const storage = getStorage(app);                     // 获取存储服务
 
@@ -686,21 +690,242 @@ window.showLoginForm = () => {
 };
 
 /**
+ * 检测是否在 App 内嵌浏览器（微信、QQ、抖音、小红书、Line、FB Messenger 等）中
+ */
+function isInAppBrowser() {
+    const ua = (navigator.userAgent || '').toLowerCase();
+    const patterns = [
+        'micromessenger', // 微信
+        'qq/',
+        'qqbrowser',
+        'weibo',
+        'douyin',
+        'tiktok',
+        'xhs',
+        'xiaohongshu',
+        'line/',
+        'fbav', // Facebook
+        'fbios',
+        'instagram',
+        'twitter',
+        'wechat',
+        'kakaotalk',
+        'snapchat'
+    ];
+    return patterns.some(p => ua.includes(p));
+}
+
+function formatMealDateDisplay(value) {
+    const v = String(value || '').trim();
+    if (!v) return { text: '点击选择日期', empty: true };
+    const [y, m, d] = v.split('-');
+    if (!y || !m || !d) return { text: '点击选择日期', empty: true };
+    return { text: `${y}/${m}/${d}`, empty: false };
+}
+
+function refreshMealDateButtonText() {
+    const input = document.getElementById('newMealDate');
+    const text = document.getElementById('newMealDateText');
+    if (!input || !text) return;
+    const { text: t, empty } = formatMealDateDisplay(input.value);
+    text.innerText = t;
+    text.classList.toggle('is-empty', empty);
+}
+window.refreshMealDateButtonText = refreshMealDateButtonText;
+
+window.openMealDatePicker = () => {
+    const input = document.getElementById('newMealDate');
+    if (!input) return;
+    if (typeof input.showPicker === 'function') {
+        try { input.showPicker(); return; } catch (e) { /* fallback */ }
+    }
+    // 退路：临时让 input 可点击 / 可见再触发
+    const prevPointer = input.style.pointerEvents;
+    const prevOpacity = input.style.opacity;
+    input.style.pointerEvents = 'auto';
+    input.style.opacity = '0.01';
+    input.focus();
+    try { input.click(); } catch (e) {}
+    setTimeout(() => {
+        input.style.pointerEvents = prevPointer;
+        input.style.opacity = prevOpacity;
+    }, 0);
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('newMealDate');
+    if (input && !input.dataset.bound) {
+        input.dataset.bound = '1';
+        input.addEventListener('change', refreshMealDateButtonText);
+        input.addEventListener('input', refreshMealDateButtonText);
+        refreshMealDateButtonText();
+    }
+});
+
+window.copyCurrentSiteUrl = async () => {
+    const url = window.location.href;
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(url);
+        } else {
+            const ta = document.createElement('textarea');
+            ta.value = url;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+        }
+        if (typeof showAppFeedbackToast === 'function') {
+            showAppFeedbackToast('网址已复制，请到浏览器中粘贴打开');
+        } else {
+            alert('网址已复制，请到浏览器中粘贴打开');
+        }
+    } catch (err) {
+        alert('复制失败，请长按下方网址手动复制：\n' + url);
+    }
+};
+
+(function setupInAppBrowserNotice() {
+    const init = () => {
+        const notice = document.getElementById('inapp-browser-notice');
+        if (!notice) return;
+        if (!isInAppBrowser()) return;
+        const urlEl = document.getElementById('inapp-browser-notice-url');
+        if (urlEl) urlEl.innerText = window.location.href;
+        notice.classList.remove('hidden');
+    };
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+
+/**
+ * PWA 添加到桌面：捕获 beforeinstallprompt，在菜单中显示按钮
+ */
+let deferredInstallPrompt = null;
+
+function isStandalonePwa() {
+    return window.matchMedia?.('(display-mode: standalone)')?.matches
+        || window.navigator.standalone === true;
+}
+
+function isMobileBrowser() {
+    const ua = (navigator.userAgent || '').toLowerCase();
+    return /iphone|ipad|ipod|android|mobile/.test(ua);
+}
+
+function isIosSafariLike() {
+    const ua = navigator.userAgent || '';
+    return /iPhone|iPad|iPod/i.test(ua);
+}
+
+function refreshInstallButtonVisibility() {
+    const btn = document.getElementById('profile-menu-install-btn');
+    if (!btn) return;
+    // 已经作为 PWA 打开，或在桌面端，则不显示
+    if (isStandalonePwa() || !isMobileBrowser()) {
+        btn.classList.add('hidden');
+        return;
+    }
+    // Android 等支持 beforeinstallprompt：等捕获到事件再显示；
+    // iOS 等不支持的浏览器：直接显示，点击后弹出操作引导。
+    if (deferredInstallPrompt || isIosSafariLike()) {
+        btn.classList.remove('hidden');
+    } else {
+        btn.classList.add('hidden');
+    }
+}
+
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    refreshInstallButtonVisibility();
+});
+
+window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    const btn = document.getElementById('profile-menu-install-btn');
+    if (btn) btn.classList.add('hidden');
+    if (typeof showAppFeedbackToast === 'function') {
+        showAppFeedbackToast('已添加到桌面');
+    }
+});
+
+window.installPwaFromMenu = async () => {
+    if (deferredInstallPrompt) {
+        try {
+            deferredInstallPrompt.prompt();
+            const choice = await deferredInstallPrompt.userChoice;
+            if (choice && choice.outcome === 'accepted') {
+                deferredInstallPrompt = null;
+                refreshInstallButtonVisibility();
+                closeProfileMenu();
+            }
+        } catch (err) {
+            console.error('install prompt failed', err);
+        }
+        return;
+    }
+    // iOS 等不支持自动安装的浏览器：弹出引导
+    if (isIosSafariLike()) {
+        const guide = document.getElementById('install-ios-guide');
+        if (guide) guide.classList.remove('hidden');
+        return;
+    }
+    if (typeof showAppFeedbackToast === 'function') {
+        showAppFeedbackToast('当前浏览器暂不支持一键添加，请在浏览器菜单中选择"添加到主屏幕"');
+    }
+};
+
+window.closeInstallIosGuide = () => {
+    const guide = document.getElementById('install-ios-guide');
+    if (guide) guide.classList.add('hidden');
+};
+
+(function initInstallButtonOnLoad() {
+    const init = () => refreshInstallButtonVisibility();
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+
+/**
  * Google账号登录
  */
 window.loginWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
+    // 强制每次都弹出账号选择，方便用户切换 Google 账号
+    provider.setCustomParameters({ prompt: 'select_account' });
     try {
         await signInWithPopup(auth, provider);
         switchView('home');
     } catch (e) {
-        // 弹窗被拦截时，自动降级到 redirect 登录
-        if (e && e.code === 'auth/popup-blocked') {
-            alert("浏览器拦截了登录弹窗，正在切换到跳转登录...");
-            await signInWithRedirect(auth, provider);
+        const code = e?.code || '';
+        const msg = e?.message || '';
+        // 弹窗被拦截、storage 不可用、内嵌环境不支持等情况下，自动降级到 redirect 登录
+        const shouldFallbackToRedirect =
+            code === 'auth/popup-blocked' ||
+            code === 'auth/popup-closed-by-user' ||
+            code === 'auth/cancelled-popup-request' ||
+            code === 'auth/web-storage-unsupported' ||
+            code === 'auth/operation-not-supported-in-this-environment' ||
+            code === 'auth/internal-error' ||
+            /sessionStorage|web[- ]?storage|initial state/i.test(msg);
+        if (shouldFallbackToRedirect) {
+            try {
+                await signInWithRedirect(auth, provider);
+            } catch (err) {
+                alert(`Google 登录失败: ${err.message || err}`);
+            }
             return;
         }
-        alert(`Google 登录失败: ${e.message}`);
+        alert(`Google 登录失败: ${msg}`);
     }
 };
 
@@ -783,13 +1008,32 @@ window.toggleProfileMenu = (event) => {
     event?.stopPropagation?.();
     const menu = document.getElementById('profile-menu');
     if (!menu) return;
-    menu.classList.toggle('open');
+    // 首次打开时把菜单移到 body 顶层，避免被 #view-profile 的位移带着一起平移
+    const justMoved = menu.parentElement !== document.body;
+    if (justMoved) {
+        document.body.appendChild(menu);
+    }
+    const willOpen = !menu.classList.contains('open');
+    if (willOpen) refreshInstallButtonVisibility();
+    const apply = () => {
+        menu.classList.toggle('open', willOpen);
+        document.body.classList.toggle('profile-menu-active', willOpen);
+    };
+    if (justMoved && willOpen) {
+        // 等一帧让浏览器计算迁移后的初始 transform，再触发动画，
+        // 避免首次打开时跳过过渡动画直接闪现
+        void menu.offsetWidth;
+        requestAnimationFrame(() => requestAnimationFrame(apply));
+    } else {
+        apply();
+    }
 };
 
 window.closeProfileMenu = (event) => {
     if (event?.target && event.target !== event.currentTarget) return;
     const menu = document.getElementById('profile-menu');
     if (menu) menu.classList.remove('open');
+    document.body.classList.remove('profile-menu-active');
 };
 
 window.handleFakeLanguageSwitch = () => {
@@ -1815,11 +2059,42 @@ function formatAbsoluteDateTime(ts) {
     return `${y}.${m}.${day} ${hh}:${mm}`;
 }
 
+/**
+ * 统一的日期格式化：今天 / 昨天 / MM.DD（同年）/ YYYY.MM.DD（跨年）
+ * @param {number} ts 时间戳
+ * @param {object} opts withTime: 是否显示 HH:MM, editedPrefix: 是否前缀"编辑于 "
+ */
+function formatSmartDate(ts, opts = {}) {
+    const { withTime = true, editedPrefix = false } = opts;
+    const t = Number(ts);
+    if (!Number.isFinite(t) || t <= 0) return '';
+    const d = new Date(t);
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startOfTarget = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const oneDay = 86400000;
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    let dateStr;
+    if (startOfTarget === startOfToday) {
+        dateStr = '今天';
+    } else if (startOfTarget === startOfToday - oneDay) {
+        dateStr = '昨天';
+    } else if (d.getFullYear() === now.getFullYear()) {
+        dateStr = `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+    } else {
+        dateStr = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+    }
+    const timeStr = withTime ? ` ${hh}:${mm}` : '';
+    return `${editedPrefix ? '编辑于 ' : ''}${dateStr}${timeStr}`;
+}
+window.formatSmartDate = formatSmartDate;
+
 function formatReviewDisplayDateLabel(rev) {
     const editedAt = getTimestampValue(rev?.editedAt);
     const baseTs = editedAt || getTimestampValue(rev?.createdAt);
     if (!baseTs) return '';
-    return `${editedAt ? '编辑于 ' : ''}${formatAbsoluteDateTime(baseTs)}`;
+    return formatSmartDate(baseTs, { editedPrefix: !!editedAt });
 }
 
 function getStoreLatestActivityTimestamp(store) {
@@ -3893,6 +4168,7 @@ function resetAddComposerFlow(opts = {}) {
     if (hiddenName) hiddenName.value = "";
     if (budget) budget.value = "";
     if (mealDate) mealDate.value = getTodayDayKey();
+    if (typeof refreshMealDateButtonText === 'function') refreshMealDateButtonText();
     if (review) review.value = "";
     if (file) file.value = "";
     const searchInput = document.getElementById('add-search-input');
@@ -4067,6 +4343,7 @@ window.openEditReviewComposer = (storeId, reviewIndex, opts = {}) => {
             budgetInput.value = Number.isFinite(budgetNum) && budgetNum > 0 ? String(budgetNum) : '';
         }
         if (mealDateInput) mealDateInput.value = getReviewMealDayKey(targetRev, getReviewEffectiveTimestamp(targetRev) || Date.now());
+        if (typeof refreshMealDateButtonText === 'function') refreshMealDateButtonText();
         if (reviewInput) reviewInput.value = String(targetRev?.text || '');
         if (fileInput) fileInput.value = '';
         setAddRatingValue(Number(targetRev?.rating || store?.rating || 3.8));
@@ -5913,7 +6190,7 @@ async function getGeolocationPermissionState() {
 
 function toggleLocationLoadingModal(visible) {
     const modal = document.getElementById('loc-loading-modal');
-    const fabBtns = document.querySelectorAll('.home-fab-btn, .fab-dice-btn');
+    const fabBtns = document.querySelectorAll('.fab-dice-btn');
     if (!modal) return;
     modal.style.display = visible ? 'flex' : 'none';
     fabBtns.forEach((btn) => {
@@ -5923,7 +6200,7 @@ function toggleLocationLoadingModal(visible) {
 
 function toggleLocationConfirmModal(visible) {
     const modal = document.getElementById('loc-confirm-modal');
-    const fabBtns = document.querySelectorAll('.home-fab-btn, .fab-dice-btn');
+    const fabBtns = document.querySelectorAll('.fab-dice-btn');
     if (!modal) return;
     modal.style.display = visible ? 'flex' : 'none';
     fabBtns.forEach((btn) => {
@@ -6329,12 +6606,6 @@ function scrollActiveViewToTop() {
     scrollTarget.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-window.scrollHomeToTop = () => {
-    const homeView = document.getElementById('view-home');
-    if (!homeView || homeView.classList.contains('hidden')) return;
-    scrollActiveViewToTop();
-};
-
 function shouldIgnoreTopTap(target) {
     return !!target.closest(
         'button, a, input, textarea, select, label, summary, [role="button"], [contenteditable="true"], .user-circle, .location-capsule, .profile-menu-popover'
@@ -6608,9 +6879,64 @@ window.submitReview = async () => {
    "今天吃什么"随机选择器
    ========================================= */
 
-// 随机抽选仅保留"步行15分钟以内"一个简单开关（默认开启）
-// 步行速度：80 米/分钟 → 15 分钟 ≈ 1200m
-const RANDOM_WALK_LIMIT_METERS = 15 * 80;
+// 随机抽选仅保留"步行X分钟以内"一个简单开关（默认15分钟）
+// 步行速度：80 米/分钟
+const RANDOM_WALK_DEFAULT_MINUTES = 15;
+const RANDOM_WALK_METERS_PER_MINUTE = 80;
+
+function getRandomWalkLimitMinutes() {
+    const input = document.getElementById('rf-walk-minutes');
+    const rawValue = Number(input?.value);
+    const minutes = Number.isFinite(rawValue) && rawValue > 0
+        ? Math.round(rawValue)
+        : RANDOM_WALK_DEFAULT_MINUTES;
+    if (input) input.value = String(minutes);
+    return minutes;
+}
+
+function getRandomPickPool() {
+    const walkOnly = !!document.getElementById('rf-walk-15')?.checked;
+    const walkMinutes = getRandomWalkLimitMinutes();
+    const walkLimitMeters = walkMinutes * RANDOM_WALK_METERS_PER_MINUTE;
+    const pool = (Array.isArray(localStores) ? localStores : []).filter(s => {
+        if (isStorePermanentlyClosed(s)) return false;
+        if (walkOnly) {
+            const distRaw = Number(getStoreLinearDistanceMeters(s));
+            if (!Number.isFinite(distRaw) || distRaw <= 0) return false;
+            if (distRaw > walkLimitMeters) return false;
+        }
+        return true;
+    });
+    return { pool, walkOnly, walkMinutes };
+}
+
+window.updateRandomPoolHint = () => {
+    const box = document.getElementById('random-state-empty');
+    if (!box) return;
+    // 不要覆盖结果或抽选动画
+    if (box.style.display === 'none') return;
+    const { pool, walkOnly, walkMinutes } = getRandomPickPool();
+    const count = pool.length;
+    // 没有勾选距离限制时，不显示数量提示
+    if (!walkOnly) {
+        box.innerHTML = `<span class="big-question-mark">?</span>`;
+        return;
+    }
+    if (count === 0) {
+        box.innerHTML = `
+            <div class="random-empty-inline">
+                <span class="big-question-mark">?</span>
+                <div class="random-pool-hint random-pool-empty">步行${walkMinutes}分钟以内没有可选的店铺，<br>试试把时间调长一点？</div>
+            </div>`;
+        return;
+    }
+    const display = count > 99 ? '99+' : String(count);
+    box.innerHTML = `
+        <div class="random-empty-inline">
+            <span class="big-question-mark">?</span>
+            <div class="random-pool-hint">将会从附近<span class="random-pool-count">${display}</span>家店铺中进行随机抽选</div>
+        </div>`;
+};
 
 window.openRandomModal = () => {
     document.getElementById('layer-random').classList.add('open');
@@ -6618,6 +6944,7 @@ window.openRandomModal = () => {
     document.getElementById('random-result-wrap').style.display = 'none';
     document.getElementById('btn-random-text').innerText = "随机抽选";
     document.getElementById('random-title').innerText = "今天吃什么？";
+    window.updateRandomPoolHint();
 };
 
 window.closeRandomPanel = () => {
@@ -6632,21 +6959,12 @@ window.closeRandomPanel = () => {
 
 window.doRandomPick = async () => {
     const btn = document.getElementById('btn-do-random');
-    const walkOnly = !!document.getElementById('rf-walk-15')?.checked;
+    const { pool } = getRandomPickPool();
 
-    const pool = localStores.filter(s => {
-        if (isStorePermanentlyClosed(s)) return false;
-        if (walkOnly) {
-            const distRaw = Number(getStoreLinearDistanceMeters(s));
-            if (!Number.isFinite(distRaw) || distRaw <= 0) return false;
-            if (distRaw > RANDOM_WALK_LIMIT_METERS) return false;
-        }
-        return true;
-    });
-
-    if (pool.length === 0) return alert(walkOnly
-        ? "步行15分钟以内没有可选的店铺，试试取消勾选？"
-        : "没有可抽选的店铺！");
+    if (pool.length === 0) {
+        window.updateRandomPoolHint();
+        return;
+    }
 
     btn.innerHTML = `<div class="spinner"></div> 抽选中...`;
 
@@ -7165,19 +7483,10 @@ function formatActivityDate(ts, isEdited = false) {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const startOfTarget = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-    const oneDay = 24 * 60 * 60 * 1000;
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mm = String(d.getMinutes()).padStart(2, '0');
-
-    if (startOfTarget === startOfToday) {
-        return { label: `${isEdited ? '编辑于 ' : ''}今天 ${hh}:${mm}`, isToday: true };
-    }
-    if (startOfTarget === startOfToday - oneDay) {
-        return { label: `${isEdited ? '编辑于 ' : ''}昨天 ${hh}:${mm}`, isToday: false };
-    }
+    const isToday = startOfTarget === startOfToday;
     return {
-        label: `${isEdited ? '编辑于 ' : ''}${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`,
-        isToday: false
+        label: formatSmartDate(d.getTime(), { editedPrefix: isEdited }),
+        isToday
     };
 }
 
@@ -7688,7 +7997,7 @@ window.openRecordDayView = (dayKey) => {
         return `
             <div class="record-day-card">
                 <div class="record-day-head">
-                    <div class="record-day-time">${a.isEdited ? '编辑于 ' : ''}${formatRecordDateTitle(dayKey)} ${hh}:${mm}</div>
+                    <div class="record-day-time">${formatSmartDate(a.createdAt, { editedPrefix: a.isEdited })}</div>
                     ${actionBtns}
                 </div>
                 <div class="record-day-store" onclick="openDetail('${a.storeId}', { mode: 'full', fromMap: false }); event.stopPropagation();">${a.store?.name || '店铺'} <span>（吃过${a.visits}次）</span></div>
@@ -8288,7 +8597,40 @@ window.openFriendsPage = async () => {
     if (profileView) profileView.classList.remove('friends-page-active');
     requestAnimationFrame(() => {
         friendsPage?.classList.add('is-open');
+        // 主页内容跟随好友列表一起向左滑动（同步过渡）
+        if (profileView) profileView.classList.add('friends-page-pushing');
     });
+
+    // 绑定从左往右滑动关闭，并让底层主页内容跟随手指一起平移
+    if (friendsPage && typeof window.bindSwipeBackToClose === 'function') {
+        const profileChildren = profileView
+            ? Array.from(document.getElementById('user-info')?.children || [])
+                .filter(c => c.id !== 'friends-page')
+            : [];
+        window.bindSwipeBackToClose(friendsPage, {
+            isOpen: () => friendsPage.classList.contains('is-open'),
+            onClose: () => window.closeFriendsPage(),
+            onDrag: (dx, w) => {
+                profileChildren.forEach(c => {
+                    c.style.transition = 'none';
+                    const offset = -100 + (dx / w) * 100;
+                    c.style.transform = `translateX(${offset}%)`;
+                });
+            },
+            onSettleClose: () => {
+                profileChildren.forEach(c => {
+                    c.style.transition = 'transform 0.26s ease';
+                    c.style.transform = 'translateX(0)';
+                });
+            },
+            onReset: () => {
+                profileChildren.forEach(c => {
+                    c.style.transition = '';
+                    c.style.transform = '';
+                });
+            }
+        });
+    }
 };
 
 /**
@@ -8307,6 +8649,8 @@ window.closeFriendsPage = (opts = {}) => {
     friendsPage.classList.remove('is-open');
     friendsPage.classList.toggle('exit-to-right', !!exitToRight);
     if (profileView) {
+        // 关闭好友列表时，主页内容也同步从左侧滑回原位
+        profileView.classList.remove('friends-page-pushing');
         if (revealProfileFromRight) {
             requestAnimationFrame(() => profileView.classList.remove('friends-page-active'));
         } else {
@@ -8806,8 +9150,16 @@ window.openFriendProfile = async (uid, opts = {}) => {
         switchProfileTab('activity');
         if (!overlay) {
             if (profileView) {
+                // 直接从打开好友列表的"pushing"状态切换到"active"状态时，
+                // 暂时关闭过渡，把主页内容瞬移到右侧 (+100%)，避免出现从 -100%→+100% 的回弹动画
+                const profileChildren = Array.from(
+                    document.getElementById('user-info')?.children || []
+                ).filter(c => c.id !== 'friends-page');
+                profileChildren.forEach(c => { c.style.transition = 'none'; });
+                profileView.classList.remove('friends-page-pushing');
                 profileView.classList.add('friends-page-active');
                 void profileView.offsetWidth;
+                profileChildren.forEach(c => { c.style.transition = ''; });
             }
             closeFriendsPage({ restoreOwnProfile: false, revealProfileFromRight: true, exitToRight: false });
         }
