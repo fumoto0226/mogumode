@@ -1699,15 +1699,82 @@ function normalizePlaceDisplayName(nameLike) {
     return '';
 }
 
-function withPreferredPlaceName(basePlace = {}, localName = '', englishName = '') {
+// 国家/地区 → 优先语言代码
+const COUNTRY_TO_LANG = {
+    JP: 'ja',
+    KR: 'ko',
+    TW: 'zh-TW',
+    HK: 'zh-HK',
+    MO: 'zh-HK',
+    CN: 'zh-CN',
+    US: 'en', GB: 'en', AU: 'en', NZ: 'en', SG: 'en', CA: 'en', IE: 'en', PH: 'en',
+    FR: 'fr', DE: 'de', IT: 'it', ES: 'es', PT: 'pt', NL: 'nl', BE: 'nl', CH: 'de', AT: 'de',
+    TH: 'th', VN: 'vi', ID: 'id', MY: 'ms',
+    RU: 'ru', UA: 'uk', PL: 'pl', CZ: 'cs', SE: 'sv', NO: 'no', DK: 'da', FI: 'fi', GR: 'el',
+    TR: 'tr', SA: 'ar', AE: 'ar',
+    BR: 'pt-BR', MX: 'es', AR: 'es', CL: 'es', CO: 'es',
+    IN: 'en'
+};
+
+function getCountryCodeFromPlace(place) {
+    const comps = place?.addressComponents || place?.address_components || [];
+    if (!Array.isArray(comps)) return '';
+    const c = comps.find((x) => Array.isArray(x?.types) && x.types.includes('country'));
+    const code = c?.shortText || c?.short_name || c?.shortName || '';
+    return String(code || '').toUpperCase();
+}
+
+function getPreferredLanguageForPlace(place) {
+    const code = getCountryCodeFromPlace(place);
+    if (!code) return '';
+    return COUNTRY_TO_LANG[code] || 'en';
+}
+
+const placeRegionalNameCache = new Map();
+async function fetchPlaceNameByLanguage(placeId, languageCode) {
+    if (!placeId || !languageCode) return '';
+    const cacheKey = `${placeId}::${languageCode}`;
+    if (placeRegionalNameCache.has(cacheKey)) return placeRegionalNameCache.get(cacheKey);
+    try {
+        const res = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?languageCode=${encodeURIComponent(languageCode)}`, {
+            headers: {
+                'X-Goog-Api-Key': MAPS_API_KEY,
+                'X-Goog-FieldMask': 'displayName',
+                'Content-Type': 'application/json'
+            }
+        });
+        if (!res.ok) {
+            placeRegionalNameCache.set(cacheKey, '');
+            return '';
+        }
+        const data = await res.json();
+        const name = normalizePlaceDisplayName(data?.displayName);
+        placeRegionalNameCache.set(cacheKey, name);
+        return name;
+    } catch (err) {
+        console.warn('fetchPlaceNameByLanguage failed:', err);
+        placeRegionalNameCache.set(cacheKey, '');
+        return '';
+    }
+}
+
+function withPreferredPlaceName(basePlace = {}, localName = '', englishName = '', regionalName = '', regionalLang = '') {
     const next = { ...basePlace };
-    const preferredName = String(localName || englishName || normalizePlaceDisplayName(basePlace?.displayName) || '').trim();
+    const localTrim = String(localName || '').trim();
+    const englishTrim = String(englishName || '').trim();
+    const regionalTrim = String(regionalName || '').trim();
+    // 优先级：店铺所在地区语言 > 当地（日文）> 英文
+    const preferredName = String(regionalTrim || localTrim || englishTrim || normalizePlaceDisplayName(basePlace?.displayName) || '').trim();
     next.preferredName = preferredName;
-    next.localName = String(localName || '').trim();
-    next.englishName = String(englishName || '').trim();
+    next.localName = localTrim;
+    next.englishName = englishTrim;
+    next.regionalName = regionalTrim;
+    next.regionalLang = String(regionalLang || '').trim();
+    let langCode = next.regionalLang;
+    if (!langCode) langCode = localTrim ? 'ja' : (englishTrim ? 'en' : (basePlace?.displayName?.languageCode || ''));
     next.displayName = {
         text: preferredName,
-        languageCode: next.localName ? 'ja' : (next.englishName ? 'en' : (basePlace?.displayName?.languageCode || ''))
+        languageCode: langCode
     };
     return next;
 }
@@ -1746,19 +1813,34 @@ async function runPlacesNearbyRequest(body, fieldMask, languageCode = 'ja') {
     return (await response.json()).places || [];
 }
 
-function mergeLocalizedPlaceResults(localizedPlaces = [], englishPlaces = []) {
+async function mergeLocalizedPlaceResults(localizedPlaces = [], englishPlaces = []) {
     const localMap = new Map(localizedPlaces.map((p) => [p.id || '', p]));
     const englishMap = new Map(englishPlaces.map((p) => [p.id || '', p]));
     const ids = new Set([...localMap.keys(), ...englishMap.keys()].filter(Boolean));
 
-    return Array.from(ids).map((id) => {
+    const items = Array.from(ids).map((id) => {
         const localPlace = localMap.get(id);
         const englishPlace = englishMap.get(id);
         const base = localPlace || englishPlace || {};
         const localName = normalizePlaceDisplayName(localPlace?.displayName);
         const englishName = normalizePlaceDisplayName(englishPlace?.displayName);
-        return withPreferredPlaceName(base, localName, englishName);
+        return { id, base, localName, englishName };
     });
+
+    // 根据每个店铺所在国家/地区，获取该地区语言的店名
+    const enhanced = await Promise.all(items.map(async ({ id, base, localName, englishName }) => {
+        const regionalLang = getPreferredLanguageForPlace(base);
+        let regionalName = '';
+        if (regionalLang === 'ja') {
+            regionalName = localName;
+        } else if (regionalLang === 'en') {
+            regionalName = englishName;
+        } else if (regionalLang) {
+            regionalName = await fetchPlaceNameByLanguage(id, regionalLang);
+        }
+        return withPreferredPlaceName(base, localName, englishName, regionalName, regionalName ? regionalLang : '');
+    }));
+    return enhanced;
 }
 
 window.fetchPreferredPlaceNameById = async (placeId) => {
@@ -1813,7 +1895,7 @@ window.fetchPreferredPlaceNameById = async (placeId) => {
  */
 window.placesSearchText = async (q, photo = false) => {
     // 构建请求字段
-    const f = 'places.displayName,places.formattedAddress,places.location,places.id,places.regularOpeningHours,places.currentOpeningHours,places.primaryType,places.primaryTypeDisplayName,places.types' + (photo ? ',places.photos' : '');
+    const f = 'places.displayName,places.formattedAddress,places.location,places.id,places.regularOpeningHours,places.currentOpeningHours,places.primaryType,places.primaryTypeDisplayName,places.types,places.addressComponents' + (photo ? ',places.photos' : '');
     try {
         const cuisineIntent = typeof window.resolveCuisineSearchIntent === 'function'
             ? window.resolveCuisineSearchIntent(q)
@@ -1842,7 +1924,7 @@ window.placesSearchTextByBounds = async (q, bounds, photo = false) => {
     const sw = bounds.getSouthWest?.();
     if (!ne || !sw) return [];
 
-    const f = 'places.displayName,places.formattedAddress,places.location,places.id,places.regularOpeningHours,places.currentOpeningHours,places.primaryType,places.primaryTypeDisplayName,places.types' + (photo ? ',places.photos' : '');
+    const f = 'places.displayName,places.formattedAddress,places.location,places.id,places.regularOpeningHours,places.currentOpeningHours,places.primaryType,places.primaryTypeDisplayName,places.types,places.addressComponents' + (photo ? ',places.photos' : '');
     try {
         const cuisineIntent = typeof window.resolveCuisineSearchIntent === 'function'
             ? window.resolveCuisineSearchIntent(q)
@@ -1881,7 +1963,7 @@ window.placesSearchNearby = async (center, opts = {}) => {
     const includedTypes = Array.isArray(opts.includedTypes) && opts.includedTypes.length
         ? opts.includedTypes
         : ['restaurant', 'cafe', 'bar', 'bakery', 'meal_takeaway'];
-    const f = 'places.displayName,places.formattedAddress,places.location,places.id,places.regularOpeningHours,places.currentOpeningHours,places.primaryType,places.primaryTypeDisplayName,places.types,places.photos';
+    const f = 'places.displayName,places.formattedAddress,places.location,places.id,places.regularOpeningHours,places.currentOpeningHours,places.primaryType,places.primaryTypeDisplayName,places.types,places.photos,places.addressComponents';
 
     try {
         const body = {

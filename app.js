@@ -33,7 +33,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v30";
+const APP_BUILD_VERSION = "v31";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 const LOCATION_CACHE_STORAGE_KEY = "mogumode:last-origin-v2";
 
@@ -1051,7 +1051,9 @@ window.logoutFromMenu = () => {
    ========================================= */
 
 // 实时监听店铺数据变化
-// 当数据库中的店铺数据有任何变化时，这个回调会自动执行
+// 数据始终保持最新（点开店铺看到的内容是最新的），但首页列表不自动重新渲染，
+// 避免世界各地用户同时更新时首页一直跳动；首页只在初次加载、登录、下拉刷新时才重排
+let initialStoresRendered = false;
 onSnapshot(query(collection(db, "stores"), orderBy("createdAt", "desc")), (snap) => {
     localStores = [];  // 清空本地数据
     // 遍历所有店铺文档
@@ -1062,8 +1064,12 @@ onSnapshot(query(collection(db, "stores"), orderBy("createdAt", "desc")), (snap)
     repairCurrentUserDanglingPreferences().catch(err => {
         console.warn("修复当前用户残留收藏失败:", err);
     });
-    applyFilters();                    // 渲染店铺列表（包含搜索/筛选/排序）
-    // 如果地图模块已加载，也更新地图上的标记
+    if (!initialStoresRendered) {
+        // 仅首次自动渲染首页店铺列表
+        initialStoresRendered = true;
+        applyFilters();
+    }
+    // 地图标记保持更新，不影响首页列表
     if (window.renderMarkers) {
         window.renderMarkers();
     }
@@ -5659,6 +5665,9 @@ window.clearFilters = window.resetFilters;
 /**
  * 应用筛选逻辑
  */
+// 首页只显示当前位置 50 公里范围内的店铺（覆盖东京/大阪/首尔等都会区，不会跨城）
+const HOME_RANGE_METERS = 50000;
+
 function applyFilters() {
     let source = [...window.localStores]; // Copy array
 
@@ -5667,6 +5676,11 @@ function applyFilters() {
         source = source.filter(s => scoreStoreSearch(homeSearchQuery, s) > 0);
     } else {
         source = source.filter(s => !isStorePermanentlyClosed(s));
+        // 仅显示用户附近的店铺，避免世界各地店铺涌入首页
+        source = source.filter(s => {
+            const dist = getStoreLinearDistanceMeters(s);
+            return Number.isFinite(dist) && dist <= HOME_RANGE_METERS;
+        });
     }
 
     // 1. 偏好筛选
