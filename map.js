@@ -1284,12 +1284,13 @@ window.initMap = () => {
             this.onClick = onClick;
             this.div = null;
             this.size = MAP_PIN_SIZE;
+            this.compact = false; // 紧凑模式标记，onAdd 时根据该状态决定是否加 is-dot 类
         }
 
         // 当标记被添加到地图时调用
         onAdd() {
             this.div = document.createElement('div');
-            this.div.className = `map-pin ${this.htmlClass}`;
+            this.div.className = `map-pin ${this.htmlClass}` + (this.compact ? ' is-dot' : '');
             this.div.innerHTML = this.iconHtml;
             // 根据纬度设置 z-index：纬度越低（越靠南/靠下）越在上层
             const lat = (typeof this.latlng?.lat === 'function') ? this.latlng.lat() : 0;
@@ -1318,6 +1319,7 @@ window.initMap = () => {
         }
 
         setCompact(flag) {
+            this.compact = !!flag;
             if (!this.div) return;
             this.div.classList.toggle('is-dot', !!flag);
         }

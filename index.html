@@ -526,10 +526,14 @@
                 <div class="record-year-row">
                     <div class="record-year-nav">
                         <button type="button" class="record-year-arrow" id="record-year-prev"
-                            onclick="changeRecordCalendarYear(-1)" aria-label="上一年">&lt;</button>
+                            onclick="changeRecordCalendarYear(-1)" aria-label="上一年">
+                            <i data-lucide="chevron-left" width="16"></i>
+                        </button>
                         <div class="record-year-display" id="record-year-display">2026</div>
                         <button type="button" class="record-year-arrow" id="record-year-next"
-                            onclick="changeRecordCalendarYear(1)" aria-label="下一年">&gt;</button>
+                            onclick="changeRecordCalendarYear(1)" aria-label="下一年">
+                            <i data-lucide="chevron-right" width="16"></i>
+                        </button>
                     </div>
                     <button type="button" class="record-jump-btn hidden" id="record-jump-btn"
                         onclick="jumpRecordCalendarFocus()">回到今天</button>
@@ -1182,8 +1186,8 @@
     <!-- =========================================
          JAVASCRIPT FILES
          ========================================= -->
-    <script type="module" src="app.js?v=68-home-quiet"></script>
-    <script src="map.js?v=68-home-quiet"></script>
+    <script type="module" src="app.js?v=76-install-guide-fix"></script>
+    <script src="map.js?v=76-install-guide-fix"></script>
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvqupW6XZ7A61lutSD8_GlV31Xdc5ZTLw&callback=initGoogleMap&libraries=geometry">
         </script>

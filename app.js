@@ -33,7 +33,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v31";
+const APP_BUILD_VERSION = "v32";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 const LOCATION_CACHE_STORAGE_KEY = "mogumode:last-origin-v2";
 
@@ -887,7 +887,14 @@ window.closeInstallIosGuide = () => {
 };
 
 (function initInstallButtonOnLoad() {
-    const init = () => refreshInstallButtonVisibility();
+    const init = () => {
+        refreshInstallButtonVisibility();
+        // install-ios-guide 原本嵌在登录区域里，登录后会跟着隐藏；移到 body 顶层始终可用
+        const guide = document.getElementById('install-ios-guide');
+        if (guide && guide.parentElement !== document.body) {
+            document.body.appendChild(guide);
+        }
+    };
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
@@ -2453,7 +2460,23 @@ window.renderStores = (list) => {
     if (!el) return;
     if (!list.length) {
         storeListPagination = { list: [], rendered: 0 };
-        el.innerHTML = "<div style='text-align:center;margin-top:40px;color:#ccc'>No spots found</div>";
+        const hasAnyStores = Array.isArray(window.localStores) && window.localStores.length > 0;
+        const isSearching = !!homeSearchQuery;
+        let html;
+        if (isSearching) {
+            html = "<div class='home-empty-tip'>没有匹配的店铺</div>";
+        } else if (hasAnyStores) {
+            // 用户附近 50 公里内还没有店铺
+            html = `
+                <div class="home-empty-tip">
+                    <div class="home-empty-title">附近 50 公里内暂时还没有店铺</div>
+                    <div class="home-empty-sub">点击下方 <span class="home-empty-plus">+</span> 添加你常去的店铺，<br>或前往「地图」页面查看其他地区的店铺。</div>
+                </div>
+            `;
+        } else {
+            html = "<div class='home-empty-tip'>正在加载店铺数据…</div>";
+        }
+        el.innerHTML = html;
         return;
     }
     storeListPagination = { list, rendered: 0 };
@@ -7424,8 +7447,10 @@ function buildActivitiesForUser(uid, userData = null) {
 /**
  * 渲染动态卡片列表
  */
-function renderActivityCards(container, activities) {
-    container.innerHTML = activities.map(a => {
+const PROFILE_PAGE_SIZE = 20;
+let profileActivityPagination = { list: [], rendered: 0, container: null };
+
+function renderSingleActivityCardHtml(a) {
         if (!a.store) return '';
         const s = a.store;
         const canDelete = !!currentUser && !isViewingFriendProfile() && Number.isInteger(a.reviewIndex) && a.reviewIndex >= 0;
@@ -7489,7 +7514,37 @@ function renderActivityCards(container, activities) {
             ${reviewHtml}
             ${photosHtml}
         </div>`;
-    }).join('');
+}
+
+function appendNextActivityPage() {
+    const { list, rendered, container } = profileActivityPagination;
+    if (!container) return;
+    if (rendered >= list.length) return;
+    const end = Math.min(list.length, rendered + PROFILE_PAGE_SIZE);
+    const html = list.slice(rendered, end).map(renderSingleActivityCardHtml).join('');
+    container.insertAdjacentHTML('beforeend', html);
+    profileActivityPagination.rendered = end;
+    if (window.lucide?.createIcons) lucide.createIcons();
+}
+
+function bindProfileScrollPagination() {
+    const scrollEl = document.getElementById('view-profile');
+    if (!scrollEl || scrollEl.dataset.profileScrollBound === '1') return;
+    scrollEl.dataset.profileScrollBound = '1';
+    scrollEl.addEventListener('scroll', () => {
+        if (scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 160) {
+            appendNextActivityPage();
+            appendNextFavPage();
+        }
+    });
+}
+
+function renderActivityCards(container, activities) {
+    profileActivityPagination = { list: Array.isArray(activities) ? activities : [], rendered: 0, container };
+    const initialCount = Math.min(PROFILE_PAGE_SIZE, profileActivityPagination.list.length);
+    container.innerHTML = profileActivityPagination.list.slice(0, initialCount).map(renderSingleActivityCardHtml).join('');
+    profileActivityPagination.rendered = initialCount;
+    bindProfileScrollPagination();
 }
 
 function formatActivityDate(ts, isEdited = false) {
@@ -7772,7 +7827,7 @@ function getRecordCalendarChrome() {
 
 function updateRecordYearHeader(years, selectedYear) {
     const { yearDisplay, prevButton, nextButton } = getRecordCalendarChrome();
-    if (yearDisplay) yearDisplay.innerText = `${selectedYear}年`;
+    if (yearDisplay) yearDisplay.innerText = `${selectedYear}`;
     if (prevButton) prevButton.disabled = !years.includes(selectedYear - 1);
     if (nextButton) nextButton.disabled = !years.includes(selectedYear + 1);
 }
@@ -7901,9 +7956,9 @@ window.renderRecordCalendar = () => {
     const activities = buildMyActivities();
     const dayMap = getRecordActivitiesByDay(activities);
     const currentYear = new Date().getFullYear();
-    const activityYears = Array.from(new Set(activities.map(a => new Date(a.mealDateTs || a.createdAt).getFullYear())));
-    const minYear = Math.min(currentYear - 1, ...(activityYears.length ? activityYears : [currentYear]));
-    const maxYear = Math.max(currentYear + 1, ...(activityYears.length ? activityYears : [currentYear]));
+    // 固定显示 2025—2035 这 11 年的范围
+    const minYear = 2025;
+    const maxYear = 2035;
     const years = [];
     for (let y = maxYear; y >= minYear; y--) years.push(y);
     const prevYear = Number(yearSelect.value || currentYear);
@@ -7968,7 +8023,8 @@ window.renderRecordCalendar = () => {
 
     if (recordAutoFocusPending && selectedYear === todayYear) {
         const target = wrap.querySelector(`[data-record-month="${todayMonth}"]`);
-        if (target) scrollRecordPageToElement(target);
+        // 进入记录页时直接定位到今天，不做平滑滚动动画
+        if (target) scrollRecordPageToElement(target, 'auto');
     }
     recordAutoFocusPending = false;
     window.requestAnimationFrame(updateRecordJumpButton);
@@ -8504,9 +8560,40 @@ window.switchProfileFavTab = (tab) => {
     const container = document.getElementById('profile-fav-list');
 
     if (filteredStores.length === 0) {
+        profileFavPagination = { list: [], rendered: 0, container, ctx: null };
         container.innerHTML = `<div style='text-align:center; padding:40px; color:#ccc;'>空空如也</div>`;
     } else {
-        container.innerHTML = filteredStores.map((s, idx) => {
+        profileFavPagination = {
+            list: filteredStores,
+            rendered: 0,
+            container,
+            ctx: { readonly, favIds, likeSet, dislikeSet }
+        };
+        const initialCount = Math.min(PROFILE_PAGE_SIZE, filteredStores.length);
+        container.innerHTML = filteredStores.slice(0, initialCount).map((s, idx) => renderSingleFavCardHtml(s, idx, profileFavPagination.ctx)).join('');
+        profileFavPagination.rendered = initialCount;
+        bindProfileScrollPagination();
+        lucide.createIcons();
+        return;
+    }
+    lucide.createIcons();
+};
+
+let profileFavPagination = { list: [], rendered: 0, container: null, ctx: null };
+
+function appendNextFavPage() {
+    const { list, rendered, container, ctx } = profileFavPagination;
+    if (!container || !ctx) return;
+    if (rendered >= list.length) return;
+    const end = Math.min(list.length, rendered + PROFILE_PAGE_SIZE);
+    const html = list.slice(rendered, end).map((s, i) => renderSingleFavCardHtml(s, rendered + i, ctx)).join('');
+    container.insertAdjacentHTML('beforeend', html);
+    profileFavPagination.rendered = end;
+    if (window.lucide?.createIcons) lucide.createIcons();
+}
+
+function renderSingleFavCardHtml(s, idx, ctx) {
+    const { readonly, favIds, likeSet, dislikeSet } = ctx || {};
             const isFav = favIds.includes(s.id);
             const isLiked = likeSet.has(s.id);
             const isDisliked = dislikeSet.has(s.id);
@@ -8571,10 +8658,7 @@ window.switchProfileFavTab = (tab) => {
             <div class="store-img-scroll">${imagesHtml}</div>
             ${renderStoreActivityMeta(s)}
         </div>`;
-        }).join('');
-    }
-    lucide.createIcons();
-};
+}
 
 /* =========================================
    17. 好友列表 & 搜索

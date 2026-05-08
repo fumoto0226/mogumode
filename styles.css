@@ -767,6 +767,42 @@ header {
     letter-spacing: 0.04em;
 }
 
+/* 首页空状态提示 */
+.home-empty-tip {
+    margin: 64px 24px 0;
+    text-align: center;
+    color: #6c7a89;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.home-empty-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #2d3436;
+    margin-bottom: 10px;
+}
+
+.home-empty-sub {
+    font-size: 13px;
+    color: #8e8e93;
+}
+
+.home-empty-plus {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #2d3436;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1;
+    vertical-align: -3px;
+    margin: 0 2px;
+}
+
 .store-card {
     background: white;
     border-radius: 20px;
@@ -3538,10 +3574,10 @@ header {
 }
 
 .map-pin.is-dot.pin-default::before { background: #FF6666; }
-.map-pin.is-dot.pin-default-low::before { background: #b2bec3; }
+.map-pin.is-dot.pin-default-low::before { background: #FFA449; }
 .map-pin.is-dot.pin-like::before { background: #FF6ECB; }
 .map-pin.is-dot.pin-dislike::before { background: #4099FF; }
-.map-pin.is-dot.pin-fav::before { background: #B9A930; }
+.map-pin.is-dot.pin-fav::before { background: #D3E32C; }
 
 /* iOS 添加到桌面引导弹窗 */
 .install-ios-guide {
@@ -3836,18 +3872,22 @@ header {
 }
 
 .record-year-arrow {
-    border: none;
-    background: transparent;
-    color: #1a1a1a;
-    font-size: 24px;
-    font-weight: 700;
-    line-height: 1;
-    padding: 4px 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: #ffffff;
+    border: 1px solid #e3e7ee;
+    color: #6f7b89;
     cursor: pointer;
+    padding: 0;
+    line-height: 1;
 }
 
 .record-year-arrow:disabled {
-    color: #b9b9b9;
+    opacity: 0.4;
     cursor: default;
 }
 
