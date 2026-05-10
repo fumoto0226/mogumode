@@ -33,7 +33,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v33";
+const APP_BUILD_VERSION = "v34";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 const LOCATION_CACHE_STORAGE_KEY = "mogumode:last-origin-v2";
 
@@ -1673,14 +1673,153 @@ const CUISINE_TYPE_RULES = [
         searchQuery: 'japanese restaurant',
         aliases: [
             '日本', '日本菜', '日本料理', '日料', '和食', '和食店', '和食料理店',
+            '居酒屋', '定食', '弁当', '便当', '怀石', '懐石',
             'japan', 'japanese', 'japanesefood', 'japaneserestaurant', 'washoku', 'Japanese Restaurant'
         ]
+    },
+    {
+        type: 'sushi_restaurant',
+        label: '寿司',
+        searchQuery: 'sushi',
+        aliases: ['寿司', '壽司', '回转寿司', '回転寿司', '握寿司', '刺身', 'sushi', 'すし', 'スシ']
+    },
+    {
+        type: 'ramen_restaurant',
+        label: '拉面',
+        searchQuery: 'ramen',
+        aliases: ['拉面', '拉麵', '日式拉面', 'ramen', 'ラーメン', '担担面', 'tantanmen', '油そば', 'つけ麺', '蘸面']
     },
     {
         type: 'thai_restaurant',
         label: '泰国料理',
         searchQuery: 'thai restaurant',
         aliases: ['泰', '泰料', '泰国', '泰国菜', '泰国料理', 'thai', 'thaifood', 'thaifoods', 'thairestaurant', 'tai', 'タイ', 'タイ料理']
+    },
+    {
+        type: 'korean_restaurant',
+        label: '韩料',
+        searchQuery: 'korean restaurant',
+        aliases: ['韩', '韩国', '韩料', '韩国菜', '韩国料理', '韩式', '韓國', '韓式', '韓国', '韓国料理', '焼肉', '烤肉', '韩式烤肉', 'korean', 'koreanfood', 'koreanrestaurant', 'kbbq', '韩餐']
+    },
+    {
+        type: 'italian_restaurant',
+        label: '意大利菜',
+        searchQuery: 'italian restaurant',
+        aliases: ['意', '意大利', '意大利菜', '意大利料理', '意式', 'italian', 'italianfood', 'pasta', '意面', '意粉', 'イタリアン', 'イタリア料理']
+    },
+    {
+        type: 'french_restaurant',
+        label: '法餐',
+        searchQuery: 'french restaurant',
+        aliases: ['法', '法国', '法国菜', '法国料理', '法餐', '法式', 'french', 'frenchfood', 'frenchrestaurant', 'フレンチ']
+    },
+    {
+        type: 'american_restaurant',
+        label: '美式',
+        searchQuery: 'american restaurant',
+        aliases: ['美式', '美国', '美国菜', 'american', 'americanfood', 'americanrestaurant', 'diner']
+    },
+    {
+        type: 'indian_restaurant',
+        label: '印度料理',
+        searchQuery: 'indian restaurant',
+        aliases: ['印度', '印度菜', '印度料理', 'indian', 'curry', '咖喱', 'カレー']
+    },
+    {
+        type: 'mexican_restaurant',
+        label: '墨西哥菜',
+        searchQuery: 'mexican restaurant',
+        aliases: ['墨西哥', '墨西哥菜', 'mexican', 'taco', '塔可', 'タコス']
+    },
+    {
+        type: 'vietnamese_restaurant',
+        label: '越南菜',
+        searchQuery: 'vietnamese restaurant',
+        aliases: ['越', '越南', '越南菜', '越南料理', '越式', 'vietnamese', 'pho', '越南河粉', 'フォー']
+    },
+    {
+        type: 'spanish_restaurant',
+        label: '西班牙菜',
+        searchQuery: 'spanish restaurant',
+        aliases: ['西班牙', '西班牙菜', 'spanish', 'tapas']
+    },
+    {
+        type: 'turkish_restaurant',
+        label: '土耳其菜',
+        searchQuery: 'turkish restaurant',
+        aliases: ['土耳其', 'turkish', 'kebab', '烤肉串']
+    },
+    {
+        type: 'mediterranean_restaurant',
+        label: '地中海菜',
+        searchQuery: 'mediterranean restaurant',
+        aliases: ['地中海', 'mediterranean']
+    },
+    {
+        type: 'pizza_restaurant',
+        label: '披萨',
+        searchQuery: 'pizza',
+        aliases: ['披萨', '比萨', 'pizza', 'ピザ', '意式披萨']
+    },
+    {
+        type: 'hamburger_restaurant',
+        label: '汉堡',
+        searchQuery: 'hamburger',
+        aliases: ['汉堡', '汉堡包', 'hamburger', 'burger', 'ハンバーガー']
+    },
+    {
+        type: 'fast_food_restaurant',
+        label: '快餐',
+        searchQuery: 'fast food',
+        aliases: ['快餐', 'fast food', 'fastfood', 'ファストフード']
+    },
+    {
+        type: 'barbecue_restaurant',
+        label: 'BBQ',
+        searchQuery: 'barbecue',
+        aliases: ['烧烤', 'bbq', 'barbecue', 'グリル']
+    },
+    {
+        type: 'steak_house',
+        label: '牛排',
+        searchQuery: 'steak house',
+        aliases: ['牛排', 'steak', 'steakhouse', 'ステーキ']
+    },
+    {
+        type: 'seafood_restaurant',
+        label: '海鲜',
+        searchQuery: 'seafood restaurant',
+        aliases: ['海鲜', '海鮮', 'seafood', '海産', 'シーフード']
+    },
+    {
+        type: 'cafe',
+        label: '咖啡',
+        searchQuery: 'cafe',
+        aliases: ['咖啡', '咖啡馆', '咖啡厅', 'cafe', 'coffee', 'café', 'カフェ', '喫茶']
+    },
+    {
+        type: 'bakery',
+        label: '面包房',
+        searchQuery: 'bakery',
+        aliases: ['面包', '麵包', 'bakery', 'パン屋', 'パン', '烘焙', '甜品']
+    },
+    {
+        type: 'cake_shop',
+        label: '蛋糕',
+        searchQuery: 'cake shop',
+        aliases: ['蛋糕', 'cake', 'patisserie', 'ケーキ']
+    },
+    {
+        type: 'ice_cream_shop',
+        label: '冰淇淋',
+        searchQuery: 'ice cream',
+        aliases: ['冰淇淋', '冰激凌', 'ice cream', 'icecream', 'gelato', 'アイス']
+    },
+    {
+        type: 'bar',
+        label: '酒吧',
+        searchQuery: 'bar',
+        aliases: ['酒吧', 'bar', 'pub', '居酒屋', 'バー']
     }
 ];
 

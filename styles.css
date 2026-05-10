@@ -1339,18 +1339,18 @@ header {
 
 .map-search-card {
     position: absolute;
-    top: 20px;
+    top: 16px;
     left: 16px;
     right: 16px;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(10px);
     border-radius: 999px;
-    padding: 13px 16px;
+    padding: 6px 6px 6px 16px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     z-index: 10;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
 }
 
 .map-search-icon {
@@ -1362,8 +1362,126 @@ header {
     min-width: 0;
     border: none;
     background: #fff !important;
-    font-size: 16px;
+    font-size: 14px;
+    color: #74767A;
+    padding: 6px 0;
+}
+
+.map-search-input::placeholder {
+    color: #74767A;
+}
+
+.map-search-action-btn {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: #f3f4f6;
+    color: #4a4a4a;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+}
+
+.map-search-action-btn.is-active {
+    background: #983FFF;
+    color: #fff;
+}
+
+/* 在此区域内搜索按钮（出现在搜索栏下方） */
+.map-search-area-row {
+    position: absolute;
+    top: 78px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    z-index: 14;
+    pointer-events: none;
+}
+
+.map-search-area-row.hidden {
+    display: none;
+}
+
+.map-search-area-btn {
+    pointer-events: auto;
+    background: #fff;
     color: #2d3436;
+    border: 1px solid #e3e7ee;
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+}
+
+/* 筛选 chip 行（横向滚动，类似 Google Maps 顶部筛选条） */
+.map-filter-chips {
+    position: absolute;
+    top: 78px;
+    left: 0;
+    right: 0;
+    z-index: 12;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 4px 16px;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+}
+
+.map-filter-chips::-webkit-scrollbar {
+    display: none;
+}
+
+/* 搜索激活并显示"在此区域内搜索"时，隐藏下方的分类 chip 行 */
+.map-search-area-row:not(.hidden) ~ .map-filter-chips {
+    display: none;
+}
+
+.map-chip {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.95);
+    border: none;
+    border-radius: 999px;
+    padding: 6px 13px;
+    font-size: 12.5px;
+    color: #74767A;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.map-chip-icon {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+}
+
+.map-chip.is-selected {
+    background: #983FFF;
+    color: #fff;
+    border-color: #983FFF;
+}
+
+.map-chip.is-selected .map-chip-icon {
+    filter: brightness(0) invert(1);
 }
 
 .map-search-input:focus {
@@ -1407,6 +1525,40 @@ header {
     padding: 8px;
     max-height: 200px;
     overflow-y: auto;
+}
+
+#view-map > #results {
+    position: absolute;
+    top: 70px;
+    left: 16px;
+    right: 16px;
+    z-index: 60;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+/* 地图右下角"回到当前位置"按钮 */
+.map-recenter-btn {
+    position: absolute;
+    right: 16px;
+    bottom: calc(var(--bottom-nav-total) + 21px);
+    width: 44px;
+    height: 44px;
+    border: none;
+    border-radius: 50%;
+    background: #ffffff;
+    color: #2d3436;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    cursor: pointer;
+    z-index: 11;
+    padding: 0;
+}
+
+.map-recenter-btn:active {
+    transform: scale(0.96);
 }
 
 .search-results.active {
@@ -3569,13 +3721,29 @@ header {
     height: 10px;
     border-radius: 50%;
     border: 2px solid #fff;
-    background: #FF6666;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+    background: #FF5E2A;
+    box-shadow: none;
 }
 
-.map-pin.is-dot.pin-default::before { background: #FF6666; }
-.map-pin.is-dot.pin-default-low::before { background: #FFA449; }
-.map-pin.is-dot.pin-like::before { background: #FF6ECB; }
+/* 紧凑模式下不显示外层 SVG / IMG 投影，避免小圆点周边发糊 */
+.map-pin.is-dot {
+    filter: none;
+}
+.map-pin.is-dot img,
+.map-pin.is-dot svg {
+    filter: none;
+}
+
+/* 高分（≥3.5）店铺统一用 #FF5E2A 红橙；低分（<3.5）统一用 #FFB641 橙黄 */
+.map-pin.is-dot.pin-default::before,
+.map-pin.is-dot.pin-drink::before,
+.map-pin.is-dot.pin-other::before { background: #FF5E2A; }
+
+.map-pin.is-dot.pin-default-low::before,
+.map-pin.is-dot.pin-drink-low::before,
+.map-pin.is-dot.pin-other-low::before { background: #FFB641; }
+
+.map-pin.is-dot.pin-like::before { background: #FF34B5; }
 .map-pin.is-dot.pin-dislike::before { background: #4099FF; }
 .map-pin.is-dot.pin-fav::before { background: #D3E32C; }
 
@@ -6885,7 +7053,7 @@ body.profile-menu-active .nav-bar {
 .app-feedback-toast {
     min-width: 180px;
     width: auto;
-    padding: 18px 22px;
+    padding: 12px 18px;
 }
 
 .post-success-card {

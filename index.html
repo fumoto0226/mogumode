@@ -234,18 +234,52 @@
              ========================================= -->
         <section id="view-map" class="hidden map-section" style="height:100vh;">
             <div class="map-search-card">
-                <i data-lucide="search" width="25" color="#b2bec3" class="map-search-icon"></i>
-                <input id="q" class="map-search-input" placeholder="在这里搜索">
-                <div class="map-search-actions">
-                    <button id="clearBtn" class="map-search-clear hidden" type="button">✕</button>
-                </div>
+                <input id="q" class="map-search-input" placeholder="输入店名或料理种类">
+                <button id="map-search-action-btn" class="map-search-action-btn" type="button" aria-label="搜索"
+                    onclick="onMapSearchActionClick()">
+                    <i data-lucide="search" width="20"></i>
+                </button>
             </div>
 
-            <div id="results" class="search-results"
-                style="position:absolute; top:70px; left:16px; right:16px; z-index:60; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.1);">
+            <div id="map-search-area-row" class="map-search-area-row hidden">
+                <button class="map-search-area-btn" type="button" onclick="searchInVisibleArea()">
+                    <i data-lucide="locate-fixed" width="14"></i>
+                    在此区域内搜索
+                </button>
             </div>
+
+            <div id="map-filter-chips" class="map-filter-chips">
+                <button class="map-chip" type="button" data-rating="3.5" onclick="toggleMapRatingChip()">
+                    高评价
+                </button>
+                <button class="map-chip" type="button" data-cat="eat" onclick="toggleMapCategoryChip('eat')">
+                    <img src="images/map-pin-01.svg" alt="" class="map-chip-icon">餐厅
+                </button>
+                <button class="map-chip" type="button" data-cat="drink" onclick="toggleMapCategoryChip('drink')">
+                    <img src="images/map-pin-02.svg" alt="" class="map-chip-icon">饮品
+                </button>
+                <button class="map-chip" type="button" data-cat="other" onclick="toggleMapCategoryChip('other')">
+                    <img src="images/map-pin-03.svg" alt="" class="map-chip-icon">其他
+                </button>
+                <button class="map-chip" type="button" data-cat="fav" onclick="toggleMapCategoryChip('fav')">
+                    <img src="images/map-pin-04.svg" alt="" class="map-chip-icon">收藏
+                </button>
+                <button class="map-chip" type="button" data-cat="like" onclick="toggleMapCategoryChip('like')">
+                    <img src="images/map-pin-05.svg" alt="" class="map-chip-icon">好吃
+                </button>
+                <button class="map-chip" type="button" data-cat="dislike" onclick="toggleMapCategoryChip('dislike')">
+                    <img src="images/map-pin-06.svg" alt="" class="map-chip-icon">难吃
+                </button>
+            </div>
+
+            <div id="results" class="search-results"></div>
 
             <div id="google-map" class="map-full"></div>
+
+            <button id="map-recenter-btn" class="map-recenter-btn" type="button" aria-label="回到当前位置"
+                onclick="recenterMapToOrigin()">
+                <i data-lucide="locate-fixed" width="20"></i>
+            </button>
 
             <div id="map-sheet-backdrop" class="map-sheet-backdrop" onclick="closeMapCard()"></div>
 
@@ -1186,8 +1220,8 @@
     <!-- =========================================
          JAVASCRIPT FILES
          ========================================= -->
-    <script type="module" src="app.js?v=77-pinlow-inline"></script>
-    <script src="map.js?v=77-pinlow-inline"></script>
+    <script type="module" src="app.js?v=95-search-clears-chips"></script>
+    <script src="map.js?v=95-search-clears-chips"></script>
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvqupW6XZ7A61lutSD8_GlV31Xdc5ZTLw&callback=initGoogleMap&libraries=geometry">
         </script>
@@ -1326,7 +1360,7 @@
 
     <div id="toast-app-feedback" class="toast-overlay" style="display:none;" onclick="closeAppFeedbackToast()">
         <div class="toast-card app-feedback-toast" onclick="closeAppFeedbackToast()">
-            <div id="toast-app-feedback-message" style="font-size:15px; font-weight:700;"></div>
+            <div id="toast-app-feedback-message" style="font-size:13px; font-weight:400; color:#2d3436;"></div>
         </div>
     </div>
 

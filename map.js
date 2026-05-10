@@ -75,14 +75,18 @@ function getSelectedStorePinUrl(store) {
 
 function getMapPinMarkup(type = 'default') {
     const wrap = (inner) => `<svg class="map-pin-svg" width="121" height="121" viewBox="0 0 121 121" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" preserveAspectRatio="xMidYMid meet">${inner}</svg>`;
+    // 餐具图标（吃 - default / default-low 共用前景）
+    const FORK_KNIFE_PATH = `<path d="M34.9041 28.4245C36.0485 28.4245 37.1929 29.5689 37.1929 30.7133V51.313C34.5226 51.313 32.6152 49.4056 32.6152 46.7353V30.7133C32.6152 29.5689 33.7597 28.4245 34.9041 28.4245Z" fill="white"/><path d="M57.0296 28.4245C55.8852 28.4245 54.7408 29.5689 54.7408 30.7133V44.8279C54.7408 46.7353 53.2149 48.2612 51.689 48.2612C49.7816 48.2612 48.2557 46.7353 48.2557 44.8279V30.7133C48.2557 29.5689 47.1113 28.4245 45.9668 28.4245C44.8224 28.4245 43.678 29.5689 43.678 30.7133V44.8279C43.678 46.7353 42.1521 48.2612 40.2447 48.2612C38.3374 48.2612 37.1929 46.7353 37.1929 44.8279V41.3946H32.6152V49.4056C32.6152 55.8907 37.1929 61.2313 43.2965 62.3757L41.0077 79.9236V80.6865C41.0077 83.3568 43.2965 85.6457 45.9668 85.6457H46.7298C49.4001 85.2642 51.689 82.5939 51.3075 79.9236L49.0186 62.3757C54.7408 61.2313 59.3185 55.8907 59.3185 49.4056V30.7133C59.3185 29.5689 58.174 28.4245 57.0296 28.4245ZM89.8364 45.5909C89.8364 36.054 83.7328 28.4245 76.4848 28.4245C69.2368 28.4245 63.1332 36.054 63.1332 45.5909C63.1332 53.9833 67.7109 60.8498 73.8145 62.3757L71.5256 80.305V81.068C71.5256 83.7383 73.8145 86.0272 76.4848 86.0272H77.2478C79.9181 85.6457 81.8255 83.3568 81.444 80.6865L79.1551 62.7572C85.2587 60.8498 89.8364 53.9833 89.8364 45.5909Z" fill="white"/>`;
+    // 饮品（杯子）图标 - drink / drink-low 共用
+    const DRINK_PATH = `<path d="M45.3101 36.1941C44.55 36.6746 43.9035 37.3147 43.4155 38.0701C42.9275 38.8254 42.6097 39.6779 42.4841 40.5684C42.3827 41.0409 42.1251 41.4656 41.7528 41.7738C41.3805 42.082 40.9153 42.2557 40.4321 42.2671C40.2513 42.2658 40.0715 42.24 39.8976 42.1903C38.7518 41.8524 38.076 40.6206 38.3801 39.4195C38.9023 36.5382 40.5458 34.0131 42.9203 32.4465C44.2504 31.6939 45.0859 30.2471 45.1013 28.662C45.1694 28.0804 45.4613 27.5483 45.9153 27.1784C46.1353 27.0004 46.3895 26.8696 46.6622 26.794C46.9348 26.7185 47.2201 26.6998 47.5003 26.7391C48.6707 26.9357 49.4724 28.0815 49.2943 29.3071C49.2236 30.6891 48.8254 32.0345 48.1327 33.2324C47.4401 34.4303 46.4726 35.4465 45.3101 36.1972V36.1941ZM60.1163 36.1941C59.3564 36.6749 58.7101 37.3151 58.2221 38.0704C57.7342 38.8257 57.4162 39.678 57.2902 40.5684C57.189 41.0404 56.9318 41.4647 56.5602 41.7728C56.1885 42.081 55.7239 42.2551 55.2413 42.2671C55.0595 42.2655 54.8787 42.2397 54.7037 42.1903C53.558 41.8524 52.8852 40.6206 53.1863 39.4195C53.7085 36.5382 55.355 34.0131 57.7264 32.4465C59.0596 31.697 59.8951 30.2471 59.9074 28.662C59.9763 28.08 60.2694 27.5477 60.7245 27.1784C60.9445 27.0004 61.1987 26.8696 61.4714 26.794C61.744 26.7185 62.0293 26.6998 62.3095 26.7391C63.4768 26.9357 64.2755 28.0815 64.1035 29.3071C64.0322 30.6893 63.6335 32.0348 62.9403 33.2327C62.247 34.4306 61.2791 35.4467 60.1163 36.1972V36.1941ZM74.9562 36.1941C74.1956 36.6741 73.5488 37.3141 73.0607 38.0696C72.5727 38.825 72.2551 39.6777 72.1301 40.5684C72.0681 40.8509 71.951 41.1184 71.7855 41.3556C71.62 41.5928 71.4093 41.795 71.1656 41.9507C70.9268 42.1014 70.6592 42.2005 70.3799 42.2418C70.1006 42.283 69.8158 42.2655 69.5437 42.1903C68.3979 41.8524 67.7251 40.6206 68.0293 39.4195C68.5515 36.5382 70.1949 34.0131 72.5663 32.4465C73.8995 31.697 74.735 30.2471 74.7473 28.662C74.8148 28.0787 75.1081 27.545 75.5644 27.1753C75.7845 26.9977 76.0389 26.8674 76.3116 26.7923C76.5842 26.7173 76.8695 26.6992 77.1495 26.7391C78.3167 26.9388 79.1154 28.0815 78.9434 29.3071C78.8731 30.6895 78.4748 32.0354 77.7815 33.2335C77.0882 34.4315 76.1197 35.4474 74.9562 36.1972V36.1941ZM88.721 57.1101H85.2007V59.3218C85.2007 62.025 84.8105 64.7128 84.0457 67.2962C85.5386 67.0044 86.8779 66.1566 87.8148 64.9094C89.0527 62.5257 89.3814 59.7365 88.724 57.1101H88.721ZM91.2613 67.5542C89.0681 70.5462 85.6492 72.2756 82.0398 72.2172C77.7884 80.4896 69.5498 85.6718 60.5678 85.7332H56.4424C42.6745 85.5305 31.6559 73.7194 31.8157 59.3279V49.9712C31.8061 49.3805 32.0238 48.8086 32.4239 48.3739C32.6171 48.165 32.8507 47.9975 33.1104 47.8813C33.3702 47.7652 33.6507 47.7028 33.9352 47.6981H83.078C84.2638 47.7134 85.213 48.7302 85.1976 49.9712V52.5669H91.8972L92.3826 54.112C92.487 54.4376 94.8646 62.1816 91.2644 67.5512L91.2613 67.5542Z" fill="white"/>`;
+    // 其他（房子）图标 - other / other-low 共用
+    const OTHER_PATH = `<path d="M80.9995 86.1746H39.4551C38.6681 86.1746 37.9133 85.862 37.3568 85.3055C36.8003 84.749 36.4877 83.9942 36.4877 83.2072V68.3699C36.4877 67.5828 36.8003 66.8281 37.3568 66.2716C37.9133 65.715 38.6681 65.4024 39.4551 65.4024C40.2421 65.4024 40.9969 65.715 41.5534 66.2716C42.1099 66.8281 42.4226 67.5828 42.4226 68.3699V80.2397H78.0321V68.3699C78.0321 67.5828 78.3447 66.8281 78.9012 66.2716C79.4577 65.715 80.2125 65.4024 80.9995 65.4024C81.7866 65.4024 82.5413 65.715 83.0979 66.2716C83.6544 66.8281 83.967 67.5828 83.967 68.3699V83.2072C83.967 83.9942 83.6544 84.749 83.0979 85.3055C82.5413 85.862 81.7866 86.1746 80.9995 86.1746ZM89.9019 47.5977C89.9018 47.012 89.7283 46.4395 89.4034 45.9522L77.5335 28.1474C77.2626 27.7409 76.8955 27.4075 76.4649 27.1769C76.0342 26.9462 75.5532 26.8255 75.0646 26.8254H45.39C44.9015 26.8255 44.4205 26.9462 43.9898 27.1769C43.5591 27.4075 43.192 27.7409 42.9211 28.1474L31.0513 45.9522C30.7264 46.4395 30.5529 47.012 30.5527 47.5977V52.0488C30.5551 54.0157 31.3375 55.9013 32.7282 57.292C34.119 58.6828 36.0046 59.4651 37.9714 59.4675C43.6748 59.4675 45.39 53.5326 45.39 53.5326C45.7678 55.2178 46.7085 56.724 48.0571 57.8028C49.4057 58.8817 51.0816 59.4688 52.8087 59.4675C58.5121 59.4675 60.2273 53.5326 60.2273 53.5326C60.6051 55.2178 61.5458 56.724 62.8944 57.8028C64.243 58.8817 65.9189 59.4688 67.646 59.4675C73.3494 59.4675 75.0646 53.5326 75.0646 53.5326C75.4424 55.2178 76.3831 56.724 77.7317 57.8028C79.0803 58.8817 80.7562 59.4688 82.4833 59.4675C84.4501 59.4651 86.3357 58.6828 87.7264 57.292C89.1172 55.9013 89.8996 54.0157 89.9019 52.0488V47.5977Z" fill="white"/>`;
+
     switch (type) {
         case 'like':
             return wrap(`
-                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FFC7F6"/>
-                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FF6ECB"/>
-                <circle cx="60.2258" cy="56.2258" r="51.7258" stroke="white" stroke-width="9"/>
-                <path d="M60.2446 87.021C59.274 87.021 58.3781 86.7224 57.5942 86.0878C56.9595 85.5651 41.4678 73.5823 35.271 63.8393C33.2179 60.629 30.3809 56.2614 30.3809 50.0647C30.3809 39.7244 38.1081 31.3252 47.5525 31.3252C52.368 31.3252 56.9595 33.5276 60.2446 37.3726C63.4922 33.4903 68.0464 31.3252 72.8993 31.3252C82.381 31.3252 90.0709 39.7244 90.0709 50.0647C90.0709 56.1494 87.4205 60.3303 85.2554 63.7273L85.1807 63.8393C78.984 73.5823 63.4922 85.6025 62.8576 86.0878C62.111 86.685 61.2151 87.021 60.2446 87.021Z" fill="#FF6ECB"/>
-                <path d="M60.2446 87.021C59.274 87.021 58.3781 86.7224 57.5942 86.0878C56.9595 85.5651 41.4678 73.5823 35.271 63.8393C33.2179 60.629 30.3809 56.2614 30.3809 50.0647C30.3809 39.7244 38.1081 31.3252 47.5525 31.3252C52.368 31.3252 56.9595 33.5276 60.2446 37.3726C63.4922 33.4903 68.0464 31.3252 72.8993 31.3252C82.381 31.3252 90.0709 39.7244 90.0709 50.0647C90.0709 56.1494 87.4205 60.3303 85.2554 63.7273L85.1807 63.8393C78.984 73.5823 63.4922 85.6025 62.8576 86.0878C62.111 86.685 61.2151 87.021 60.2446 87.021Z" fill="#FFC7F6"/>
+                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FF34B5" stroke="white" stroke-width="9"/>
+                <path d="M60.2446 87.021C59.274 87.021 58.3781 86.7224 57.5942 86.0878C56.9595 85.5651 41.4678 73.5823 35.271 63.8393C33.2179 60.629 30.3809 56.2614 30.3809 50.0647C30.3809 39.7244 38.1081 31.3252 47.5525 31.3252C52.368 31.3252 56.9595 33.5276 60.2446 37.3726C63.4922 33.4903 68.0464 31.3252 72.8993 31.3252C82.381 31.3252 90.0709 39.7244 90.0709 50.0647C90.0709 56.1494 87.4205 60.3303 85.2554 63.7273L85.1807 63.8393C78.984 73.5823 63.4922 85.6025 62.8576 86.0878C62.111 86.685 61.2151 87.021 60.2446 87.021Z" fill="#FFDCF2"/>
             `);
         case 'dislike':
             return wrap(`
@@ -97,26 +101,52 @@ function getMapPinMarkup(type = 'default') {
                 <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#E5F795" stroke="white" stroke-width="9"/>
                 <path d="M80.3457 27.8963L80.3457 90.3616L60.2256 71.1149L40.1055 90.3616L40.1055 27.8963L80.3457 27.8963Z" fill="#B9A930"/>
             `);
+        case 'drink':
+            return wrap(`
+                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FF8BD5"/>
+                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FF5E2A"/>
+                <circle cx="60.2258" cy="56.2258" r="51.7258" stroke="white" stroke-width="9"/>
+                ${DRINK_PATH}
+            `);
+        case 'drink-low':
+            return wrap(`
+                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#9AF490"/>
+                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FF8BD5"/>
+                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FFB641"/>
+                <circle cx="60.2258" cy="56.2258" r="51.7258" stroke="white" stroke-width="9"/>
+                ${DRINK_PATH}
+            `);
+        case 'other':
+            return wrap(`
+                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FF8BD5"/>
+                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FF5E2A"/>
+                <circle cx="60.2258" cy="56.2258" r="51.7258" stroke="white" stroke-width="9"/>
+                ${OTHER_PATH}
+            `);
+        case 'other-low':
+            return wrap(`
+                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#9AF490"/>
+                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FF8BD5"/>
+                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FFB641"/>
+                <circle cx="60.2258" cy="56.2258" r="51.7258" stroke="white" stroke-width="9"/>
+                ${OTHER_PATH}
+            `);
         case 'default-low':
             return wrap(`
                 <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#9AF490"/>
-                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FFA449"/>
+                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FF8BD5"/>
+                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FFB641"/>
                 <circle cx="60.2258" cy="56.2258" r="51.7258" stroke="white" stroke-width="9"/>
-                <path d="M69.0062 59.4965L71.7098 75.1217C71.7098 79.476 68.183 83.0065 63.825 83.0065H56.9486C52.5906 83.0065 49.0601 79.476 49.0601 75.1217L51.7636 59.4965" fill="white"/>
-                <path d="M60.6821 59.4966V83.0066H63.8245C68.1825 83.0066 71.7093 79.476 71.7093 75.1218L69.0057 59.4966H60.6821Z" fill="white"/>
-                <path d="M88.354 55.6841C88.354 71.2184 75.7573 63.5033 60.2277 63.5033C44.6949 63.5028 32.0977 71.2141 32.0977 55.6841C32.0977 40.1494 44.6949 29.4452 60.2277 29.4452C75.7573 29.4452 88.354 40.1494 88.354 55.6841Z" fill="white"/>
-                <path d="M88.0509 51.8212C87.9698 51.2544 87.9032 50.6801 87.7869 50.1297C87.6946 49.6886 87.56 49.2676 87.4452 48.8373C87.3308 48.405 87.2365 47.9657 87.102 47.5462C86.9412 47.0497 86.7406 46.5767 86.5516 46.0966C86.4208 45.7661 86.3116 45.4225 86.1677 45.0995C85.9328 44.5679 85.6562 44.062 85.3848 43.5524C85.254 43.3049 85.1405 43.0447 85.0027 42.8023C84.6797 42.2449 84.3197 41.7128 83.9577 41.1826C83.8391 41.0111 83.7374 40.8301 83.6179 40.6623C83.202 40.088 82.7496 39.5414 82.2865 39.0041C82.1979 38.9005 82.12 38.788 82.0277 38.6844C81.514 38.1116 80.9743 37.5626 80.4103 37.0393C80.355 36.9878 80.3067 36.9306 80.2495 36.8786C79.6378 36.3171 79 35.7847 78.3382 35.2832C78.3237 35.2724 78.3087 35.2593 78.2941 35.2481C73.5133 31.6458 67.3813 29.5591 60.6821 29.4691V63.5145C65.5399 63.5591 70.0994 64.3307 74.0622 64.8806C74.4424 64.9322 74.817 64.9847 75.1883 65.0325L75.7218 65.0986C76.2094 65.1577 76.6857 65.213 77.1493 65.258C77.2712 65.2726 77.3893 65.2801 77.5079 65.2904C77.9027 65.3279 78.289 65.3537 78.6673 65.3757C78.7817 65.3837 78.8979 65.3907 79.0109 65.3944C79.4516 65.4165 79.8801 65.424 80.2959 65.4165C80.4061 65.4165 80.512 65.4127 80.6185 65.409C80.9935 65.3982 81.3592 65.3757 81.7098 65.3387C81.7689 65.3312 81.8317 65.3312 81.8894 65.3241C82.2633 65.2782 82.6343 65.2117 83.0009 65.1249C83.0909 65.1061 83.1837 65.0803 83.2719 65.0578C83.6197 64.9682 83.9611 64.8548 84.2934 64.7184C84.3178 64.7072 84.3398 64.6922 84.3633 64.6814C84.6601 64.5491 84.9454 64.3921 85.216 64.2121C85.2845 64.1681 85.3529 64.1235 85.4195 64.0757C85.6981 63.8758 85.9578 63.6507 86.1953 63.4034C86.2357 63.3589 86.2708 63.3111 86.3116 63.2628C86.5179 63.0303 86.712 62.7715 86.8887 62.4879C86.9318 62.425 86.9759 62.3618 87.0148 62.2919C87.2051 61.9666 87.3767 61.6046 87.5281 61.2132C87.5596 61.1283 87.5896 61.036 87.6186 60.9511C87.7499 60.578 87.8662 60.179 87.9623 59.7472C87.9768 59.6802 87.9951 59.6216 88.0082 59.5513C88.1099 59.0679 88.1835 58.5359 88.2388 57.9742C88.3142 57.2144 88.3525 56.4514 88.3537 55.6879C88.3537 54.7221 88.3045 53.7752 88.2098 52.8479C88.1732 52.4967 88.0991 52.1648 88.0509 51.8212Z" fill="white"/>
+                ${FORK_KNIFE_PATH}
             `);
         case 'default':
         default:
             return wrap(`
                 <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#9AF490"/>
-                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FF6666"/>
+                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FF6066"/>
+                <circle cx="60.2258" cy="56.2258" r="51.7258" fill="#FF5E2A"/>
                 <circle cx="60.2258" cy="56.2258" r="51.7258" stroke="white" stroke-width="9"/>
-                <path d="M69.0062 59.4965L71.7098 75.1217C71.7098 79.4759 68.183 83.0065 63.825 83.0065H56.9486C52.5906 83.0065 49.0601 79.4759 49.0601 75.1217L51.7636 59.4965" fill="white"/>
-                <path d="M60.6821 59.4965V83.0065H63.8245C68.1825 83.0065 71.7093 79.4759 71.7093 75.1217L69.0057 59.4965H60.6821Z" fill="white"/>
-                <path d="M88.354 55.6841C88.354 71.2184 75.7573 63.5033 60.2277 63.5033C44.6949 63.5028 32.0977 71.2141 32.0977 55.6841C32.0977 40.1494 44.6949 29.4452 60.2277 29.4452C75.7573 29.4452 88.354 40.1494 88.354 55.6841Z" fill="white"/>
-                <path d="M88.0509 51.8212C87.9698 51.2544 87.9032 50.6801 87.7869 50.1297C87.6946 49.6886 87.56 49.2676 87.4452 48.8373C87.3308 48.405 87.2365 47.9657 87.102 47.5462C86.9412 47.0497 86.7406 46.5767 86.5516 46.0966C86.4208 45.7661 86.3116 45.4225 86.1677 45.0995C85.9328 44.5679 85.6562 44.062 85.3848 43.5524C85.254 43.3049 85.1405 43.0447 85.0027 42.8023C84.6797 42.2449 84.3197 41.7128 83.9577 41.1826C83.8391 41.0111 83.7374 40.8301 83.6179 40.6623C83.202 40.088 82.7496 39.5414 82.2865 39.0041C82.1979 38.9005 82.12 38.788 82.0277 38.6844C81.514 38.1116 80.9743 37.5626 80.4103 37.0393C80.355 36.9878 80.3067 36.9306 80.2495 36.8786C79.6378 36.3171 79 35.7847 78.3382 35.2832C78.3237 35.2724 78.3087 35.2593 78.2941 35.2481C73.5133 31.6458 67.3813 29.5591 60.6821 29.4691V63.5145C65.5399 63.5591 70.0994 64.3307 74.0622 64.8806C74.4424 64.9322 74.817 64.9847 75.1883 65.0325L75.7218 65.0986C76.2094 65.1577 76.6857 65.213 77.1493 65.258C77.2712 65.2726 77.3893 65.2801 77.5079 65.2904C77.9027 65.3279 78.289 65.3537 78.6673 65.3757C78.7817 65.3837 78.8979 65.3907 79.0109 65.3944C79.4516 65.4165 79.8801 65.424 80.2959 65.4165C80.4061 65.4165 80.512 65.4127 80.6185 65.409C80.9935 65.3982 81.3592 65.3757 81.7098 65.3387C81.7689 65.3312 81.8317 65.3312 81.8894 65.3241C82.2633 65.2782 82.6343 65.2117 83.0009 65.1249C83.0909 65.1061 83.1837 65.0803 83.2719 65.0578C83.6197 64.9682 83.9611 64.8548 84.2934 64.7184C84.3178 64.7072 84.3398 64.6922 84.3633 64.6814C84.6601 64.5491 84.9454 64.3921 85.216 64.2121C85.2845 64.1681 85.3529 64.1235 85.4195 64.0757C85.6981 63.8758 85.9578 63.6507 86.1953 63.4034C86.2357 63.3589 86.2708 63.3111 86.3116 63.2628C86.5179 63.0303 86.712 62.7715 86.8887 62.4879C86.9318 62.425 86.9759 62.3618 87.0148 62.2919C87.2051 61.9666 87.3767 61.6046 87.5281 61.2132C87.5596 61.1283 87.5896 61.036 87.6186 60.9511C87.7499 60.578 87.8662 60.179 87.9623 59.7472C87.9768 59.6802 87.9951 59.6216 88.0082 59.5513C88.1099 59.0679 88.1835 58.5359 88.2388 57.9742C88.3142 57.2144 88.3525 56.4514 88.3537 55.6879C88.3537 54.7221 88.3045 53.7752 88.2098 52.8479C88.1732 52.4967 88.0991 52.1648 88.0509 51.8212Z" fill="white"/>
+                ${FORK_KNIFE_PATH}
             `);
     }
 }
@@ -152,6 +182,32 @@ function createSelectedPinOverlayClass() {
             this.div = null;
         }
     };
+}
+
+// 把店铺按主属性分成 吃 (default) / 喝 (drink) / 其他 (other)
+// 参考 Google Places 的 primaryType / types 字段
+function classifyStorePinKind(store) {
+    const primary = String(store?.primaryType || '').toLowerCase();
+    const types = (Array.isArray(store?.types) ? store.types : []).map(t => String(t).toLowerCase());
+    const isDrink = (t) => /(^|_)(bar|pub|night_club|wine_bar|beer_garden|cafe|coffee_shop|tea_house|juice_shop)$/.test(t)
+        || /^(cafe|coffee_shop|tea_house|juice_shop|bar|pub|night_club|wine_bar|beer_garden)$/.test(t);
+    const isEat = (t) => /(restaurant|food|bakery|meal_takeaway|meal_delivery|cake_shop|sandwich_shop|pizza|burger|sushi|ramen|donut|ice_cream|confectionery|deli|barbecue|seafood|steakhouse|noodle|dessert|chocolate|patisserie)/.test(t);
+    const classify = (t) => {
+        if (!t) return null;
+        if (isDrink(t)) return 'drink';
+        if (isEat(t)) return 'default';
+        return null;
+    };
+    // 优先看 primaryType
+    const fromPrimary = classify(primary);
+    if (fromPrimary) return fromPrimary;
+    // primary 没匹配上 → 看 types 列表
+    for (const t of types) {
+        const k = classify(t);
+        if (k) return k;
+    }
+    // 都没匹配 → 其他
+    return 'other';
 }
 
 function setSelectedStorePin(store) {
@@ -1346,12 +1402,37 @@ window.initMap = () => {
     // ==========================================
     // 创建地图实例
     // ==========================================
+    // 简约浅灰风格地图样式：白底、淡灰路网、隐藏 POI / 交通图标，
+    // 让我们的店铺图钉成为视觉焦点
+    const MINIMAL_MAP_STYLES = [
+        { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
+        { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+        { elementType: 'labels.text.fill', stylers: [{ color: '#7d7d7d' }] },
+        { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
+        { featureType: 'administrative', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
+        { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
+        { featureType: 'administrative.neighborhood', stylers: [{ visibility: 'off' }] },
+        { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+        { featureType: 'poi', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
+        { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+        { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
+        { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
+        { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#eaeaea' }] },
+        { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#8a8a8a' }] },
+        { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#bdbdbd' }] },
+        { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+        { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#e5e5e5' }] },
+        { featureType: 'transit.station', stylers: [{ visibility: 'off' }] },
+        { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#e9eef2' }] },
+        { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#a7b3bd' }] },
+        { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] }
+    ];
+
     map = new google.maps.Map(document.getElementById('google-map'), {
         center: getMapCenterFromOrigin(),
         zoom: 15,                       // 缩放级别
         disableDefaultUI: true,         // 禁用默认控件
-        // 隐藏POI标签（商店、餐厅等默认标记）
-        styles: [{ featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] }]
+        styles: MINIMAL_MAP_STYLES
     });
 
     // 显示当前起点标记（Cocoon=蓝，GPS=红）
@@ -1381,7 +1462,12 @@ window.initMap = () => {
             qInput.addEventListener("keypress", function (event) {
                 if (event.key === "Enter") {
                     event.preventDefault();
-                    performMapSearch();
+                    // 回车 = 点击放大镜，提交搜索（限制地图只显示匹配的店铺）
+                    if (typeof window.onMapSearchActionClick === 'function') {
+                        window.onMapSearchActionClick();
+                    } else {
+                        performMapSearch();
+                    }
                 }
             });
             qInput.addEventListener('input', () => {
@@ -1427,6 +1513,325 @@ window.initMap = () => {
 
 window.refreshCurrentOriginMarker = renderCurrentOriginMarker;
 
+/* ===========================
+   地图筛选状态：按搜索词、分类、评分、可见区域过滤显示的店铺图钉
+   =========================== */
+const mapVisibleFilter = {
+    searchActive: false,        // 用户点了放大镜后才生效；只显示 searchMatchedIds 集合中的
+    searchMatchedIds: null,     // Set<string> 或 null
+    categories: new Set(),      // 已选的分类 chip：'eat' | 'drink' | 'other' | 'fav' | 'like' | 'dislike'
+    minRating: 0                // 0=不限；3.5=只显示 ≥3.5
+};
+
+function storePassesMapFilter(store) {
+    // 1) 搜索激活时只显示匹配的
+    if (mapVisibleFilter.searchActive) {
+        if (!mapVisibleFilter.searchMatchedIds || !mapVisibleFilter.searchMatchedIds.has(String(store.id))) return false;
+    }
+    // 2) 分类多选（多个分类是"或"关系；选中任一即通过）
+    if (mapVisibleFilter.categories.size > 0) {
+        const cats = mapVisibleFilter.categories;
+        const myFavs = window.myFavIds || [];
+        const likes = window.localLikes || new Set();
+        const dislikes = window.localDislikes || new Set();
+        let pass = false;
+        if (cats.has('fav') && myFavs.includes(store.id)) pass = true;
+        if (!pass && cats.has('like') && likes.has(store.id)) pass = true;
+        if (!pass && cats.has('dislike') && dislikes.has(store.id)) pass = true;
+        if (!pass && (cats.has('eat') || cats.has('drink') || cats.has('other'))) {
+            const kind = classifyStorePinKind(store); // 'default' | 'drink' | 'other'
+            const kindKey = kind === 'default' ? 'eat' : kind;
+            if (cats.has(kindKey)) pass = true;
+        }
+        if (!pass) return false;
+    }
+    // 3) 评分阈值
+    if (mapVisibleFilter.minRating > 0) {
+        const rating = (typeof window.getStoreAverageRating === 'function')
+            ? Number(window.getStoreAverageRating(store)) || 0
+            : 0;
+        if (rating < mapVisibleFilter.minRating) return false;
+    }
+    return true;
+}
+
+window.toggleMapCategoryChip = (cat) => {
+    const set = mapVisibleFilter.categories;
+    if (set.has(cat)) set.delete(cat); else set.add(cat);
+    refreshMapChipUI();
+    if (typeof window.renderMarkers === 'function') window.renderMarkers();
+};
+
+window.toggleMapRatingChip = () => {
+    mapVisibleFilter.minRating = mapVisibleFilter.minRating > 0 ? 0 : 3.5;
+    refreshMapChipUI();
+    if (typeof window.renderMarkers === 'function') window.renderMarkers();
+};
+
+function refreshMapChipUI() {
+    document.querySelectorAll('.map-chip').forEach((btn) => {
+        const cat = btn.dataset.cat;
+        const rating = btn.dataset.rating;
+        if (cat) btn.classList.toggle('is-selected', mapVisibleFilter.categories.has(cat));
+        if (rating) btn.classList.toggle('is-selected', mapVisibleFilter.minRating > 0);
+    });
+}
+
+function refreshMapSearchActionButton() {
+    const btn = document.getElementById('map-search-action-btn');
+    const areaRow = document.getElementById('map-search-area-row');
+    if (!btn) return;
+    btn.innerHTML = mapVisibleFilter.searchActive
+        ? '<i data-lucide="x" width="20"></i>'
+        : '<i data-lucide="search" width="20"></i>';
+    btn.classList.toggle('is-active', mapVisibleFilter.searchActive);
+    if (window.lucide?.createIcons) lucide.createIcons();
+    if (areaRow) areaRow.classList.toggle('hidden', !mapVisibleFilter.searchActive);
+}
+
+// 地图搜索时默认限定一个城市级别的最大半径（米）
+const MAP_SEARCH_MAX_RADIUS_METERS = 50000;
+
+function getStoresMatchingQuery(query, opts = {}) {
+    const q = String(query || '').trim();
+    if (!q) return [];
+    const { bounds = null, center = null, maxMeters = 0 } = opts;
+    const scoreFn = typeof window.scoreStoreSearch === 'function'
+        ? window.scoreStoreSearch
+        : ((qq, store) => {
+            const k = String(qq || '').toLowerCase();
+            const name = String(store?.name || '').toLowerCase();
+            const addr = String(store?.address || store?.formattedAddress || '').toLowerCase();
+            return (name.includes(k) || addr.includes(k)) ? 1 : 0;
+        });
+    const haversine = (a, b) => {
+        if (!a || !b) return Infinity;
+        const R = 6371000;
+        const toRad = (x) => x * Math.PI / 180;
+        const dLat = toRad(b.lat - a.lat);
+        const dLng = toRad(b.lng - a.lng);
+        const lat1 = toRad(a.lat);
+        const lat2 = toRad(b.lat);
+        const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+        return 2 * R * Math.asin(Math.sqrt(h));
+    };
+    return (window.localStores || []).filter((s) => {
+        const lat = Number(s.lat);
+        const lng = Number(s.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+        if (scoreFn(q, s) <= 0) return false;
+        if (bounds && map) {
+            try {
+                const ll = new google.maps.LatLng(lat, lng);
+                if (!bounds.contains(ll)) return false;
+            } catch (e) { /* ignore */ }
+        }
+        if (center && maxMeters > 0) {
+            const d = haversine(center, { lat, lng });
+            if (d > maxMeters) return false;
+        }
+        return true;
+    });
+}
+
+function getMapCurrentSearchScope() {
+    if (!map?.getBounds) return { bounds: null, center: null };
+    const bounds = map.getBounds();
+    const c = map.getCenter?.();
+    const center = c ? { lat: c.lat(), lng: c.lng() } : null;
+    return { bounds, center };
+}
+
+function commitMapSearch() {
+    const input = document.getElementById('q');
+    const q = (input?.value || '').trim();
+    if (!q) {
+        clearMapSearchFilter();
+        return;
+    }
+    const { bounds, center } = getMapCurrentSearchScope();
+    // Pass 1：当前可见区域 + 最大 50km 半径（站在用户视角的附近搜索）
+    let matched = getStoresMatchingQuery(q, {
+        bounds,
+        center,
+        maxMeters: MAP_SEARCH_MAX_RADIUS_METERS
+    });
+    let expandedToFit = false;
+    // Pass 2：视区里没有 → 在中心点 50km 内（不限制 bounds）找
+    if (matched.length === 0 && center) {
+        matched = getStoresMatchingQuery(q, { center, maxMeters: 50000 });
+        if (matched.length > 0) expandedToFit = true;
+    }
+    // Pass 3：附近 50km 仍没有 → 扩大到周边 150km（覆盖大都会区周边城市）
+    if (matched.length === 0 && center) {
+        matched = getStoresMatchingQuery(q, { center, maxMeters: 150000 });
+        if (matched.length > 0) expandedToFit = true;
+    }
+    if (matched.length === 0) {
+        // 真的没有：轻提示，不激活筛选
+        if (typeof window.showAppFeedbackToast === 'function') {
+            window.showAppFeedbackToast('没有符合条件的店铺');
+        }
+        return;
+    }
+    // 进入搜索结果时自动清掉之前选中的 chip 筛选，避免命中店铺被分类/评分过滤掉
+    mapVisibleFilter.categories.clear();
+    mapVisibleFilter.minRating = 0;
+    refreshMapChipUI();
+    mapVisibleFilter.searchActive = true;
+    mapVisibleFilter.searchMatchedIds = new Set(matched.map(s => String(s.id)));
+    refreshMapSearchActionButton();
+    const results = document.getElementById('results');
+    if (results) results.classList.remove('active');
+    if (typeof window.renderMarkers === 'function') window.renderMarkers();
+    // 如果命中的店铺不在当前视窗里（被扩大半径找到的），平滑过渡到这些店铺
+    if (expandedToFit && map?.fitBounds && window.google?.maps?.LatLngBounds) {
+        try {
+            const lb = new google.maps.LatLngBounds();
+            matched.forEach(s => {
+                const lat = Number(s.lat), lng = Number(s.lng);
+                if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                    lb.extend(new google.maps.LatLng(lat, lng));
+                }
+            });
+            smoothFlyToBounds(lb, 80);
+        } catch (e) { /* ignore */ }
+    }
+}
+
+// 计算让 bounds 完整显示在指定像素尺寸下所需的最小 zoom（参考 Google Maps Mercator 投影）
+function computeBoundsZoom(bounds, mapDim) {
+    if (!bounds) return 0;
+    const WORLD_DIM = 256;
+    const ZOOM_MAX = 21;
+    const latRad = (lat) => {
+        const sin = Math.sin(lat * Math.PI / 180);
+        const r = Math.log((1 + sin) / (1 - sin)) / 2;
+        return Math.max(Math.min(r, Math.PI), -Math.PI) / 2;
+    };
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+    const latFraction = (latRad(ne.lat()) - latRad(sw.lat())) / Math.PI;
+    const lngDiff = ne.lng() - sw.lng();
+    const lngFraction = ((lngDiff < 0) ? (lngDiff + 360) : lngDiff) / 360;
+    if (latFraction <= 0 || lngFraction <= 0) return ZOOM_MAX;
+    const latZoom = Math.floor(Math.log(mapDim.height / WORLD_DIM / latFraction) / Math.LN2);
+    const lngZoom = Math.floor(Math.log(mapDim.width / WORLD_DIM / lngFraction) / Math.LN2);
+    return Math.min(latZoom, lngZoom, ZOOM_MAX);
+}
+
+// 平滑过渡到目标 bounds：
+// - 当前 zoom 已经能装下目标 → 仅平移 (panTo)，不缩放
+// - 装不下 → 先缩到刚好装下的 zoom，再平滑 pan 过去
+function smoothFlyToBounds(targetBounds, padding = 60) {
+    if (!map || !targetBounds) return;
+    try {
+        const currentZoom = Number(map.getZoom?.() || 15);
+        const div = map.getDiv?.();
+        const mapDim = div
+            ? { width: div.offsetWidth || 360, height: div.offsetHeight || 640 }
+            : { width: 360, height: 640 };
+        const reqZoom = computeBoundsZoom(targetBounds, mapDim);
+        const center = targetBounds.getCenter();
+        if (reqZoom >= currentZoom) {
+            // 当前缩放已经够装下，纯平移
+            animateMapCenterTo(center, 600);
+        } else {
+            // 需要缩小才能容下：先 setZoom 再平滑平移
+            map.setZoom(Math.max(8, reqZoom));
+            requestAnimationFrame(() => animateMapCenterTo(center, 600));
+        }
+    } catch (e) {
+        try { map.fitBounds(targetBounds, padding); } catch (_) { /* ignore */ }
+    }
+}
+window.smoothFlyToBounds = smoothFlyToBounds;
+
+function clearMapSearchFilter() {
+    mapVisibleFilter.searchActive = false;
+    mapVisibleFilter.searchMatchedIds = null;
+    const input = document.getElementById('q');
+    if (input) input.value = '';
+    const results = document.getElementById('results');
+    if (results) {
+        results.classList.remove('active');
+        results.innerHTML = '';
+    }
+    refreshMapSearchActionButton();
+    if (typeof window.renderMarkers === 'function') window.renderMarkers();
+}
+
+window.onMapSearchActionClick = () => {
+    if (mapVisibleFilter.searchActive) {
+        clearMapSearchFilter();
+    } else {
+        commitMapSearch();
+    }
+};
+
+window.searchInVisibleArea = () => {
+    // 移动地图后再次按当前视区重新搜索
+    commitMapSearch();
+};
+
+window.clearMapSearchFilter = clearMapSearchFilter;
+
+// 给 chip 行加上手动拖拽滚动逻辑（防止被 Google Map 的手势拦截）
+function bindMapChipsDragScroll() {
+    const el = document.getElementById('map-filter-chips');
+    if (!el || el.dataset.dragBound === '1') return;
+    el.dataset.dragBound = '1';
+    let isDown = false;
+    let startX = 0;
+    let scrollStart = 0;
+    let dragged = false;
+    const SLOP = 5;
+
+    el.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        isDown = true;
+        dragged = false;
+        startX = e.clientX;
+        scrollStart = el.scrollLeft;
+    });
+    el.addEventListener('pointermove', (e) => {
+        if (!isDown) return;
+        const dx = e.clientX - startX;
+        if (!dragged && Math.abs(dx) > SLOP) {
+            dragged = true;
+            try { el.setPointerCapture(e.pointerId); } catch (_) { }
+        }
+        if (dragged) {
+            el.scrollLeft = scrollStart - dx;
+            e.preventDefault();
+        }
+    }, { passive: false });
+    const finish = (e) => {
+        if (!isDown) return;
+        isDown = false;
+        try { el.releasePointerCapture(e.pointerId); } catch (_) { }
+        if (dragged) {
+            // 阻止本次拖动后的 click 触发，避免误触发 chip 选择
+            const blockClick = (ev) => {
+                ev.stopPropagation();
+                ev.preventDefault();
+                el.removeEventListener('click', blockClick, true);
+            };
+            el.addEventListener('click', blockClick, true);
+            setTimeout(() => el.removeEventListener('click', blockClick, true), 350);
+        }
+    };
+    el.addEventListener('pointerup', finish);
+    el.addEventListener('pointercancel', finish);
+    el.addEventListener('pointerleave', finish);
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bindMapChipsDragScroll);
+} else {
+    bindMapChipsDragScroll();
+}
+
 /* =========================================
    2. 渲染店铺标记
    在地图上显示所有店铺的图钉
@@ -1450,14 +1855,18 @@ window.renderMarkers = () => {
         // 跳过没有坐标的店铺
         if (!store.lat || !store.lng) return;
         if (activePinnedStoreId && store.id === activePinnedStoreId) return;
+        // 应用搜索 / 分类 / 评分筛选
+        if (!storePassesMapFilter(store)) return;
 
-        // 默认样式：根据平均评分（>=3.5 显示 pin-default，<3.5 显示 pin-default02）
+        // 默认样式：先根据店铺主属性分类（吃 default / 喝 drink / 其他 other），再根据评分加 -low 后缀
         const avgRatingForPin = (typeof window.getStoreAverageRating === 'function')
             ? Number(window.getStoreAverageRating(store)) || 0
             : 0;
         const isLowRated = avgRatingForPin > 0 && avgRatingForPin < 3.5;
-        let pinClass = isLowRated ? "pin-default-low" : "pin-default";
-        let iconHtml = getMapPinMarkup(isLowRated ? 'default-low' : 'default');
+        const kind = classifyStorePinKind(store); // 'default' | 'drink' | 'other'
+        const baseType = isLowRated ? `${kind}-low` : kind;
+        let pinClass = `pin-${baseType}`;
+        let iconHtml = getMapPinMarkup(baseType);
 
         // 根据状态设置不同颜色
         // 优先级：难吃(蓝) > 好吃(红) > 想吃(黄) > 默认
@@ -2636,6 +3045,24 @@ window.centerMapOnCurrentOrigin = () => {
     map.setZoom(15);
     renderCurrentOriginMarker();
     window.renderMarkers();
+};
+
+// 地图右下角按钮：平滑回到当前定位（保持当前 zoom，仅平移）
+window.recenterMapToOrigin = () => {
+    if (!map) return;
+    const origin = getMapCenterFromOrigin();
+    if (!origin) return;
+    try {
+        const lat = Number(origin.lat ?? origin.lat?.());
+        const lng = Number(origin.lng ?? origin.lng?.());
+        if (Number.isFinite(lat) && Number.isFinite(lng) && window.google?.maps?.LatLng) {
+            animateMapCenterTo(new google.maps.LatLng(lat, lng), 600);
+            renderCurrentOriginMarker();
+            return;
+        }
+    } catch (e) { /* fallthrough */ }
+    map.setCenter(origin);
+    renderCurrentOriginMarker();
 };
 
 window.openStoreInGoogleMapsById = (storeId) => {
