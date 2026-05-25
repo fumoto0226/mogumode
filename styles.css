@@ -1472,6 +1472,15 @@ header {
     width: 15px;
     height: 15px;
     flex-shrink: 0;
+    -webkit-user-drag: none;
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: none;
+}
+
+.map-chip {
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .map-chip.is-selected {
@@ -3870,6 +3879,23 @@ header {
     width: 28px;
     height: 40px;
     z-index: 999999999;
+}
+
+/* 当前用户位置图标（GPS / Cocoon），floatPane 顶层不被任何店铺图钉遮挡 */
+.map-origin-overlay {
+    position: absolute;
+    pointer-events: none;
+    width: 30px;
+    height: 30px;
+    z-index: 999999998;
+}
+
+.map-origin-overlay img {
+    width: 30px;
+    height: 30px;
+    display: block;
+    -webkit-user-drag: none;
+    user-select: none;
 }
 
 .map-pin-selected-overlay svg {

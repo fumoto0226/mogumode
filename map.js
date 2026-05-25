@@ -349,32 +349,58 @@ function formatMapDistanceText(storeLike) {
     return `${mins}分钟`;
 }
 
+function createOriginPinOverlayClass() {
+    return class OriginPinOverlay extends google.maps.OverlayView {
+        constructor(latlng, iconUrl, anchorBottom) {
+            super();
+            this.latlng = latlng;
+            this.iconUrl = iconUrl;
+            this.anchorBottom = !!anchorBottom; // true: anchor 底部中心；false: 中心
+            this.div = null;
+        }
+        onAdd() {
+            this.div = document.createElement('div');
+            this.div.className = 'map-origin-overlay';
+            this.div.innerHTML = `<img src="${this.iconUrl}" width="30" height="30" alt="" draggable="false">`;
+            const panes = this.getPanes();
+            // floatPane 是最高层，保证不会被任何店铺图钉遮挡
+            panes.floatPane.appendChild(this.div);
+        }
+        draw() {
+            if (!this.div) return;
+            const projection = this.getProjection();
+            const point = projection?.fromLatLngToDivPixel?.(this.latlng);
+            if (!point) return;
+            const w = 30, h = 30;
+            const left = Math.round(point.x - w / 2);
+            const top = this.anchorBottom ? Math.round(point.y - h) : Math.round(point.y - h / 2);
+            this.div.style.left = `${left}px`;
+            this.div.style.top = `${top}px`;
+        }
+        onRemove() {
+            if (this.div && this.div.parentNode) this.div.parentNode.removeChild(this.div);
+            this.div = null;
+        }
+    };
+}
+
 function renderCurrentOriginMarker() {
     if (!map) return;
     if (currentOriginMarker) currentOriginMarker.setMap(null);
 
     const { origin, type } = getCurrentOriginState();
     const isGpsOrigin = type === 'gps';
+    const iconUrl = 'images/weizhilan.svg';
 
-    const iconUrl = isGpsOrigin ? 'images/weizhih.svg' : 'images/weizhilan.svg';
-    const iconSize = new google.maps.Size(30, 30);
-    // GPS 当前位置以图标中间最下方为锚点；其它（如 cocoon）以中心为锚点
-    const anchor = isGpsOrigin
-        ? new google.maps.Point(Math.round(iconSize.width / 2), iconSize.height)
-        : new google.maps.Point(Math.round(iconSize.width / 2), Math.round(iconSize.height / 2));
-    currentOriginMarker = new google.maps.Marker({
-        map,
-        position: origin,
-        optimized: false,
-        zIndex: 1,
-        clickable: false,
-        draggable: false,
-        icon: {
-            url: iconUrl,
-            scaledSize: iconSize,
-            anchor
-        }
-    });
+    if (!window.OriginPinOverlayClass) {
+        window.OriginPinOverlayClass = createOriginPinOverlayClass();
+    }
+    const lat = Number(origin?.lat ?? origin?.lat?.());
+    const lng = Number(origin?.lng ?? origin?.lng?.());
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    const latlng = new google.maps.LatLng(lat, lng);
+    currentOriginMarker = new window.OriginPinOverlayClass(latlng, iconUrl, isGpsOrigin);
+    currentOriginMarker.setMap(map);
 }
 
 function stopMapFocusAnimation() {
