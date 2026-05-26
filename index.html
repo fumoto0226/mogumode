@@ -111,8 +111,8 @@
                                 <i data-lucide="align-left" width="16"></i> 最新
                             </div>
                             <div class="sort-menu-item" data-sort-key="rating"
-                                onclick="selectSortOption('评价', 'rating')">
-                                <i data-lucide="heart" width="16"></i> 评价
+                                onclick="selectSortOption('评分', 'rating')">
+                                <i data-lucide="heart" width="16"></i> 评分
                             </div>
                             <div class="sort-menu-item" data-sort-key="distance"
                                 onclick="selectSortOption('距离', 'distance')">
@@ -250,7 +250,7 @@
 
             <div id="map-filter-chips" class="map-filter-chips">
                 <button class="map-chip" type="button" data-rating="3.5" onclick="toggleMapRatingChip()">
-                    高评价
+                    高分
                 </button>
                 <button class="map-chip" type="button" data-cat="eat" onclick="toggleMapCategoryChip('eat')">
                     <img src="images/map-pin-01.svg" alt="" class="map-chip-icon">餐厅
@@ -325,7 +325,7 @@
                     <div class="sheet-section">
                         <div class="sheet-section-header">
                             <button type="button" class="sheet-section-link"
-                                onclick="openMapReviewSubpage('mine')"><span>我的评价</span><span
+                                onclick="openMapReviewSubpage('mine')"><span>我的评论</span><span
                                     id="mp-my-review-count"></span><span>&nbsp;&gt;</span></button>
                         </div>
                         <div class="sheet-my-rating">
@@ -363,7 +363,7 @@
                     <div class="sheet-section sheet-section-clickable" onclick="openMapReviewSubpage('friends')">
                         <div class="sheet-section-header">
                             <button type="button" class="sheet-section-link"
-                                onclick="event.stopPropagation();openMapReviewSubpage('friends')"><span>朋友评价</span><span
+                                onclick="event.stopPropagation();openMapReviewSubpage('friends')"><span>朋友评论</span><span
                                     id="mp-friend-review-count"></span><span>&nbsp;&gt;</span></button>
                             <div class="sheet-friend-avatars">
                                 <img src="images/avatar-placeholder.svg" class="f-avatar">
@@ -433,7 +433,7 @@
             <div class="map-review-overlay-header">
                 <button type="button" class="map-review-overlay-back" onclick="closeMapReviewSubpage()">
                     <img src="images/back.svg" width="10">
-                    <span id="map-review-subpage-title">我的评价</span>
+                    <span id="map-review-subpage-title">我的评论</span>
                 </button>
             </div>
             <div id="map-review-subpage-list" class="map-review-overlay-list"></div>
@@ -519,11 +519,11 @@
                     <div class="add-input-card">
                         <div class="add-input-label">日期<span style="color:#8f8f8f; font-size:12px;">（选填）</span></div>
                         <div class="custom-date-wrap">
-                            <button type="button" class="custom-date-button" id="newMealDateButton" onclick="openMealDatePicker()">
+                            <input type="date" id="newMealDate" class="custom-date-native">
+                            <div class="custom-date-display">
                                 <span class="custom-date-text is-empty" id="newMealDateText">点击选择日期</span>
                                 <i data-lucide="calendar" width="18" class="custom-date-icon"></i>
-                            </button>
-                            <input type="date" id="newMealDate" class="custom-date-native">
+                            </div>
                         </div>
                     </div>
 
@@ -954,6 +954,14 @@
                             inputmode="numeric" oninput="updateRandomPoolHint()" onchange="updateRandomPoolHint()">
                         <span>分钟以内</span>
                     </label>
+                    <label class="rf-checkbox">
+                        <input type="checkbox" id="rf-high-rating" checked onchange="updateRandomPoolHint()">
+                        <span>3分以上</span>
+                    </label>
+                    <label class="rf-checkbox">
+                        <input type="checkbox" id="rf-only-eat" checked onchange="updateRandomPoolHint()">
+                        <span>餐厅</span>
+                    </label>
                 </div>
 
                 <button id="btn-do-random" class="btn-random-main" onclick="doRandomPick()">
@@ -1004,7 +1012,7 @@
 
                 <div class="fd-section-card">
                     <div style="flex:1">
-                        <div style="font-size:11px; color:#b2bec3; margin-bottom:8px;">我的评价 &gt;</div>
+                        <div style="font-size:11px; color:#b2bec3; margin-bottom:8px;">我的评论 &gt;</div>
                         <div style="display:flex; align-items:center;">
                             <div style="display:flex; align-items:baseline; gap:4px;">
                                 <span class="fd-score-big">4.8</span>
@@ -1023,7 +1031,7 @@
                     <div style="flex:1">
                         <div
                             style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <div style="font-size:11px; color:#b2bec3;">朋友评价 &gt;</div>
+                            <div style="font-size:11px; color:#b2bec3;">朋友评论 &gt;</div>
                             <div class="mp-friend-avatars">
                                 <img src="images/avatar-placeholder.svg" class="mp-f-avatar">
                                 <img src="images/avatar-placeholder.svg" class="mp-f-avatar">
@@ -1220,8 +1228,8 @@
     <!-- =========================================
          JAVASCRIPT FILES
          ========================================= -->
-    <script type="module" src="app.js?v=98-origin-noshadow"></script>
-    <script src="map.js?v=98-origin-noshadow"></script>
+    <script type="module" src="app.js?v=110-friend-no-dup"></script>
+    <script src="map.js?v=110-friend-no-dup"></script>
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvqupW6XZ7A61lutSD8_GlV31Xdc5ZTLw&callback=initGoogleMap&libraries=geometry">
         </script>

@@ -33,7 +33,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v34";
+const APP_BUILD_VERSION = "v35";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 const LOCATION_CACHE_STORAGE_KEY = "mogumode:last-origin-v2";
 
@@ -2518,6 +2518,157 @@ window.refreshStoresFromFirestore = async () => {
     }
 };
 
+/**
+ * 把若干个重复的店铺文档合并成一个：
+ * - 把 mergeIds 里所有 store 的 revs / images 合并到 keepId
+ * - 全局用户的 favorites / likes / dislikes 里指向 mergeIds 的引用改成 keepId
+ * - 删除 mergeIds 对应的 store 文档
+ * 在浏览器 console 里调用：await window.mergeDuplicateStores('keepId', ['dupId1','dupId2'])
+ */
+window.mergeDuplicateStores = async (keepId, mergeIds = []) => {
+    if (!keepId || !Array.isArray(mergeIds) || !mergeIds.length) {
+        console.warn('mergeDuplicateStores: 需要 keepId 和至少一个 mergeId');
+        return;
+    }
+    const keepSnap = await getDoc(doc(db, "stores", keepId));
+    if (!keepSnap.exists()) {
+        console.warn('保留的店铺不存在:', keepId);
+        return;
+    }
+    const keep = { id: keepSnap.id, ...keepSnap.data() };
+    const mergedRevs = Array.isArray(keep.revs) ? [...keep.revs] : [];
+    const mergedImages = Array.isArray(keep.images) ? [...keep.images] : [];
+    const revKey = (r) => `${r?.uid || r?.user || ''}|${r?.createdAt || ''}|${r?.text || ''}`;
+    const haveRev = new Set(mergedRevs.map(revKey));
+    const imageUrl = (entry) => (typeof getImageAssetFullUrl === 'function')
+        ? getImageAssetFullUrl(entry)
+        : (typeof entry === 'string' ? entry : entry?.url || '');
+    const haveImg = new Set(mergedImages.map(imageUrl).filter(Boolean));
+
+    for (const dupId of mergeIds) {
+        if (!dupId || dupId === keepId) continue;
+        const dupSnap = await getDoc(doc(db, "stores", dupId));
+        if (!dupSnap.exists()) continue;
+        const dup = { id: dupSnap.id, ...dupSnap.data() };
+        (Array.isArray(dup.revs) ? dup.revs : []).forEach(r => {
+            const k = revKey(r);
+            if (!haveRev.has(k)) { haveRev.add(k); mergedRevs.push(r); }
+        });
+        (Array.isArray(dup.images) ? dup.images : []).forEach(entry => {
+            const url = imageUrl(entry);
+            if (url && !haveImg.has(url)) { haveImg.add(url); mergedImages.push(entry); }
+        });
+    }
+
+    await updateDoc(doc(db, "stores", keepId), {
+        revs: mergedRevs,
+        images: mergedImages
+    });
+
+    // 修改当前用户自己的 favorites / likes / dislikes 引用（Firestore 规则一般只允许读写自己的 user doc）
+    try {
+        const meUid = window.currentUser?.uid;
+        if (meUid) {
+            const meRef = doc(db, "users", meUid);
+            const meSnap = await getDoc(meRef);
+            if (meSnap.exists()) {
+                const data = meSnap.data() || {};
+                const rewrite = (arr) => {
+                    if (!Array.isArray(arr)) return null;
+                    let changed = false;
+                    const next = arr.map(id => {
+                        if (mergeIds.includes(id)) { changed = true; return keepId; }
+                        return id;
+                    });
+                    return changed ? Array.from(new Set(next)) : null;
+                };
+                const updates = {};
+                const favs = rewrite(data.favorites); if (favs) updates.favorites = favs;
+                const likes = rewrite(data.likes); if (likes) updates.likes = likes;
+                const dislikes = rewrite(data.dislikes); if (dislikes) updates.dislikes = dislikes;
+                if (Object.keys(updates).length) await updateDoc(meRef, updates);
+            }
+        }
+    } catch (err) {
+        console.warn("改写当前用户收藏引用失败（已忽略，继续删除重复店铺）:", err);
+    }
+
+    // 最后删除重复的店铺
+    for (const dupId of mergeIds) {
+        if (!dupId || dupId === keepId) continue;
+        try { await deleteDoc(doc(db, "stores", dupId)); } catch (err) { console.warn('删除重复店铺失败:', dupId, err); }
+    }
+    await window.refreshStoresFromFirestore();
+    console.log(`已合并完成：保留 ${keepId}，删除 ${mergeIds.join(', ')}`);
+};
+
+/**
+ * 自动扫描 localStores 中按归一化店名 + googlePlaceId 重复的店铺，合并到最早创建的那个。
+ * 在浏览器 console 里调用：await window.cleanupDuplicateStores({ dryRun: true })
+ * 看完输出确认没问题后，再 await window.cleanupDuplicateStores() 真正执行合并。
+ */
+window.cleanupDuplicateStores = async ({ dryRun = false } = {}) => {
+    const stores = Array.isArray(window.localStores) ? window.localStores : [];
+    if (!stores.length) {
+        console.warn('localStores 为空，先打开首页加载数据');
+        return;
+    }
+    // 并查集：只要任意两家店铺共享 googlePlaceId 或归一化店名，就把它们并为一组
+    const parent = Object.create(null);
+    stores.forEach(s => { parent[s.id] = s.id; });
+    const root = (x) => {
+        while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; }
+        return x;
+    };
+    const union = (a, b) => {
+        const ra = root(a), rb = root(b);
+        if (ra !== rb) parent[ra] = rb;
+    };
+    const placeIdMap = new Map();
+    stores.forEach(s => {
+        const pid = String(s.googlePlaceId || '').trim();
+        if (!pid) return;
+        if (placeIdMap.has(pid)) union(s.id, placeIdMap.get(pid));
+        else placeIdMap.set(pid, s.id);
+    });
+    const norm = (typeof normalizeStoreName === 'function')
+        ? normalizeStoreName
+        : (v) => String(v || '').trim().toLowerCase();
+    const nameMap = new Map();
+    stores.forEach(s => {
+        const n = norm(s.name);
+        if (!n) return;
+        if (nameMap.has(n)) union(s.id, nameMap.get(n));
+        else nameMap.set(n, s.id);
+    });
+    const groups = new Map();
+    stores.forEach(s => {
+        const r = root(s.id);
+        if (!groups.has(r)) groups.set(r, []);
+        groups.get(r).push(s);
+    });
+    const dupSets = [...groups.values()].filter(arr => arr.length > 1);
+    if (!dupSets.length) {
+        console.log('没有发现重复店铺 🎉');
+        return [];
+    }
+    const plan = dupSets.map(arr => {
+        arr.sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0));
+        const keep = arr[0];
+        const merge = arr.slice(1);
+        return { name: keep.name, keepId: keep.id, mergeIds: merge.map(x => x.id) };
+    });
+    console.table(plan.map(p => ({ name: p.name, keepId: p.keepId, mergeIds: p.mergeIds.join(', ') })));
+    if (dryRun) {
+        console.log('dryRun 模式，未真正合并。确认后跑：await window.cleanupDuplicateStores()');
+        return plan;
+    }
+    for (const item of plan) {
+        await window.mergeDuplicateStores(item.keepId, item.mergeIds);
+    }
+    return plan;
+};
+
 const STORE_PAGE_SIZE = 20;
 let storeListPagination = { list: [], rendered: 0 };
 
@@ -3326,8 +3477,8 @@ window.toggleLocalAction = async (id, type) => {
     try {
         await setDoc(userRef, updates, { merge: true });
     } catch (err) {
-        console.error("保存评价失败:", err);
-        alert("保存评价失败: " + err.message);
+        console.error("保存评论失败:", err);
+        alert("保存评论失败: " + err.message);
         return;
     }
 
@@ -3406,6 +3557,40 @@ window.submitNew = async () => {
             if (existingByName) {
                 existingStoreId = existingByName.id;
                 existingStoreData = existingByName;
+            }
+        }
+
+        // 最后兜底：本地缓存可能还没拿到刚刚被别人 / 自己另一台设备创建的店铺，
+        // 在写入前再请求一次 Firestore 看看有没有同 googlePlaceId / 同名店铺，避免重复创建
+        if (!existingStoreId) {
+            try {
+                if (selectedStorePlaceId) {
+                    const dupSnap = await getDocs(query(
+                        collection(db, "stores"),
+                        where("googlePlaceId", "==", selectedStorePlaceId)
+                    ));
+                    if (!dupSnap.empty) {
+                        const d = dupSnap.docs[0];
+                        existingStoreId = d.id;
+                        existingStoreData = { id: d.id, ...d.data() };
+                    }
+                }
+                if (!existingStoreId) {
+                    const typedNameForRemote = String(document.getElementById('newName').value || '').trim();
+                    if (typedNameForRemote) {
+                        const dupNameSnap = await getDocs(query(
+                            collection(db, "stores"),
+                            where("name", "==", typedNameForRemote)
+                        ));
+                        if (!dupNameSnap.empty) {
+                            const d = dupNameSnap.docs[0];
+                            existingStoreId = d.id;
+                            existingStoreData = { id: d.id, ...d.data() };
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn("查重失败，继续按本地缓存判断:", err);
             }
         }
 
@@ -5473,7 +5658,7 @@ window.selectSortOption = (text, sortKey) => {
             default: '最新发布',
             price: '价格排序',
             distance: '距离排序',
-            rating: '评价排序'
+            rating: '评分排序'
         };
         btnText.innerText = labelMap[sortKey] || (String(text || '').includes('排序') ? text : `${text}排序`);
     }
@@ -7074,6 +7259,8 @@ function getRandomPickPool() {
     const walkOnly = !!document.getElementById('rf-walk-15')?.checked;
     const walkMinutes = getRandomWalkLimitMinutes();
     const walkLimitMeters = walkMinutes * RANDOM_WALK_METERS_PER_MINUTE;
+    const highRatingOnly = !!document.getElementById('rf-high-rating')?.checked;
+    const onlyEat = !!document.getElementById('rf-only-eat')?.checked;
     const pool = (Array.isArray(localStores) ? localStores : []).filter(s => {
         if (isStorePermanentlyClosed(s)) return false;
         if (walkOnly) {
@@ -7081,9 +7268,19 @@ function getRandomPickPool() {
             if (!Number.isFinite(distRaw) || distRaw <= 0) return false;
             if (distRaw > walkLimitMeters) return false;
         }
+        if (highRatingOnly) {
+            const r = (typeof getStoreAverageRating === 'function') ? Number(getStoreAverageRating(s)) || 0 : 0;
+            if (r < 3) return false;
+        }
+        if (onlyEat) {
+            const kind = (typeof window.classifyStorePinKind === 'function')
+                ? window.classifyStorePinKind(s)
+                : 'default';
+            if (kind !== 'default') return false;
+        }
         return true;
     });
-    return { pool, walkOnly, walkMinutes };
+    return { pool, walkOnly, walkMinutes, highRatingOnly, onlyEat };
 }
 
 window.updateRandomPoolHint = () => {
@@ -7091,18 +7288,21 @@ window.updateRandomPoolHint = () => {
     if (!box) return;
     // 不要覆盖结果或抽选动画
     if (box.style.display === 'none') return;
-    const { pool, walkOnly, walkMinutes } = getRandomPickPool();
+    const { pool, walkOnly, walkMinutes, highRatingOnly, onlyEat } = getRandomPickPool();
     const count = pool.length;
-    // 没有勾选距离限制时，不显示数量提示
-    if (!walkOnly) {
+    const anyFilter = walkOnly || highRatingOnly || onlyEat;
+    if (!anyFilter) {
         box.innerHTML = `<span class="big-question-mark">?</span>`;
         return;
     }
     if (count === 0) {
+        const tip = walkOnly
+            ? `步行${walkMinutes}分钟以内没有符合条件的店铺，<br>试试放宽筛选条件`
+            : `附近没有符合条件的店铺，<br>试试放宽筛选条件`;
         box.innerHTML = `
             <div class="random-empty-inline">
                 <span class="big-question-mark">?</span>
-                <div class="random-pool-hint random-pool-empty">步行${walkMinutes}分钟以内没有可选的店铺，<br>试试把时间调长一点？</div>
+                <div class="random-pool-hint random-pool-empty">${tip}</div>
             </div>`;
         return;
     }

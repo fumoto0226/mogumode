@@ -186,6 +186,7 @@ function createSelectedPinOverlayClass() {
 
 // 把店铺按主属性分成 吃 (default) / 喝 (drink) / 其他 (other)
 // 参考 Google Places 的 primaryType / types 字段
+window.classifyStorePinKind = classifyStorePinKind;
 function classifyStorePinKind(store) {
     const primary = String(store?.primaryType || '').toLowerCase();
     const types = (Array.isArray(store?.types) ? store.types : []).map(t => String(t).toLowerCase());
@@ -638,12 +639,12 @@ function refreshMapFriendSection(store) {
     const ratingWrap = document.getElementById('sheet-friend-rating');
     if (ratingWrap) {
         if (!revs.length) {
-            ratingWrap.innerHTML = `<div class="friend-score">--</div><div class="sheet-friend-empty">暂无好友评价</div>`;
+            ratingWrap.innerHTML = `<div class="friend-score">--</div><div class="sheet-friend-empty">暂无好友评论</div>`;
             return;
         }
 
         const previewItems = revs.map((item, idx) => {
-            const text = String(item.rev?.text || '').trim() || `评分 ${Number(item.rev?.rating || 0).toFixed(1)}`;
+            const text = String(item.rev?.text || '').trim();
             const rating = Number(item.rev?.rating || 0);
             return `
                 <div class="sheet-friend-rating-frame${idx === 0 ? ' is-active' : ''}">
@@ -1189,12 +1190,12 @@ function renderMapReviewSubpage(store, scope = 'mine') {
         const userKey = card?.dataset?.reviewUserKey || '';
         const userName = card?.dataset?.reviewUserName || '';
         items = buildMapReviewItems(store, 'all').filter(it => it.userKey === userKey);
-        title = userName ? `${userName}的评价` : '用户评价';
-        emptyText = '暂无评价';
+        title = userName ? `${userName}的评论` : '用户评论';
+        emptyText = '暂无评论';
     } else {
         items = buildMapReviewItems(store, scope);
-        title = scope === 'friends' ? '朋友评价' : '我的评价';
-        emptyText = scope === 'friends' ? '这家店还没有好友评价' : '你还没有评价过这家店';
+        title = scope === 'friends' ? '朋友评论' : '我的评论';
+        emptyText = scope === 'friends' ? '这家店还没有好友评论' : '你还没有评论过这家店';
     }
     titleEl.innerText = title;
 
