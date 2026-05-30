@@ -374,12 +374,89 @@ header {
     pointer-events: none;
 }
 
+/* 主页搜索栏右侧搜索按钮：平时灰底，输入有内容时高亮，提示可点击 */
+.search-submit-btn {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: #f3f4f6;
+    color: #9aa3ad;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    transition: background 0.16s ease, color 0.16s ease;
+}
+
+.search-submit-btn.is-armed {
+    background: #ff6ecb;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(255, 110, 203, 0.32);
+}
+
+.search-submit-btn:active {
+    transform: translateY(-50%) scale(0.94);
+}
+
 /* --- Filter Row --- */
 .filter-row {
     display: flex;
-    gap: 10px;
+    align-items: center;
+    gap: 8px;
     margin-bottom: 16px;
     padding-left: 4px;
+}
+
+/* 排序四个按钮（距离 / 最新 / 评分 / 价格） */
+.sort-pill-group {
+    display: flex;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.sort-pill-group::-webkit-scrollbar {
+    display: none;
+}
+
+.sort-pill {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #fff;
+    color: #2d3436;
+    border: none;
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    transition: background 0.16s ease, color 0.16s ease;
+}
+
+.sort-pill svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+}
+
+.sort-pill.is-selected {
+    background: #1a1a1a;
+    color: #fff;
+}
+
+.sort-pill:active {
+    transform: scale(0.96);
 }
 
 .sort-circle-btn {
@@ -687,7 +764,7 @@ header {
     top: 98px;
     right: 0;
     pointer-events: none;
-    z-index: 0;
+    z-index: -1;
     /* opacity: 0.6; */
 }
 
@@ -804,6 +881,90 @@ header {
     line-height: 1;
     vertical-align: -3px;
     margin: 0 2px;
+}
+
+/* 首页搜索结果底部的"添加这家店"小入口 */
+.home-search-add-hint {
+    padding: 14px 16px 10px;
+    text-align: center;
+    color: #9aa3ad;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.home-search-add-hint a {
+    color: #1f8fff;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.home-search-add-hint a:active {
+    opacity: 0.7;
+}
+
+/* 主页搜索后，Google 上有但库里没有的候选 */
+.home-google-candidates {
+    background: #fff;
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.home-google-candidates-title {
+    font-size: 12px;
+    color: #6c7a89;
+    margin-bottom: 6px;
+}
+
+.home-google-candidate {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.home-google-candidate:last-child {
+    border-bottom: none;
+}
+
+.home-google-candidate-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.home-google-candidate-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #2d3436;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.home-google-candidate-sub {
+    font-size: 11px;
+    color: #9aa3ad;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.home-google-candidate-add {
+    flex-shrink: 0;
+    background: #ff6ecb;
+    color: #fff;
+    border: none;
+    border-radius: 999px;
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.home-google-candidate-add:active {
+    transform: scale(0.96);
 }
 
 .store-card {

@@ -2364,6 +2364,42 @@ window.placesSearchText = async (q, photo = false) => {
     }
 };
 
+// 文本搜索附近（locationBias = 以 origin 为圆心的圆）：用户输入文字时优先返回附近相关店铺
+window.placesSearchTextNearOrigin = async (q, origin, radiusMeters = 30000, photo = false) => {
+    if (!q || !origin) return [];
+    const lat = Number(origin.lat);
+    const lng = Number(origin.lng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];
+
+    const f = 'places.displayName,places.formattedAddress,places.location,places.id,places.regularOpeningHours,places.currentOpeningHours,places.primaryType,places.primaryTypeDisplayName,places.types,places.addressComponents' + (photo ? ',places.photos' : '');
+    try {
+        const cuisineIntent = typeof window.resolveCuisineSearchIntent === 'function'
+            ? window.resolveCuisineSearchIntent(q)
+            : null;
+        const body = {
+            textQuery: cuisineIntent?.replaceQuery ? cuisineIntent.searchQuery : q,
+            locationBias: {
+                circle: {
+                    center: { latitude: lat, longitude: lng },
+                    radius: Math.max(100, Math.min(50000, Number(radiusMeters) || 30000))
+                }
+            }
+        };
+        if (cuisineIntent?.type) {
+            body.includedType = cuisineIntent.type;
+            body.strictTypeFiltering = true;
+        }
+        const [localPlaces, englishPlaces] = await Promise.all([
+            runPlacesSearchRequest(body, f, 'ja'),
+            runPlacesSearchRequest(body, f, 'en')
+        ]);
+        return mergeLocalizedPlaceResults(localPlaces, englishPlaces);
+    } catch (e) {
+        console.error(e);
+        return [];
+    }
+};
+
 window.placesSearchTextByBounds = async (q, bounds, photo = false) => {
     if (!q || !bounds || !window.google?.maps) return [];
     const ne = bounds.getNorthEast?.();
