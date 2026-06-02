@@ -1429,30 +1429,49 @@ window.initMap = () => {
     // ==========================================
     // 创建地图实例
     // ==========================================
-    // 简约浅灰风格地图样式：白底、淡灰路网、隐藏 POI / 交通图标，
-    // 让我们的店铺图钉成为视觉焦点
+    // 简约浅色地图样式：白底为主，加入淡奶油 / 浅薄荷 / 雾蓝等微弱色调，
+    // 让地图有轻微层次但不会像默认 Google Maps 那样杂乱
     const MINIMAL_MAP_STYLES = [
-        { elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] },
+        { elementType: 'geometry', stylers: [{ color: '#f2f2f2' }] }, // 整体底色：浅中性灰
         { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-        { elementType: 'labels.text.fill', stylers: [{ color: '#7d7d7d' }] },
+        { elementType: 'labels.text.fill', stylers: [{ color: '#6f7a85' }] },
         { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }] },
+
+        // 不显示行政边界 / 邻里区块
         { featureType: 'administrative', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
         { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
         { featureType: 'administrative.neighborhood', stylers: [{ visibility: 'off' }] },
+
+        // POI 全部隐藏，让我们的店铺图钉成为视觉焦点
         { featureType: 'poi', stylers: [{ visibility: 'off' }] },
         { featureType: 'poi', elementType: 'labels.text', stylers: [{ visibility: 'off' }] },
+
+        // 公园 / 自然给一点淡绿色，不发亮
+        { featureType: 'poi.park', elementType: 'geometry', stylers: [{ visibility: 'on' }, { color: '#dde9d4' }] },
+        { featureType: 'poi.park', elementType: 'labels', stylers: [{ visibility: 'off' }] },
+        { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#e3ecdc' }] },
+        { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#f0f0f0' }] },
+        { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#f2f2f2' }] },
+
+        // 道路：白色为主，主干道淡象牙
         { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
         { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-        { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#9e9e9e' }] },
-        { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#eaeaea' }] },
-        { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#8a8a8a' }] },
-        { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#bdbdbd' }] },
+        { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#dadfe4' }] },
+        { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#c2c9d1' }] },
+        { featureType: 'road.highway', elementType: 'labels.text.fill', stylers: [{ color: '#6f7884' }] },
+        { featureType: 'road.arterial', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+        { featureType: 'road.arterial', elementType: 'labels.text.fill', stylers: [{ color: '#8c97a2' }] },
+        { featureType: 'road.local', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
+        { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#a8b0b8' }] },
+
+        // 铁路 / 地铁线路：浅灰 + 隐藏车站符号
         { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-        { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#e5e5e5' }] },
+        { featureType: 'transit.line', elementType: 'geometry', stylers: [{ color: '#dedede' }] },
         { featureType: 'transit.station', stylers: [{ visibility: 'off' }] },
-        { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#e9eef2' }] },
-        { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#a7b3bd' }] },
-        { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#f5f5f5' }] }
+
+        // 水域：柔和雾蓝
+        { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#cfe1ec' }] },
+        { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#7a96a8' }] }
     ];
 
     map = new google.maps.Map(document.getElementById('google-map'), {
@@ -2648,10 +2667,10 @@ function updateCheckInBtnUI() {
 }
 
 function formatCheckInCountLabel(count) {
+    // 角标只显示数字，0 次返回空字符串让 :empty 隐藏角标
     const normalizedCount = Number.isFinite(Number(count)) ? Number(count) : 0;
-    if (normalizedCount <= 0) return '(还没吃过)';
-    const displayCount = normalizedCount > 99 ? '99+' : String(normalizedCount);
-    return `(吃过${displayCount}次)`;
+    if (normalizedCount <= 0) return '';
+    return normalizedCount > 99 ? '99+' : String(normalizedCount);
 }
 
 /**

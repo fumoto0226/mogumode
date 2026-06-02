@@ -12,13 +12,29 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="application-name" content="MoguMode">
     <link rel="manifest" href="manifest.webmanifest">
+    <!-- 浏览器标签 / 桌面端使用 SVG logo；PWA 安装到主屏 / 启动画面继续走 PNG -->
     <link rel="icon" type="image/svg+xml" href="images/logo.svg">
+    <link rel="icon" type="image/png" sizes="192x192" href="images/pwa/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="images/pwa/icon-512.png">
     <link rel="apple-touch-icon" href="images/pwa/apple-touch-icon.png">
+
+    <!-- 社交分享预览（Open Graph / Twitter Card） -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="MoguMode">
+    <meta property="og:title" content="MoguMode">
+    <meta property="og:description" content="记录、收藏、随机抽选你身边的好店。">
+    <meta property="og:image" content="images/appposter.jpg">
+    <meta property="og:image:width" content="1496">
+    <meta property="og:image:height" content="1000">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="MoguMode">
+    <meta name="twitter:description" content="记录、收藏、随机抽选你身边的好店。">
+    <meta name="twitter:image" content="images/appposter.jpg">
 
     <!-- External Libraries -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <link
-        href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Fredoka+One&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&family=Fredoka+One&display=swap"
         rel="stylesheet">
 
     <!-- Custom Styles -->
@@ -73,8 +89,25 @@
                     <div class="loc-confirm-box">
                         <div id="mini-map-confirm" style="height:200px; background:#eee;"></div>
                         <div style="padding-top:20px;">
-                            <h3 style="margin:0 0 10px 0; font-size:18px;">你在这里吗？</h3>
+                            <div class="loc-confirm-title-row">
+                                <h3 class="loc-confirm-title">你在这里吗？</h3>
+                                <button type="button" class="loc-custom-toggle" id="loc-custom-toggle"
+                                    onclick="toggleLocCustomSearch()">
+                                    <i data-lucide="search" width="12"></i>
+                                    <span id="loc-custom-toggle-label">自定义位置</span>
+                                </button>
+                            </div>
                             <div id="loc-confirm-current" class="loc-confirm-current">当前位置：读取中...</div>
+                            <div id="loc-custom-search-panel" class="loc-custom-search-panel hidden">
+                                <div class="loc-custom-search-input-wrap">
+                                    <input type="text" id="loc-custom-search-input" class="loc-custom-search-input"
+                                        placeholder="搜索地址或店名">
+                                    <button type="button" id="loc-custom-search-clear"
+                                        class="loc-custom-search-clear hidden" aria-label="清空"
+                                        onclick="clearLocCustomSearch()"></button>
+                                </div>
+                                <div id="loc-custom-search-results" class="loc-custom-search-results"></div>
+                            </div>
                             <div class="loc-actions">
                                 <button class="action-btn btn-cancel" onclick="closeLocModals()">取消</button>
                                 <button class="action-btn btn-reread" onclick="startFetchLocation()">重新读取</button>
@@ -348,9 +381,9 @@
                                 </div>
                             </div>
                             <button class="sheet-checkin-btn" onclick="toggleMapCheckIn()">
-                                <span class="checkin-count" id="txt-checkin-count">(吃过0次)</span>
-                                <i data-lucide="plus-circle" width="22"></i>
-                                <span class="checkin-label">吃了</span>
+                                <span class="checkin-count" id="txt-checkin-count"></span>
+                                <i data-lucide="plus" width="22"></i>
+                                <span class="checkin-label">记录</span>
                             </button>
                         </div>
                     </div>
@@ -485,8 +518,9 @@
 
                 <div id="add-step-form" class="add-step-panel hidden">
                     <div class="add-picked-topbar">
-                        <button class="add-chip-back-btn add-chip-back-btn-separate" onclick="handleAddComposerBack()">
-                            <img src="images/back.svg" width="14" alt="back">
+                        <button class="add-chip-back-btn add-chip-back-btn-separate" onclick="handleAddComposerBack()"
+                            aria-label="返回">
+                            <i data-lucide="chevron-left" width="18"></i>
                         </button>
                         <div class="add-picked-chip add-picked-chip-edit">
                             <span id="add-form-store-name">店铺名</span>
@@ -496,45 +530,51 @@
                         </div>
                     </div>
 
+                    <!-- 评分卡（hero） -->
                     <div class="add-rating-card">
-                        <div class="add-card-title">这次觉得怎么样？<span>（直接滑动蘑菇评分）</span></div>
+                        <div class="add-rating-hint">滑动蘑菇评分</div>
                         <div class="add-rating-number" id="add-rating-number">3.8</div>
                         <input id="add-rating-slider" type="hidden" value="3.8">
                         <div class="add-rating-mushrooms" id="add-rating-mushrooms"></div>
                     </div>
 
-                    <div class="add-input-card">
-                        <div class="add-input-label">花费</div>
-                        <div class="add-jpy-row">
-                            <input type="number" id="newBudget" class="input-std" placeholder="在这里输入这次的花费"
-                                style="margin-bottom:0;">
-                            <span>JPY</span>
+                    <!-- 花费 + 日期（同一张卡里，左右两栏） -->
+                    <div class="add-row-card">
+                        <div class="add-row-item">
+                            <div class="add-input-label">花费<span class="add-input-label-hint">人均</span></div>
+                            <div class="add-budget-input">
+                                <input type="number" id="newBudget" class="add-bare-input" placeholder="0">
+                                <span class="add-budget-suffix">JPY</span>
+                            </div>
                         </div>
-                    </div>
-
-                    <div class="add-input-card">
-                        <div class="add-input-label">日期<span style="color:#8f8f8f; font-size:12px;">（选填）</span></div>
-                        <div class="custom-date-wrap">
-                            <input type="date" id="newMealDate" class="custom-date-native">
-                            <div class="custom-date-display">
-                                <span class="custom-date-text is-empty" id="newMealDateText">点击选择日期</span>
-                                <i data-lucide="calendar" width="18" class="custom-date-icon"></i>
+                        <div class="add-row-divider" aria-hidden="true"></div>
+                        <div class="add-row-item">
+                            <div class="add-input-label">日期</div>
+                            <div class="custom-date-wrap add-date-inline">
+                                <input type="date" id="newMealDate" class="custom-date-native">
+                                <div class="custom-date-display">
+                                    <span class="custom-date-text is-empty" id="newMealDateText">点击选择</span>
+                                    <i data-lucide="calendar" width="16" class="custom-date-icon"></i>
+                                </div>
                             </div>
                         </div>
                     </div>
 
+                    <!-- 照片 -->
                     <div class="upload-box" onclick="document.getElementById('fileInput').click()">
                         <input type="file" id="fileInput" hidden multiple accept="image/*" onchange="previewImg(this)">
                         <div id="preview-list" class="preview-list hidden"></div>
-                        <div id="upload-placeholder" style="text-align:center;">
-                            <i data-lucide="image-plus" style="margin-bottom:8px;"></i>
-                            <div>从相册中选择照片（可多选）</div>
+                        <div id="upload-placeholder" class="upload-placeholder">
+                            <i data-lucide="image-plus" width="22"></i>
+                            <span>添加照片（可多选）</span>
                         </div>
                     </div>
 
+                    <!-- 留言 -->
                     <div class="add-input-card">
-                        <div class="add-input-label">有什么想说的？</div>
-                        <textarea id="newReview" class="input-std" placeholder="在这里输入想说的" rows="4"></textarea>
+                        <div class="add-input-label">想说点什么</div>
+                        <textarea id="newReview" class="input-std add-review-textarea"
+                            placeholder="今天的味道、感受、推荐菜⋯⋯" rows="4"></textarea>
                     </div>
 
                     <button id="edit-cancel-btn" class="btn-submit add-edit-cancel-btn hidden"
@@ -667,7 +707,15 @@
                         <div class="profile-username-row">
                             <h2 class="profile-username" id="profile-username">用户名用户名</h2>
                             <button id="profile-edit-name-btn" class="profile-edit-name-btn"
-                                onclick="editUsername()">修改</button>
+                                onclick="editUsername()" aria-label="修改用户名">
+                                <i data-lucide="square-pen" width="14"></i>
+                            </button>
+                        </div>
+                        <div id="profile-top-store" class="profile-top-store hidden" role="button" tabindex="0"
+                            onclick="openProfileTopStore()">
+                            <img src="images/huangguan.svg" class="profile-top-store-icon" alt="">
+                            <span class="profile-top-store-name" id="profile-top-store-name"></span>
+                            <span class="profile-top-store-count" id="profile-top-store-count"></span>
                         </div>
                         <button id="profile-friend-action-btn" class="profile-friend-action-btn hidden"></button>
                     </div>
@@ -1165,56 +1213,69 @@
         <div id="provide-info-modal" class="modal-overlay" onclick="if(event.target===this) closeProvideInfoModal()">
             <div class="provide-info-card" onclick="event.stopPropagation()">
                 <div class="provide-info-head">
-                    <div class="provide-info-title-wrap">
-                        <span class="provide-info-title">追加信息</span>
-                        <button class="provide-info-report" onclick="showDeleteStoreModal()">
-                            <img src="images/trash-red.svg" width="14" alt="trash"> 这家店已经停业了？
-                        </button>
-                    </div>
-                    <button class="provide-info-close" onclick="closeProvideInfoModal()">
-                        <img src="images/close.svg" width="18" alt="close">
+                    <span class="provide-info-title">追加信息</span>
+                    <button class="provide-info-close" onclick="closeProvideInfoModal()" aria-label="关闭">
+                        <img src="images/close.svg" width="18" alt="">
                     </button>
                 </div>
                 <div id="provide-info-list" class="provide-info-list"></div>
                 <div class="provide-info-form">
-                    <div class="provide-form-row">
-                        <label>分类：</label>
-                        <select id="provide-new-cat" class="fd-input-sm">
+                    <div class="provide-form-section">
+                        <div class="provide-form-section-label">选择分类</div>
+                        <div class="provide-cat-chips" id="provide-cat-chips">
+                            <button type="button" class="provide-cat-chip is-selected"
+                                data-cat="自定义" onclick="selectProvideCategory('自定义')">自定义</button>
+                            <button type="button" class="provide-cat-chip" data-cat="营业时间"
+                                onclick="selectProvideCategory('营业时间')">营业时间</button>
+                            <button type="button" class="provide-cat-chip" data-cat="位置"
+                                onclick="selectProvideCategory('位置')">位置</button>
+                            <button type="button" class="provide-cat-chip" data-cat="电话"
+                                onclick="selectProvideCategory('电话')">电话</button>
+                            <button type="button" class="provide-cat-chip" data-cat="料理种类"
+                                onclick="selectProvideCategory('料理种类')">料理种类</button>
+                        </div>
+                        <select id="provide-new-cat" class="provide-hidden-select" aria-hidden="true">
                             <option value="自定义">自定义</option>
                             <option value="营业时间">营业时间</option>
                             <option value="位置">位置</option>
                             <option value="电话">电话</option>
                             <option value="料理种类">料理种类</option>
                         </select>
-                        <input id="provide-new-cat-custom" class="fd-input-sm" placeholder="在这里输入自定义分类名"
-                            style="flex:1; display:none;">
                     </div>
-                    <div id="provide-mode-custom" class="provide-mode-box">
-                        <div class="provide-form-row provide-form-row-stack">
-                            <label>信息：</label>
-                            <textarea id="provide-new-val" class="provide-input-textarea" placeholder="输入信息"></textarea>
-                        </div>
+
+                    <div id="provide-mode-custom-name" class="provide-form-section hidden">
+                        <div class="provide-form-section-label">分类名称</div>
+                        <input id="provide-new-cat-custom" class="provide-input"
+                            placeholder="给这条信息起个分类名">
                     </div>
-                    <div id="provide-mode-hours" class="provide-mode-box hidden">
-                        <div class="provide-form-row">
-                            <label>信息：</label>
-                            <div class="provide-hours-wrap">
-                                <div class="provide-hour-row">
-                                    <span>开始时间</span>
-                                    <input id="provide-start-time" class="provide-hour-input" type="text"
-                                        placeholder="11:00">
-                                </div>
-                                <div class="provide-hour-row">
-                                    <span>结束时间</span>
-                                    <input id="provide-end-time" class="provide-hour-input" type="text"
-                                        placeholder="22:00">
-                                </div>
+
+                    <div id="provide-mode-custom" class="provide-form-section">
+                        <div class="provide-form-section-label">填写内容</div>
+                        <textarea id="provide-new-val" class="provide-input-textarea"
+                            placeholder="在这里输入要追加的信息"></textarea>
+                    </div>
+
+                    <div id="provide-mode-hours" class="provide-form-section hidden">
+                        <div class="provide-form-section-label">营业时间</div>
+                        <div class="provide-hours-wrap">
+                            <div class="provide-hour-row">
+                                <span>开始</span>
+                                <input id="provide-start-time" class="provide-hour-input" type="text"
+                                    placeholder="11:00">
+                            </div>
+                            <div class="provide-hour-row">
+                                <span>结束</span>
+                                <input id="provide-end-time" class="provide-hour-input" type="text"
+                                    placeholder="22:00">
                             </div>
                         </div>
                     </div>
-                    <div class="provide-add-row">
-                        <button class="fd-add-btn" onclick="addAdditionalInfo()">添加</button>
-                    </div>
+
+                    <button class="provide-submit-btn" onclick="addAdditionalInfo()">添加这条信息</button>
+
+                    <button class="provide-info-report" onclick="showDeleteStoreModal()">
+                        <img src="images/trash-red.svg" width="12" alt=""> 这家店已经停业了？
+                    </button>
                 </div>
             </div>
         </div>
@@ -1224,8 +1285,8 @@
     <!-- =========================================
          JAVASCRIPT FILES
          ========================================= -->
-    <script type="module" src="app.js?v=119-deco-back"></script>
-    <script src="map.js?v=119-deco-back"></script>
+    <script type="module" src="app.js?v=170-top-store-tiebreak"></script>
+    <script src="map.js?v=170-top-store-tiebreak"></script>
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvqupW6XZ7A61lutSD8_GlV31Xdc5ZTLw&callback=initGoogleMap&libraries=geometry">
         </script>

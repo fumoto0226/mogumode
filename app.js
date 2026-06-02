@@ -33,7 +33,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v36";
+const APP_BUILD_VERSION = "v37";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 const LOCATION_CACHE_STORAGE_KEY = "mogumode:last-origin-v2";
 
@@ -1015,10 +1015,12 @@ window.toggleProfileMenu = (event) => {
     event?.stopPropagation?.();
     const menu = document.getElementById('profile-menu');
     if (!menu) return;
-    // 首次打开时把菜单移到 body 顶层，避免被 #view-profile 的位移带着一起平移
-    const justMoved = menu.parentElement !== document.body;
+    // 首次打开时把菜单挪到 #app 容器下（而不是 body），这样桌面端 #app 居中限宽时
+    // 菜单仍然贴在 app 框内，不会跑到屏幕最左边
+    const appRoot = document.getElementById('app') || document.body;
+    const justMoved = menu.parentElement !== appRoot;
     if (justMoved) {
-        document.body.appendChild(menu);
+        appRoot.appendChild(menu);
     }
     const willOpen = !menu.classList.contains('open');
     if (willOpen) refreshInstallButtonVisibility();
@@ -3386,14 +3388,26 @@ function syncProvideCategoryMode() {
     const cat = document.getElementById('provide-new-cat');
     const custom = document.getElementById('provide-mode-custom');
     const hours = document.getElementById('provide-mode-hours');
-    const customInput = document.getElementById('provide-new-cat-custom');
+    const customNameWrap = document.getElementById('provide-mode-custom-name');
     if (!cat || !custom || !hours) return;
     const isHours = cat.value === '营业时间';
     const isCustom = cat.value === '自定义';
     custom.classList.toggle('hidden', isHours);
     hours.classList.toggle('hidden', !isHours);
-    if (customInput) customInput.style.display = isCustom ? 'block' : 'none';
+    if (customNameWrap) customNameWrap.classList.toggle('hidden', !isCustom);
+    // 同步 chip 选中态
+    document.querySelectorAll('.provide-cat-chip').forEach(btn => {
+        btn.classList.toggle('is-selected', btn.dataset.cat === cat.value);
+    });
 }
+
+// 点击分类 chip → 更新隐藏 select 并切换表单模式
+window.selectProvideCategory = (catName) => {
+    const cat = document.getElementById('provide-new-cat');
+    if (!cat) return;
+    cat.value = catName;
+    syncProvideCategoryMode();
+};
 
 /**
  * 关闭详情页
@@ -3552,11 +3566,27 @@ window.toggleLocalAction = async (id, type) => {
 /**
  * 提交新店铺
  */
+// 全局防滥用配额
+const MAX_REVIEW_IMAGES = 5;             // 单次评论最多 5 张图
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 单张原图最大 8MB（避免压缩前 OOM）
+const MAX_REVIEW_TEXT_LEN = 2000;        // 评论文字最长 2000 字
+const SUBMIT_COOLDOWN_MS = 3000;         // 提交后至少 3 秒才能再点
+let isSubmittingReview = false;
+let lastSubmitAt = 0;
+
 window.submitNew = async () => {
     if (!currentUser) return showAppNoticeModal("请先登录");
     if (!document.getElementById('newName').value.trim()) {
         return showAppNoticeModal("请先选择店铺并确认");
     }
+
+    // 防双击 / 刷量
+    const now = Date.now();
+    if (isSubmittingReview) return;
+    if (now - lastSubmitAt < SUBMIT_COOLDOWN_MS) {
+        return showAppNoticeModal("操作太频繁，请稍候再发布");
+    }
+    isSubmittingReview = true;
 
     const btn = document.getElementById('post-btn');
     btn.classList.add('loading');  // 显示加载状态
@@ -3566,11 +3596,23 @@ window.submitNew = async () => {
         const files = document.getElementById('fileInput').files;
 
         if (files.length) {
+            if (files.length > MAX_REVIEW_IMAGES) {
+                throw new Error(`一次最多上传 ${MAX_REVIEW_IMAGES} 张图片`);
+            }
             const invalidFile = [...files].find(f => !isImageFile(f));
             if (invalidFile) {
                 document.getElementById('fileInput').value = "";
                 previewImg(document.getElementById('fileInput'));
                 throw new Error("只能上传图片文件");
+            }
+            const oversized = [...files].find(f => f.size > MAX_IMAGE_BYTES);
+            if (oversized) {
+                throw new Error(`单张图片不能超过 ${Math.floor(MAX_IMAGE_BYTES / 1024 / 1024)}MB`);
+            }
+            // 评论文字长度上限
+            const reviewTextRaw = String(document.getElementById('newReview').value || '');
+            if (reviewTextRaw.length > MAX_REVIEW_TEXT_LEN) {
+                throw new Error(`评论文字最多 ${MAX_REVIEW_TEXT_LEN} 个字符`);
             }
             // 用户上传了图片，上传到 Firebase Storage
             reviewImageUrls = await Promise.all([...files].map(async (f, index) => {
@@ -3885,7 +3927,7 @@ window.submitNew = async () => {
         document.getElementById('newReview').value = "";
         document.getElementById('fileInput').value = "";
         document.getElementById('preview-list').classList.add('hidden');
-        document.getElementById('upload-placeholder').style.display = 'block';
+        document.getElementById('upload-placeholder').style.display = 'inline-flex';
         resetSelectedStoreState();
         resetAddComposerFlow();
         if (postSuccessPayload) {
@@ -3893,6 +3935,9 @@ window.submitNew = async () => {
         }
     } catch (e) {
         showAppNoticeModal(e.message || "发布失败，请稍后重试");
+    } finally {
+        isSubmittingReview = false;
+        lastSubmitAt = Date.now();
     }
     btn.classList.remove('loading');
 };
@@ -4421,7 +4466,7 @@ function renderAddComposerPreview() {
     const files = [...(input.files || [])];
     if (files.some(f => !isImageFile(f))) {
         input.value = "";
-        uploadPlaceholder.style.display = 'block';
+        uploadPlaceholder.style.display = 'inline-flex';
         previewList.classList.add('hidden');
         showAppNoticeModal("只能上传图片文件");
         return;
@@ -4454,7 +4499,7 @@ function renderAddComposerPreview() {
         return;
     }
 
-    uploadPlaceholder.style.display = 'block';
+    uploadPlaceholder.style.display = 'inline-flex';
     previewList.classList.add('hidden');
 }
 
@@ -4601,7 +4646,7 @@ function resetAddComposerFlow(opts = {}) {
     const slider = document.getElementById('add-rating-slider');
     if (slider) slider.value = "3.8";
     if (previewList) previewList.classList.add('hidden');
-    if (uploadPlaceholder) uploadPlaceholder.style.display = 'block';
+    if (uploadPlaceholder) uploadPlaceholder.style.display = 'inline-flex';
     const addClearBtn = document.getElementById('add-search-clear-btn');
     if (addClearBtn && addClearBtn.dataset.bound !== '1') {
         addClearBtn.dataset.bound = '1';
@@ -6951,6 +6996,128 @@ window.startFetchLocation = (options = {}) => {
 };
 
 /**
+ * 切换/打开 自定义位置 搜索面板
+ */
+let locCustomSearchDebounceTimer = null;
+window.toggleLocCustomSearch = () => {
+    const panel = document.getElementById('loc-custom-search-panel');
+    const toggle = document.getElementById('loc-custom-toggle');
+    const label = document.getElementById('loc-custom-toggle-label');
+    const input = document.getElementById('loc-custom-search-input');
+    if (!panel || !toggle) return;
+    const willShow = panel.classList.contains('hidden');
+    panel.classList.toggle('hidden', !willShow);
+    toggle.classList.toggle('is-active', willShow);
+    if (label) label.innerText = willShow ? '收起' : '自定义位置';
+    if (willShow && input) {
+        if (!input.dataset.bound) {
+            input.dataset.bound = '1';
+            input.addEventListener('input', () => {
+                clearTimeout(locCustomSearchDebounceTimer);
+                const q = (input.value || '').trim();
+                updateLocCustomClearBtn();
+                if (!q) {
+                    const list = document.getElementById('loc-custom-search-results');
+                    if (list) list.innerHTML = '';
+                    return;
+                }
+                locCustomSearchDebounceTimer = setTimeout(() => runLocCustomSearch(q), 240);
+            });
+        }
+        updateLocCustomClearBtn();
+        setTimeout(() => input.focus(), 0);
+    }
+};
+
+function updateLocCustomClearBtn() {
+    const input = document.getElementById('loc-custom-search-input');
+    const clearBtn = document.getElementById('loc-custom-search-clear');
+    if (!input || !clearBtn) return;
+    clearBtn.classList.toggle('hidden', !String(input.value || '').trim());
+}
+
+window.clearLocCustomSearch = () => {
+    const input = document.getElementById('loc-custom-search-input');
+    const list = document.getElementById('loc-custom-search-results');
+    clearTimeout(locCustomSearchDebounceTimer);
+    if (input) {
+        input.value = '';
+        input.focus();
+    }
+    if (list) list.innerHTML = '';
+    updateLocCustomClearBtn();
+};
+
+async function runLocCustomSearch(q) {
+    const list = document.getElementById('loc-custom-search-results');
+    if (!list) return;
+    list.innerHTML = `<div class="loc-custom-search-item" style="color:#9aa3ad">搜索中…</div>`;
+    try {
+        const origin = typeof getCurrentOriginCoords === 'function' ? getCurrentOriginCoords() : null;
+        let places = [];
+        if (origin && typeof window.placesSearchTextNearOrigin === 'function') {
+            places = await window.placesSearchTextNearOrigin(q, origin, 30000, false);
+        } else if (typeof placesSearchTextCached === 'function') {
+            places = await placesSearchTextCached(q, false);
+        }
+        if (!Array.isArray(places) || !places.length) {
+            list.innerHTML = `<div class="loc-custom-search-item" style="color:#9aa3ad">没有匹配的位置</div>`;
+            return;
+        }
+        const haversine = (a, b) => {
+            if (!a || !b) return Infinity;
+            const R = 6371000;
+            const toRad = (x) => x * Math.PI / 180;
+            const dLat = toRad(b.lat - a.lat);
+            const dLng = toRad(b.lng - a.lng);
+            const lat1 = toRad(a.lat);
+            const lat2 = toRad(b.lat);
+            const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+            return 2 * R * Math.asin(Math.sqrt(h));
+        };
+        const sorted = [...places].sort((a, b) => {
+            const la = Number(a?.location?.latitude), na = Number(a?.location?.longitude);
+            const lb = Number(b?.location?.latitude), nb = Number(b?.location?.longitude);
+            const da = origin ? haversine(origin, { lat: la, lng: na }) : Infinity;
+            const db = origin ? haversine(origin, { lat: lb, lng: nb }) : Infinity;
+            return da - db;
+        });
+        list.innerHTML = sorted.slice(0, 8).map((p) => {
+            const name = getPreferredPlaceName(p) || '';
+            const addr = p.formattedAddress || '';
+            const lat = Number(p.location?.latitude);
+            const lng = Number(p.location?.longitude);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng) || !name) return '';
+            const safeName = String(name).replace(/'/g, "\\'");
+            const safeAddr = String(addr).replace(/'/g, "\\'");
+            return `
+                <div class="loc-custom-search-item"
+                    onclick="applyCustomLocation(${lat},${lng},'${safeName}','${safeAddr}')">
+                    ${escapeAttrHtml(name)}
+                    <div class="loc-custom-search-item-sub">${escapeAttrHtml(addr)}</div>
+                </div>
+            `;
+        }).join('') || `<div class="loc-custom-search-item" style="color:#9aa3ad">没有匹配的位置</div>`;
+    } catch (e) {
+        list.innerHTML = `<div class="loc-custom-search-item" style="color:#c92a2a">搜索出错，请稍后再试</div>`;
+    }
+}
+
+// 点击搜索结果只是预览：把临时坐标和文字 / 迷你地图换成所选位置，
+// 但不写入正式 mapOrigin，也不关弹窗。用户点"使用位置"才真的应用。
+window.applyCustomLocation = (lat, lng, name, address) => {
+    const la = Number(lat), ln = Number(lng);
+    if (!Number.isFinite(la) || !Number.isFinite(ln)) return;
+    tempCoords = { lat: la, lng: ln };
+    tempLocationMeta = {
+        label: String(name || '自定义位置').trim() || '自定义位置',
+        detail: String(address || name || '自定义位置').trim() || '自定义位置'
+    };
+    setLocationConfirmDetailText(tempLocationMeta.detail);
+    renderMiniConfirmMap(tempCoords);
+};
+
+/**
  * 确认使用GPS位置
  */
 window.confirmGPSLocation = () => {
@@ -6983,6 +7150,17 @@ window.closeLocModals = () => {
         list.classList.remove('active');
         list.innerHTML = "";
     }
+    // 收起自定义位置搜索面板，下次打开还是初始状态
+    const customPanel = document.getElementById('loc-custom-search-panel');
+    const customToggle = document.getElementById('loc-custom-toggle');
+    const customLabel = document.getElementById('loc-custom-toggle-label');
+    const customInput = document.getElementById('loc-custom-search-input');
+    const customResults = document.getElementById('loc-custom-search-results');
+    if (customPanel) customPanel.classList.add('hidden');
+    if (customToggle) customToggle.classList.remove('is-active');
+    if (customLabel) customLabel.innerText = '自定义位置';
+    if (customInput) customInput.value = '';
+    if (customResults) customResults.innerHTML = '';
 };
 
 async function initPreferredLocationOnStartup() {
@@ -7732,6 +7910,7 @@ function isViewingStrangerProfile() {
 
 function updateProfileHeaderMode() {
     const isFriendMode = isViewingFriendProfile();
+    const stranger = isViewingStrangerProfile();
     const menuBtn = document.querySelector('.profile-menu-btn');
     const menu = document.getElementById('profile-menu');
     const backBtn = document.getElementById('profile-back-btn');
@@ -7751,9 +7930,68 @@ function updateProfileHeaderMode() {
         avatarWrap.onclick = isFriendMode ? null : () => avatarInput?.click();
     }
     if (avatarCamera) avatarCamera.classList.toggle('hidden', isFriendMode);
-    if (friendBtn) friendBtn.classList.toggle('hidden', !isFriendMode);
+    // 陌生人（未添加好友）显示"发送好友申请"按钮；自己 / 已添加好友显示"最爱店铺"
+    if (friendBtn) friendBtn.classList.toggle('hidden', !stranger);
     if (editNameBtn) editNameBtn.classList.toggle('hidden', isFriendMode);
+    refreshProfileTopStore();
 }
+
+// 找用户最常吃的店铺：次数最多者；并列时取「最近吃过的」那家
+function getUserTopStore(uid) {
+    if (!uid) return null;
+    const stores = Array.isArray(window.localStores) ? window.localStores : [];
+    let bestStore = null;
+    let bestCount = 0;
+    let bestLatestTs = 0;
+    stores.forEach(store => {
+        if (!store) return;
+        const revs = Array.isArray(store.revs) ? store.revs : [];
+        let cnt = 0;
+        let latestTs = 0;
+        for (const r of revs) {
+            if (r && String(r.uid || '') === String(uid)) {
+                cnt += 1;
+                const ts = Math.max(Number(r.editedAt) || 0, Number(r.createdAt) || 0);
+                if (ts > latestTs) latestTs = ts;
+            }
+        }
+        if (cnt <= 0) return;
+        // 次数更多 → 胜出；次数并列 → 最近吃过的胜出
+        if (cnt > bestCount || (cnt === bestCount && latestTs > bestLatestTs)) {
+            bestCount = cnt;
+            bestStore = store;
+            bestLatestTs = latestTs;
+        }
+    });
+    return bestStore && bestCount > 0 ? { store: bestStore, count: bestCount } : null;
+}
+
+function refreshProfileTopStore() {
+    const wrap = document.getElementById('profile-top-store');
+    if (!wrap) return;
+    const stranger = isViewingStrangerProfile();
+    // 陌生人：用"发送好友申请"按钮顶替这块，不显示最爱店铺
+    if (stranger) { wrap.classList.add('hidden'); wrap.dataset.storeId = ''; return; }
+    const uid = isViewingFriendProfile() ? viewingFriendUid : (currentUser && currentUser.uid);
+    const top = getUserTopStore(uid);
+    if (!top) { wrap.classList.add('hidden'); wrap.dataset.storeId = ''; return; }
+    const nameEl = document.getElementById('profile-top-store-name');
+    const countEl = document.getElementById('profile-top-store-count');
+    if (nameEl) nameEl.innerText = top.store.name || '店铺';
+    if (countEl) countEl.innerText = `（吃过${top.count}次）`;
+    wrap.dataset.storeId = top.store.id || '';
+    wrap.classList.remove('hidden');
+}
+window.refreshProfileTopStore = refreshProfileTopStore;
+
+window.openProfileTopStore = () => {
+    const wrap = document.getElementById('profile-top-store');
+    const sid = String(wrap?.dataset?.storeId || '').trim();
+    if (!sid) return;
+    if (typeof window.openDetail === 'function') {
+        window.openDetail(sid, { mode: 'full', fromMap: false });
+    }
+};
 
 function updateFriendActionButton() {
     const btn = document.getElementById('profile-friend-action-btn');
@@ -7839,11 +8077,48 @@ window.confirmEditUsername = async () => {
         }, { merge: true });
         setProfileIdentity(nextName, currentUser.photoURL || '');
         closeEditUsernameModal();
+        // 同步把所有店铺里我写过的评论的 user 字段更新成新名字（后台异步进行，不阻塞 UI）
+        backfillMyReviewsDisplayName(nextName).catch((err) => {
+            console.warn('同步评论用户名失败:', err);
+        });
     } catch (err) {
         console.error("修改用户名失败:", err);
         alert("修改用户名失败: " + err.message);
     }
 };
+
+async function backfillMyReviewsDisplayName(newName) {
+    if (!currentUser?.uid) return;
+    const uid = String(currentUser.uid);
+    const stores = Array.isArray(window.localStores) ? window.localStores : [];
+    const targets = []; // [{storeId, nextRevs}]
+    stores.forEach((store) => {
+        const revs = Array.isArray(store?.revs) ? store.revs : [];
+        let changed = false;
+        const nextRevs = revs.map((rev) => {
+            if (rev && typeof rev === 'object' && String(rev.uid || '') === uid && rev.user !== newName) {
+                changed = true;
+                return { ...rev, user: newName };
+            }
+            return rev;
+        });
+        if (changed) targets.push({ storeId: store.id, nextRevs });
+    });
+    if (!targets.length) return;
+    // 并行更新（数量通常较少；如果上千条评论可改成分批 batch）
+    const updates = targets.map(({ storeId, nextRevs }) =>
+        updateDoc(doc(db, 'stores', storeId), { revs: nextRevs })
+            .then(() => {
+                const idx = (window.localStores || []).findIndex(s => s.id === storeId);
+                if (idx >= 0) window.localStores[idx] = { ...window.localStores[idx], revs: nextRevs };
+            })
+            .catch((err) => { console.warn('更新评论用户名失败 store=' + storeId, err); })
+    );
+    await Promise.all(updates);
+    if (typeof applyFilters === 'function') applyFilters();
+    if (typeof renderProfileActivity === 'function') renderProfileActivity();
+    if (typeof window.renderMarkers === 'function') window.renderMarkers();
+}
 
 /**
  * 切换个人页标签（动态 / 收藏）
@@ -7900,6 +8175,7 @@ window.switchProfileTab = (tab) => {
  * 渲染个人页动态列表
  */
 function renderProfileActivity() {
+    refreshProfileTopStore();
     let container = document.getElementById('profile-activity-list');
     if (!container) {
         const activityEl = document.getElementById('profile-content-activity');
@@ -8585,10 +8861,12 @@ window.renderRecordCalendar = () => {
             const daySpend = dayActs.reduce((sum, a) => sum + (Number(a.budget) || 0), 0);
             const dayRecordCount = dayActs.length;
             const isToday = selectedYear === todayYear && month === todayMonth && day === todayDate;
+            const noImage = !!dayActs.length && !primaryImg;
             cells.push(`
-                <button class="record-day-cell ${dayActs.length ? 'has-data' : ''} ${isToday ? 'is-today' : ''}" data-record-day="${dayKey}" ${dayActs.length ? `onclick="openRecordDayView('${dayKey}')"` : 'disabled'}>
+                <button class="record-day-cell ${dayActs.length ? 'has-data' : ''} ${noImage ? 'no-image' : ''} ${isToday ? 'is-today' : ''}" data-record-day="${dayKey}" ${dayActs.length ? `onclick="openRecordDayView('${dayKey}')"` : 'disabled'}>
                     <div class="record-day-thumb">
                         ${primaryImg ? `<img src="${primaryImg}" alt="day-thumb">` : ''}
+                        ${noImage ? '<span class="record-day-no-image-icon" aria-hidden="true">🍽️</span>' : ''}
                         ${dayRecordCount > 0 ? `<span class="record-day-count-badge">${dayRecordCount}</span>` : ''}
                     </div>
                     <div class="record-day-meta">
@@ -8599,15 +8877,20 @@ window.renderRecordCalendar = () => {
             `);
         }
 
-        const monthTotal = Array.from(dayMap.entries())
+        const monthActs = Array.from(dayMap.entries())
             .filter(([k]) => Number(k.slice(0, 4)) === selectedYear && Number(k.slice(5, 7)) === month)
-            .reduce((sum, [, list]) => sum + list.reduce((s, a) => s + (Number(a.budget) || 0), 0), 0);
+            .flatMap(([, list]) => list);
+        const monthTotal = monthActs.reduce((sum, a) => sum + (Number(a.budget) || 0), 0);
+        const monthStoreCount = new Set(monthActs.map(a => String(a.storeId || '')).filter(Boolean)).size;
 
         return `
             <div class="record-month-block" data-record-month="${month}">
                 <div class="record-month-head">
                     <h3>${month}月</h3>
-                    <div>总花费: <b>${monthTotal || 0}</b></div>
+                    <div class="record-month-stats">
+                        ${monthStoreCount > 0 ? `<span class="record-month-store-count">吃过 <b>${monthStoreCount}</b> 家店</span>` : ''}
+                        <span class="record-month-spend">总花费: <b>${monthTotal || 0}</b></span>
+                    </div>
                 </div>
                 <div class="record-week-head">
                     <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
