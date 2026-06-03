@@ -35,7 +35,7 @@
 }
 
 body {
-    font-family: 'PingFang SC', 'Noto Sans JP', sans-serif;
+    font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Noto Sans JP', 'Source Han Sans SC', sans-serif;
     background-color: #d9d9d9;
     color: var(--text-main);
     margin: 0;
@@ -1332,8 +1332,8 @@ header {
     color: #b2bec3;
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 4px;
+    justify-content: space-between;
+    gap: 8px;
 }
 
 .store-activity-time {
@@ -1350,6 +1350,50 @@ header {
 
 .store-activity-divider {
     color: #a5b0b5;
+}
+
+/* 右下角"我 + 好友"评分小标签 */
+.store-activity-stats {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+.store-stat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+}
+.store-stat-chip svg {
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+}
+.store-stat-chip-num {
+    font-weight: 500;
+    margin-left: 1px;
+    opacity: 0.7;
+}
+/* 我：薄荷绿药丸 */
+.store-stat-chip.is-me {
+    background: #e6f7ee;
+    color: #1f8a4d;
+}
+.store-stat-chip.is-me svg {
+    color: #1f8a4d;
+}
+/* 好友：粉色药丸 */
+.store-stat-chip.is-friends {
+    background: #fdebf6;
+    color: #d6309c;
+}
+.store-stat-chip.is-friends svg {
+    color: #d6309c;
 }
 
 .store-img-item {
@@ -5156,6 +5200,36 @@ header {
     margin: 0 3px;
 }
 
+.random-pool-subhint {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #b2bec3;
+    line-height: 1.45;
+}
+
+/* 常驻提示（抽选前/后都显示）*/
+.random-persistent-hint {
+    text-align: center;
+    margin: 6px 0 8px;
+    font-size: 12px;
+    color: #636e72;
+    line-height: 1.5;
+}
+.random-persistent-hint .random-pool-count {
+    color: #ff6fa3;
+    font-weight: 700;
+    margin: 0 2px;
+}
+.random-persistent-hint .random-persistent-sub {
+    display: block;
+    margin-top: 2px;
+    font-size: 11px;
+    color: #b2bec3;
+}
+.random-persistent-hint:empty {
+    display: none;
+}
+
 /* Random Result Container */
 .random-result-container {
     width: 100%;
@@ -5319,8 +5393,53 @@ header {
     flex-wrap: wrap;
     justify-content: center;
     align-items: center;
-    gap: 10px 14px;
+    gap: 8px;
     margin: 12px 0;
+}
+
+/* 药丸 chip 筛选条 */
+.rf-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    padding: 0 14px 0 10px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    border: none;
+    background: #f1f3f5;
+    color: #2d3436;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    user-select: none;
+}
+/* 简洁的小圆点指示器（替代原生 checkbox） */
+.rf-chip input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 8px;
+    height: 8px;
+    margin: 0;
+    border-radius: 50%;
+    background: #c5cbd0;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.rf-chip input[type="checkbox"]:checked {
+    background: #22c55e;
+}
+.rf-chip:has(input[type="checkbox"]:checked) {
+    background: #dcfce7;
+}
+.rf-chip:has(input[type="checkbox"]:checked) .rf-minute-input {
+    background: transparent;
+    color: #2d3436;
+}
+.rf-chip-text {
+    line-height: 1;
 }
 
 .random-walk-filter {
@@ -5330,19 +5449,24 @@ header {
 }
 
 .rf-minute-input {
-    width: 42px;
-    height: 28px;
-    padding: 4px 6px;
-    border: 1px solid #dfe6e9;
-    border-radius: 6px;
-    background: #fff;
+    width: 28px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    background: transparent;
     font-size: 13px;
-    color: #2d3436;
+    font-weight: 600;
+    color: inherit;
     text-align: center;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+    text-decoration-color: currentColor;
     outline: none;
     appearance: textfield;
     -webkit-appearance: none;
     -moz-appearance: textfield;
+    transition: color 0.15s ease;
 }
 
 .rf-minute-input:focus {
@@ -6136,13 +6260,17 @@ body.profile-menu-active .nav-bar {
     padding: 12px 0;
     text-align: center;
     font-size: 16px;
-    font-weight: 500;
+    /* 强制用 Web 字体，避免系统字体 500 weight 渲染不一致 */
+    font-family: 'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    font-weight: 400;
     color: #b2bec3;
     border: none;
     background: none;
     cursor: pointer;
     position: relative;
     transition: color 0.3s;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .profile-tab.active {
@@ -6154,10 +6282,22 @@ body.profile-menu-active .nav-bar {
     position: absolute;
     bottom: 0;
     left: 0;
-    width: 50%;
+    width: calc(100% / 3);
     height: 2px;
     background: #2d3436;
     transition: transform 0.3s ease;
+}
+
+.profile-eaten-summary {
+    padding: 16px 20px 4px;
+    font-size: 13px;
+    color: #636e72;
+    font-weight: 500;
+}
+.profile-eaten-summary strong {
+    color: #2d3436;
+    font-weight: 700;
+    font-size: 15px;
 }
 
 /* Profile Tab Content */

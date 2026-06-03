@@ -789,17 +789,18 @@ function resolveMapReviewAvatar(rev, idx) {
     const me = window.currentUser || null;
     const profileImg = document.getElementById('profile-avatar-display');
     if (me && uid && me.uid === uid) {
-        return me.photoURL || profileImg?.src || DEFAULT_AVATAR_URL;
+        // 自己的评论：优先用最新的 Firestore 头像（currentUserAvatarUrl 由 users 文档同步），
+        // 再退化到 DOM 上展示的头像，最后才退到 Firebase Auth 的 photoURL
+        return window.currentUserAvatarUrl
+            || profileImg?.src
+            || me.photoURL
+            || DEFAULT_AVATAR_URL;
     }
-    if (uid && MAP_REVIEW_AVATAR_CACHE.has(uid)) {
-        return MAP_REVIEW_AVATAR_CACHE.get(uid);
-    }
+    // 不再走内存缓存——allUsersCache 由 publicUsers onSnapshot 实时维护，
+    // 别人改头像后立即生效，避免老链接被锁死
     if (uid) {
         const friend = (window.allUsersCache || []).find(u => u.id === uid);
-        if (friend?.avatarUrl) {
-            MAP_REVIEW_AVATAR_CACHE.set(uid, friend.avatarUrl);
-            return friend.avatarUrl;
-        }
+        if (friend?.avatarUrl) return friend.avatarUrl;
     }
     return DEFAULT_AVATAR_URL;
 }
@@ -927,7 +928,7 @@ function renderMapReviewCardHtml(store, item, opts = {}) {
             <div class="review-header">
                 <img src="${item.avatar}" class="review-avatar ${canOpenProfile ? 'is-clickable' : ''}" ${openProfileAttr}>
                 <div class="review-user-info ${canOpenProfile ? 'is-clickable' : ''}" ${openProfileAttr}>
-                    <div class="review-username">${item.userName}${friendBadge}${visitBadge}</div>
+                    <div class="review-username">${escapeHtml(item.userName)}${friendBadge}${visitBadge}</div>
                     <div class="review-user-meta">${item.dateStr}</div>
                 </div>
                 ${actionBtns}
@@ -942,7 +943,7 @@ function renderMapReviewCardHtml(store, item, opts = {}) {
                 textClassName: 'review-text',
                 wrapperClassName: 'review-text-block'
             })
-            : `<div class="review-text">${item.text}</div>`) : ''}
+            : `<div class="review-text">${escapeHtml(item.text)}</div>`) : ''}
             ${item.imgs.length ? `<div class="review-images">${item.imgs.map((src, index) => {
             const fullSrc = window.getImageAssetFullUrl ? window.getImageAssetFullUrl(src) : String(src || '');
             const thumbSrc = window.getImageAssetThumbUrl ? window.getImageAssetThumbUrl(src) : fullSrc;
@@ -2352,6 +2353,18 @@ window.fetchPreferredPlaceNameById = async (placeId) => {
     };
 };
 
+// Places API 客户端速率限制（防止用户连点导致 quota 爆炸）
+const PLACES_MIN_INTERVAL_MS = 800;
+let __lastPlacesCallAt = 0;
+async function __placesRateLimit() {
+    const now = Date.now();
+    const wait = PLACES_MIN_INTERVAL_MS - (now - __lastPlacesCallAt);
+    if (wait > 0) {
+        await new Promise(r => setTimeout(r, wait));
+    }
+    __lastPlacesCallAt = Date.now();
+}
+
 /**
  * 搜索店铺
  * @param {string} q - 搜索关键词
@@ -2359,6 +2372,7 @@ window.fetchPreferredPlaceNameById = async (placeId) => {
  * @returns {Array} 搜索结果数组
  */
 window.placesSearchText = async (q, photo = false) => {
+    await __placesRateLimit();
     // 构建请求字段
     const f = 'places.displayName,places.formattedAddress,places.location,places.id,places.regularOpeningHours,places.currentOpeningHours,places.primaryType,places.primaryTypeDisplayName,places.types,places.addressComponents' + (photo ? ',places.photos' : '');
     try {
@@ -2385,6 +2399,7 @@ window.placesSearchText = async (q, photo = false) => {
 
 // 文本搜索附近（locationBias = 以 origin 为圆心的圆）：用户输入文字时优先返回附近相关店铺
 window.placesSearchTextNearOrigin = async (q, origin, radiusMeters = 30000, photo = false) => {
+    await __placesRateLimit();
     if (!q || !origin) return [];
     const lat = Number(origin.lat);
     const lng = Number(origin.lng);
@@ -2420,6 +2435,7 @@ window.placesSearchTextNearOrigin = async (q, origin, radiusMeters = 30000, phot
 };
 
 window.placesSearchTextByBounds = async (q, bounds, photo = false) => {
+    await __placesRateLimit();
     if (!q || !bounds || !window.google?.maps) return [];
     const ne = bounds.getNorthEast?.();
     const sw = bounds.getSouthWest?.();
@@ -2455,6 +2471,7 @@ window.placesSearchTextByBounds = async (q, bounds, photo = false) => {
 };
 
 window.placesSearchNearby = async (center, opts = {}) => {
+    await __placesRateLimit();
     const lat = Number(center?.lat);
     const lng = Number(center?.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) return [];

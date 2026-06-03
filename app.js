@@ -20,6 +20,18 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, on
 import { getFirestore, collection, addDoc, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, query, orderBy, setDoc, where, deleteDoc, getDoc, getDocs, increment } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 
+// 生产环境屏蔽 console.log / console.debug / console.info，避免泄漏内部状态
+(() => {
+    const host = location.hostname;
+    const isLocal = host === 'localhost' || host === '127.0.0.1' || host === '' || host.endsWith('.local');
+    if (!isLocal) {
+        const noop = () => {};
+        console.log = noop;
+        console.debug = noop;
+        console.info = noop;
+    }
+})();
+
 /* =========================================
    1. Firebase 配置
    这些是连接 Firebase 后台服务的密钥
@@ -33,7 +45,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v37";
+const APP_BUILD_VERSION = "v38";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 const LOCATION_CACHE_STORAGE_KEY = "mogumode:last-origin-v2";
 
@@ -299,19 +311,35 @@ function isGoogleAccount(user) {
 
 async function syncGoogleAvatar(user) {
     if (!user || !isGoogleAccount(user) || !user.photoURL) return;
+    // 仅在 Firestore 里还没有 avatarUrl 时做首次种子写入，
+    // 否则会把用户上传的自定义头像每次启动都覆盖回 Google 原图
     try {
-        await setDoc(doc(db, "users", user.uid), {
-            email: user.email || "",
-            displayName: user.displayName || (user.email ? user.email.split('@')[0] : ""),
-            avatarUrl: user.photoURL
-        }, { merge: true });
-        await setDoc(doc(db, "publicUsers", user.uid), {
-            email: user.email || "",
-            displayName: user.displayName || (user.email ? user.email.split('@')[0] : ""),
-            avatarUrl: user.photoURL
-        }, { merge: true });
+        const userRef = doc(db, "users", user.uid);
+        const userSnap = await getDoc(userRef);
+        if (!userSnap.exists()) {
+            await setDoc(userRef, {
+                displayName: user.displayName || (user.email ? user.email.split('@')[0] : ""),
+                avatarUrl: user.photoURL
+            }, { merge: true });
+        } else if (!userSnap.data()?.avatarUrl) {
+            await setDoc(userRef, { avatarUrl: user.photoURL }, { merge: true });
+        }
     } catch (err) {
-        console.warn("同步Google头像失败:", err);
+        console.warn("同步Google头像(users)失败:", err);
+    }
+    try {
+        const pubRef = doc(db, "publicUsers", user.uid);
+        const pubSnap = await getDoc(pubRef);
+        if (!pubSnap.exists()) {
+            await setDoc(pubRef, {
+                displayName: user.displayName || (user.email ? user.email.split('@')[0] : ""),
+                avatarUrl: user.photoURL
+            }, { merge: true });
+        } else if (!pubSnap.data()?.avatarUrl) {
+            await setDoc(pubRef, { avatarUrl: user.photoURL }, { merge: true });
+        }
+    } catch (err) {
+        console.warn("同步Google头像(publicUsers)失败:", err);
     }
 }
 
@@ -453,8 +481,10 @@ async function uploadImageAssetPair(fileOrBlob, basename) {
         maxBytes: 56 * 1024
     });
 
-    const fullRef = ref(storage, `p/${basename}_full.jpg`);
-    const thumbRef = ref(storage, `p/${basename}_thumb.jpg`);
+    const uid = currentUser?.uid;
+    if (!uid) throw new Error('请先登录后再上传图片');
+    const fullRef = ref(storage, `p/${uid}/${basename}_full.jpg`);
+    const thumbRef = ref(storage, `p/${uid}/${basename}_thumb.jpg`);
     await Promise.all([
         uploadBytes(fullRef, fullBlob, { contentType: 'image/jpeg' }),
         uploadBytes(thumbRef, thumbBlob, { contentType: 'image/jpeg' })
@@ -490,9 +520,11 @@ async function copyGooglePlacePhotoToStorage(photoRef, options = {}) {
         minQuality: 0.48,
         maxBytes: 56 * 1024
     });
+    const uid = currentUser?.uid;
+    if (!uid) throw new Error('请先登录后再上传图片');
     const basename = `google_${Date.now()}`;
-    const fullRef = ref(storage, `p/${basename}_full.jpg`);
-    const thumbRef = ref(storage, `p/${basename}_thumb.jpg`);
+    const fullRef = ref(storage, `p/${uid}/${basename}_full.jpg`);
+    const thumbRef = ref(storage, `p/${uid}/${basename}_thumb.jpg`);
     await Promise.all([
         uploadBytes(fullRef, compressedBlob, { contentType: 'image/jpeg' }),
         uploadBytes(thumbRef, thumbBlob, { contentType: 'image/jpeg' })
@@ -531,8 +563,8 @@ onAuthStateChanged(auth, (u) => {
             email: u.email,
             displayName: u.displayName || (u.email ? u.email.split('@')[0] : "")
         }, { merge: true });
+        // publicUsers 不再存 email，避免对外泄漏
         setDoc(doc(db, "publicUsers", u.uid), {
-            email: u.email || "",
             displayName: u.displayName || (u.email ? u.email.split('@')[0] : ""),
             avatarUrl: u.photoURL || ""
         }, { merge: true });
@@ -967,7 +999,6 @@ window.uploadAvatar = async (input) => {
         // 保存URL到Firestore
         await updateDoc(doc(db, "users", currentUser.uid), { avatarUrl: url });
         await setDoc(doc(db, "publicUsers", currentUser.uid), {
-            email: currentUser.email || "",
             displayName: currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : ""),
             avatarUrl: url
         }, { merge: true });
@@ -2341,19 +2372,94 @@ function formatStoreRecentReviewText(timestamp) {
     return { text: `${years}年前有人吃过`, isFresh: false };
 }
 
+// 计算"我"在某店的评分平均（如果只有 1 条就是那条的分）
+function getStoreMyRatingSummary(store) {
+    if (!currentUser) return { count: 0, avg: 0 };
+    const revs = Array.isArray(store?.revs) ? store.revs : [];
+    const aliases = getCurrentUserAliases();
+    const mine = revs.filter(r => isReviewMine(r, aliases));
+    if (!mine.length) return { count: 0, avg: 0 };
+    const ratings = mine
+        .map(r => Number(r?.rating))
+        .filter(n => Number.isFinite(n) && n > 0);
+    if (!ratings.length) return { count: mine.length, avg: 0 };
+    const sum = ratings.reduce((a, n) => a + n, 0);
+    return { count: mine.length, avg: sum / ratings.length };
+}
+
+// 计算"好友们"在某店的评分平均 + 几位朋友吃过
+function getStoreFriendsRatingSummary(store) {
+    const revs = Array.isArray(store?.revs) ? store.revs : [];
+    const friendIds = Array.isArray(myFriends) ? myFriends : [];
+    if (!revs.length || !friendIds.length) return { count: 0, avg: 0 };
+
+    const usersById = new Map(
+        (Array.isArray(allUsersCache) ? allUsersCache : [])
+            .filter(user => user?.id)
+            .map(user => [String(user.id), user])
+    );
+    const friendEntries = friendIds.map((friendId) => {
+        const key = String(friendId || '').trim().toLowerCase();
+        if (!key) return null;
+        const user = usersById.get(String(friendId)) || { id: friendId };
+        return { key, aliases: getUserAliasSet(user) };
+    }).filter(Boolean);
+    if (!friendEntries.length) return { count: 0, avg: 0 };
+
+    const matchedFriends = new Set();
+    const ratings = [];
+    revs.forEach((rev) => {
+        const revUid = String(rev?.uid || '').trim().toLowerCase();
+        const revUser = String(rev?.user || '').trim().toLowerCase();
+        if (!revUid && !revUser) return;
+        for (const entry of friendEntries) {
+            if ((revUid && entry.aliases.has(revUid)) || (revUser && entry.aliases.has(revUser))) {
+                matchedFriends.add(entry.key);
+                const r = Number(rev?.rating);
+                if (Number.isFinite(r) && r > 0) ratings.push(r);
+                break;
+            }
+        }
+    });
+
+    if (!ratings.length) return { count: matchedFriends.size, avg: 0 };
+    const sum = ratings.reduce((a, n) => a + n, 0);
+    return { count: matchedFriends.size, avg: sum / ratings.length };
+}
+
 function renderStoreActivityMeta(store) {
     const latestReviewAt = getStoreLatestReviewTimestamp(store);
     const recent = formatStoreRecentReviewText(latestReviewAt);
-    if (!recent.text) return '';
-    const friendCount = getStoreFriendReviewCount(store);
+
+    const me = getStoreMyRatingSummary(store);
+    const friends = getStoreFriendsRatingSummary(store);
+
+    const meChip = me.count > 0 ? `
+        <span class="store-stat-chip is-me" title="我的评分">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>
+            ${me.avg > 0 ? me.avg.toFixed(1) : '—'}
+        </span>` : '';
+
+    const friendChip = friends.count > 0 ? `
+        <span class="store-stat-chip is-friends" title="${friends.count} 位好友吃过">
+            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            ${friends.avg > 0 ? friends.avg.toFixed(1) : '—'}
+            <span class="store-stat-chip-num">·${friends.count}</span>
+        </span>` : '';
+
+    const leftHtml = recent.text
+        ? `<span class="store-activity-time${recent.isFresh ? ' is-fresh' : ''}">${recent.text}</span>`
+        : '';
+    const rightHtml = (meChip || friendChip)
+        ? `<span class="store-activity-stats">${meChip}${friendChip}</span>`
+        : '';
+
+    if (!leftHtml && !rightHtml) return '';
 
     return `
         <div class="store-activity-meta">
-            <span class="store-activity-time${recent.isFresh ? ' is-fresh' : ''}">${recent.text}</span>
-            ${friendCount > 0 ? `
-            <span class="store-activity-divider">·</span>
-            <span class="store-activity-friends">${friendCount}个朋友吃过此店</span>
-            ` : ''}
+            ${leftHtml}
+            ${rightHtml}
         </div>
     `;
 }
@@ -2799,9 +2905,11 @@ window.renderStores = (list) => {
         let html;
         if (isSearching) {
             const googleHtml = getHomeGoogleCandidatesHtml();
+            // 不再底部追加"找不到想要的？添加这家店"提示：
+            // 如果谷歌有候选，上面已经能添加；如果没有，跳到添加页也搜不到，提示是多余的
             html = googleHtml
-                ? googleHtml + `<div class='home-empty-tip'>${getHomeSearchAddHintHtml()}</div>`
-                : `<div class='home-empty-tip'><div>没有符合条件的店铺</div>${getHomeSearchAddHintHtml()}</div>`;
+                ? googleHtml
+                : `<div class='home-empty-tip'><div>没有符合条件的店铺</div></div>`;
         } else if (hasAnyStores) {
             // 用户附近 50 公里内还没有店铺
             html = `
@@ -4471,6 +4579,21 @@ function renderAddComposerPreview() {
         showAppNoticeModal("只能上传图片文件");
         return;
     }
+    if (files.length > MAX_REVIEW_IMAGES) {
+        input.value = "";
+        uploadPlaceholder.style.display = 'inline-flex';
+        previewList.classList.add('hidden');
+        showAppNoticeModal(`一次最多上传 ${MAX_REVIEW_IMAGES} 张图片`);
+        return;
+    }
+    const oversized = files.find(f => f.size > MAX_IMAGE_BYTES);
+    if (oversized) {
+        input.value = "";
+        uploadPlaceholder.style.display = 'inline-flex';
+        previewList.classList.add('hidden');
+        showAppNoticeModal(`单张图片不能超过 ${Math.floor(MAX_IMAGE_BYTES / 1024 / 1024)}MB`);
+        return;
+    }
 
     if (files.length) {
         uploadPlaceholder.style.display = 'none';
@@ -5327,8 +5450,8 @@ function renderAddSearchResultList(items, listEl) {
             : "";
 
         d.innerHTML = `
-            <div class="result-item-name"><b>${item.name}</b>${badge}</div>
-            <small>${item.secondaryText || item.address || "地址未收录"}</small>
+            <div class="result-item-name"><b>${escapeHtml(item.name)}</b>${badge}</div>
+            <small>${escapeHtml(item.secondaryText || item.address || "地址未收录")}</small>
         `;
 
         d.onclick = item.onClick;
@@ -5842,6 +5965,8 @@ window.submitHomeSearch = async function () {
     // 先按本地店名严格匹配渲染（applyFilters 会读 homeSearchQuery）
     applyFilters();
     if (!raw) return;
+    // 如果搜的是料理类别（日料/泰料 等），不再去 Google 找未收录店——类别词没意义且会浪费 API
+    if (resolveCuisineSearchIntent(raw)) return;
     // 再去 Google Places 找用户附近未收录的同名店铺
     try {
         const origin = typeof getCurrentOriginCoords === 'function' ? getCurrentOriginCoords() : null;
@@ -6320,9 +6445,15 @@ const HOME_RANGE_METERS = 50000;
 function applyFilters() {
     let source = [...window.localStores]; // Copy array
 
-    // 首页搜索：严格按店名匹配（与添加店铺时同一套逻辑），避免 cuisine 类别模糊命中
+    // 首页搜索：店名精确/前缀/包含匹配，
+    // 同时若关键词是料理类别（日料 / 泰料 / 韩餐 等），按 cuisine intent 匹配该类别的所有店
     if (homeSearchQuery) {
-        source = source.filter(s => scoreHomeNameMatch(homeSearchQuery, s) > 0);
+        const cuisineIntent = resolveCuisineSearchIntent(homeSearchQuery);
+        source = source.filter(s => {
+            if (scoreHomeNameMatch(homeSearchQuery, s) > 0) return true;
+            if (cuisineIntent && scoreCuisineIntentMatch(homeSearchQuery, s) > 0) return true;
+            return false;
+        });
     } else {
         source = source.filter(s => !isStorePermanentlyClosed(s));
         // 仅显示用户附近的店铺，避免世界各地店铺涌入首页
@@ -7680,6 +7811,9 @@ window.submitReview = async () => {
 const RANDOM_WALK_DEFAULT_MINUTES = 15;
 const RANDOM_WALK_METERS_PER_MINUTE = 80;
 
+// 本次弹窗内已经抽中过的店（关闭弹窗后清空）
+const randomPickedSessionSet = new Set();
+
 function getRandomWalkLimitMinutes() {
     const input = document.getElementById('rf-walk-minutes');
     const rawValue = Number(input?.value);
@@ -7720,33 +7854,34 @@ function getRandomPickPool() {
 
 window.updateRandomPoolHint = () => {
     const box = document.getElementById('random-state-empty');
-    if (!box) return;
-    // 不要覆盖结果或抽选动画
-    if (box.style.display === 'none') return;
-    const { pool, walkOnly, walkMinutes, highRatingOnly, onlyEat } = getRandomPickPool();
+    const persistEl = document.getElementById('random-persistent-hint');
+    const { pool, walkOnly, walkMinutes } = getRandomPickPool();
     const count = pool.length;
-    const anyFilter = walkOnly || highRatingOnly || onlyEat;
-    if (!anyFilter) {
-        box.innerHTML = `<span class="big-question-mark">?</span>`;
-        return;
+    const excludedCount = pool.filter(s => randomPickedSessionSet.has(s.id)).length;
+    const remainingCount = Math.max(0, count - excludedCount);
+
+    // 常驻提示（chip 上方），抽选前后都会显示
+    if (persistEl) {
+        if (count === 0) {
+            const tip = walkOnly
+                ? `步行 ${walkMinutes} 分钟以内没有符合条件的店铺，试试放宽筛选条件`
+                : `附近没有符合条件的店铺，试试放宽筛选条件`;
+            persistEl.innerHTML = `<span style="color:#b2bec3;">${tip}</span>`;
+        } else {
+            const displayRemain = remainingCount > 99 ? '99+' : String(remainingCount);
+            const sub = excludedCount > 0
+                ? `<span class="random-persistent-sub">已避开本次抽中过的 ${excludedCount} 家（关闭重开可重置）</span>`
+                : '';
+            persistEl.innerHTML = `
+                可抽选 <span class="random-pool-count">${displayRemain}</span> 家
+                ${sub}
+            `;
+        }
     }
-    if (count === 0) {
-        const tip = walkOnly
-            ? `步行${walkMinutes}分钟以内没有符合条件的店铺，<br>试试放宽筛选条件`
-            : `附近没有符合条件的店铺，<br>试试放宽筛选条件`;
-        box.innerHTML = `
-            <div class="random-empty-inline">
-                <span class="big-question-mark">?</span>
-                <div class="random-pool-hint random-pool-empty">${tip}</div>
-            </div>`;
-        return;
-    }
-    const display = count > 99 ? '99+' : String(count);
-    box.innerHTML = `
-        <div class="random-empty-inline">
-            <span class="big-question-mark">?</span>
-            <div class="random-pool-hint">将会从附近<span class="random-pool-count">${display}</span>家店铺中进行随机抽选</div>
-        </div>`;
+
+    // 问号占位框：抽选动画 / 出结果时不要覆盖
+    if (!box || box.style.display === 'none') return;
+    box.innerHTML = `<span class="big-question-mark">?</span>`;
 };
 
 window.openRandomModal = () => {
@@ -7755,6 +7890,8 @@ window.openRandomModal = () => {
     document.getElementById('random-result-wrap').style.display = 'none';
     document.getElementById('btn-random-text').innerText = "随机抽选";
     document.getElementById('random-title').innerText = "今天吃什么？";
+    // 每次打开弹窗都清空"已抽过"会话集合
+    randomPickedSessionSet.clear();
     window.updateRandomPoolHint();
 };
 
@@ -7765,6 +7902,8 @@ window.closeRandomPanel = () => {
     setTimeout(() => {
         layer.classList.remove('open');
         layer.classList.remove('closing');
+        // 关闭后清空，确保下次打开是干净状态
+        randomPickedSessionSet.clear();
     }, 220);
 };
 
@@ -7775,6 +7914,15 @@ window.doRandomPick = async () => {
     if (pool.length === 0) {
         window.updateRandomPoolHint();
         return;
+    }
+
+    // 排除本次已抽中过的店；如果全部抽过了 → 自动重置并提示
+    let candidatePool = pool.filter(s => !randomPickedSessionSet.has(s.id));
+    let didReset = false;
+    if (candidatePool.length === 0) {
+        randomPickedSessionSet.clear();
+        candidatePool = pool;
+        didReset = true;
     }
 
     btn.innerHTML = `<div class="spinner"></div> 抽选中...`;
@@ -7794,13 +7942,16 @@ window.doRandomPick = async () => {
         if (step > maxSteps) {
             clearInterval(interval);
             // 最终选中
-            const winner = pool[Math.floor(Math.random() * pool.length)];
+            const winner = candidatePool[Math.floor(Math.random() * candidatePool.length)];
+            randomPickedSessionSet.add(winner.id);
             renderRandomResult(winner);
+            // 抽完后立即刷新"可抽选 N 家"提示
+            window.updateRandomPoolHint();
 
             document.getElementById('random-state-empty').style.display = 'none';
             document.getElementById('random-result-wrap').style.display = 'block';
-            document.getElementById('random-title').innerText = "今天吃这个";
-            btn.innerHTML = `🎲<span>随机抽选</span>`;
+            document.getElementById('random-title').innerText = didReset ? "抽过一轮了，重新开始" : "今天吃这个";
+            btn.innerHTML = `🎲<span>再抽一次</span>`;
         }
     }, 80);
 };
@@ -8072,7 +8223,6 @@ window.confirmEditUsername = async () => {
             displayName: nextName
         }, { merge: true });
         await setDoc(doc(db, "publicUsers", currentUser.uid), {
-            email: currentUser.email || "",
             displayName: nextName
         }, { merge: true });
         setProfileIdentity(nextName, currentUser.photoURL || '');
@@ -8134,6 +8284,7 @@ window.switchProfileTab = (tab) => {
 
     const activityEl = document.getElementById('profile-content-activity');
     const favoritesEl = document.getElementById('profile-content-favorites');
+    const eatenEl = document.getElementById('profile-content-eaten');
     let activityListEl = document.getElementById('profile-activity-list');
     if (activityEl && !activityListEl) {
         activityEl.innerHTML = `<div id="profile-activity-list" class="profile-activity-list"></div>`;
@@ -8142,6 +8293,7 @@ window.switchProfileTab = (tab) => {
 
     if (stranger) {
         if (favoritesEl) favoritesEl.style.display = 'none';
+        if (eatenEl) eatenEl.style.display = 'none';
         if (activityEl) {
             activityEl.style.display = 'block';
         }
@@ -8153,23 +8305,124 @@ window.switchProfileTab = (tab) => {
 
     document.getElementById('profile-tab-activity').classList.toggle('active', tab === 'activity');
     document.getElementById('profile-tab-favorites').classList.toggle('active', tab === 'favorites');
+    const eatenTabBtn = document.getElementById('profile-tab-eaten');
+    if (eatenTabBtn) eatenTabBtn.classList.toggle('active', tab === 'eaten');
 
     const indicator = document.getElementById('profile-tab-indicator');
-    if (tab === 'favorites') {
-        indicator.style.transform = 'translateX(100%)';
-    } else {
-        indicator.style.transform = 'translateX(0)';
+    if (indicator) {
+        if (tab === 'favorites') indicator.style.transform = 'translateX(100%)';
+        else if (tab === 'eaten') indicator.style.transform = 'translateX(200%)';
+        else indicator.style.transform = 'translateX(0)';
     }
 
     if (activityEl) activityEl.style.display = tab === 'activity' ? 'block' : 'none';
     if (favoritesEl) favoritesEl.style.display = tab === 'favorites' ? 'flex' : 'none';
+    if (eatenEl) eatenEl.style.display = tab === 'eaten' ? 'block' : 'none';
 
     if (tab === 'activity') {
         renderProfileActivity();
-    } else {
+    } else if (tab === 'favorites') {
         renderProfileFavorites();
+    } else if (tab === 'eaten') {
+        renderProfileEaten();
     }
 };
+
+/**
+ * 渲染个人页"吃过"列表
+ * 按访问次数降序排，次数一样按最近一次吃的时间降序
+ */
+let profileEatenPagination = { list: [], rendered: 0, container: null, ctx: null };
+
+function buildEatenStoresForUser(uid, userData = null) {
+    if (!uid) return [];
+    const aliases = uid === (currentUser && currentUser.uid)
+        ? getCurrentUserAliases()
+        : getAliasesForUid(uid, userData);
+    const result = [];
+    (Array.isArray(localStores) ? localStores : []).forEach(store => {
+        const revs = Array.isArray(store.revs) ? store.revs : [];
+        let count = 0;
+        let latestTs = 0;
+        revs.forEach(rev => {
+            if (!isReviewMine(rev, aliases)) return;
+            count++;
+            const ts = getReviewEffectiveTimestamp(rev) || Number(rev?.createdAt) || 0;
+            if (ts > latestTs) latestTs = ts;
+        });
+        if (count > 0) {
+            result.push({ store, count, latestTs });
+        }
+    });
+    // 次数降序；同次数按最近时间降序
+    result.sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return b.latestTs - a.latestTs;
+    });
+    return result;
+}
+
+function renderProfileEaten() {
+    const container = document.getElementById('profile-eaten-list');
+    const summaryEl = document.getElementById('profile-eaten-summary');
+    if (!container) return;
+    if (!currentUser) {
+        if (summaryEl) summaryEl.innerHTML = '';
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#ccc;">请先登录</div>`;
+        return;
+    }
+    const uid = isViewingFriendProfile() ? viewingFriendUid : currentUser.uid;
+    const userData = isViewingFriendProfile()
+        ? (viewingFriendData || {})
+        : { email: currentUser.email || '', displayName: currentUser.displayName || '' };
+    const items = buildEatenStoresForUser(uid, userData);
+
+    if (summaryEl) {
+        summaryEl.innerHTML = items.length
+            ? `一共吃过 <strong>${items.length}</strong> 家店`
+            : '';
+    }
+
+    if (!items.length) {
+        profileEatenPagination = { list: [], rendered: 0, container, ctx: null };
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#ccc;">还没有吃过的店</div>`;
+        if (window.lucide?.createIcons) lucide.createIcons();
+        return;
+    }
+
+    const validStoreIds = getExistingStoreIdSet();
+    const favIds = isViewingFriendProfile()
+        ? sanitizePreferenceIds(viewingFriendData?.favorites, validStoreIds)
+        : sanitizePreferenceIds(myFavIds, validStoreIds);
+    const likeSet = isViewingFriendProfile()
+        ? new Set(sanitizePreferenceIds(viewingFriendData?.likes, validStoreIds))
+        : new Set(sanitizePreferenceIds(Array.from(localLikes), validStoreIds));
+    const dislikeSet = isViewingFriendProfile()
+        ? new Set(sanitizePreferenceIds(viewingFriendData?.dislikes, validStoreIds))
+        : new Set(sanitizePreferenceIds(Array.from(localDislikes), validStoreIds));
+    const eatenCounts = new Map();
+    items.forEach(it => eatenCounts.set(it.store.id, it.count));
+    const ctx = { readonly: isViewingFriendProfile(), favIds, likeSet, dislikeSet, eatenCounts };
+    const storeList = items.map(it => it.store);
+    profileEatenPagination = { list: storeList, rendered: 0, container, ctx };
+    const initialCount = Math.min(PROFILE_PAGE_SIZE, storeList.length);
+    container.innerHTML = storeList.slice(0, initialCount)
+        .map((s, idx) => renderSingleFavCardHtml(s, idx, ctx)).join('');
+    profileEatenPagination.rendered = initialCount;
+    bindProfileScrollPagination();
+    if (window.lucide?.createIcons) lucide.createIcons();
+}
+
+function appendNextEatenPage() {
+    const { list, rendered, container, ctx } = profileEatenPagination;
+    if (!container || !ctx) return;
+    if (rendered >= list.length) return;
+    const end = Math.min(list.length, rendered + PROFILE_PAGE_SIZE);
+    const html = list.slice(rendered, end).map((s, i) => renderSingleFavCardHtml(s, rendered + i, ctx)).join('');
+    container.insertAdjacentHTML('beforeend', html);
+    profileEatenPagination.rendered = end;
+    if (window.lucide?.createIcons) lucide.createIcons();
+}
 
 /**
  * 渲染个人页动态列表
@@ -8375,7 +8628,7 @@ function renderSingleActivityCardHtml(a) {
             </div>
             <div class="activity-store-row">
                 <div class="activity-store-name" onclick="openDetail('${s.id}', { mode: 'full', fromMap: false }); event.stopPropagation();">
-                    <span class="activity-store-title">${s.name}</span>
+                    <span class="activity-store-title">${escapeHtml(s.name)}</span>
                     <span class="activity-visit-count">（吃过${a.visits}次）</span>
                 </div>
             </div>
@@ -8407,6 +8660,7 @@ function bindProfileScrollPagination() {
         if (scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 160) {
             appendNextActivityPage();
             appendNextFavPage();
+            appendNextEatenPage();
         }
     });
 }
@@ -8866,7 +9120,7 @@ window.renderRecordCalendar = () => {
                 <button class="record-day-cell ${dayActs.length ? 'has-data' : ''} ${noImage ? 'no-image' : ''} ${isToday ? 'is-today' : ''}" data-record-day="${dayKey}" ${dayActs.length ? `onclick="openRecordDayView('${dayKey}')"` : 'disabled'}>
                     <div class="record-day-thumb">
                         ${primaryImg ? `<img src="${primaryImg}" alt="day-thumb">` : ''}
-                        ${noImage ? '<span class="record-day-no-image-icon" aria-hidden="true">🍽️</span>' : ''}
+                        ${noImage ? '<span class="record-day-no-image-icon" aria-hidden="true">🍔</span>' : ''}
                         ${dayRecordCount > 0 ? `<span class="record-day-count-badge">${dayRecordCount}</span>` : ''}
                     </div>
                     <div class="record-day-meta">
@@ -9472,10 +9726,14 @@ function appendNextFavPage() {
 }
 
 function renderSingleFavCardHtml(s, idx, ctx) {
-    const { readonly, favIds, likeSet, dislikeSet } = ctx || {};
+    const { readonly, favIds, likeSet, dislikeSet, eatenCounts } = ctx || {};
             const isFav = favIds.includes(s.id);
             const isLiked = likeSet.has(s.id);
             const isDisliked = dislikeSet.has(s.id);
+            // 吃过 Tab 用自定义底部信息（吃过 N 次），替代默认的"X 周前有人吃过 · N 个朋友吃过此店"
+            const bottomMetaHtml = (eatenCounts && eatenCounts.has(s.id))
+                ? `<div class="store-activity-meta"><span class="store-activity-time" style="color:#2d3436;">吃过 ${eatenCounts.get(s.id)} 次</span></div>`
+                : renderStoreActivityMeta(s);
 
             let statusClass = '';
             if (isDisliked) statusClass = 'status-disliked';
@@ -9503,7 +9761,7 @@ function renderSingleFavCardHtml(s, idx, ctx) {
                     </div>
                 </div>
                 <div class="store-img-scroll">${imagesHtml}</div>
-                ${renderStoreActivityMeta(s)}
+                ${bottomMetaHtml}
             </div>`;
             }
 
@@ -9535,7 +9793,7 @@ function renderSingleFavCardHtml(s, idx, ctx) {
                 ${renderStoreActionGroup(s.id, isLiked, isDisliked, idx)}
             </div>
             <div class="store-img-scroll">${imagesHtml}</div>
-            ${renderStoreActivityMeta(s)}
+            ${bottomMetaHtml}
         </div>`;
 }
 
@@ -9679,12 +9937,11 @@ async function ensureAllUsersLoaded(forceReload = false) {
                     rawUsers.push({ id: d.id, ...d.data() });
                 });
 
-                // 去重：优先按 email（忽略大小写）去重，没有 email 再按 uid
+                // 去重：按 uid（publicUsers 不再存 email）
                 const deduped = [];
                 const seenKeys = new Set();
                 rawUsers.forEach(u => {
-                    const emailKey = (u.email || '').trim().toLowerCase();
-                    const key = emailKey ? `email:${emailKey}` : `uid:${u.id}`;
+                    const key = `uid:${u.id}`;
                     if (seenKeys.has(key)) return;
                     seenKeys.add(key);
                     if (hasLoadedStoresSnapshot) {
@@ -9780,9 +10037,7 @@ function renderFriendsList() {
         .filter((u) => {
             if (!keyword) return true;
             const name = getFriendSearchName(u).toLowerCase();
-            const emailLocal = getFriendSearchEmailLocal(u);
-            const emailFull = String(u?.email || '').trim().toLowerCase();
-            return name.includes(keyword) || emailLocal.includes(keyword) || emailFull.includes(keyword);
+            return name.includes(keyword);
         });
     if (!friendUsers.length) {
         listEl.innerHTML = `<div style="text-align:center; padding:40px; color:#b2bec3; font-size:13px;">
@@ -9927,20 +10182,15 @@ window.doFriendSearch = (opts = {}) => {
     const hits = allUsersCache.filter(u => {
         if (!u) return false;
         const uid = String(u.id || '').toLowerCase();
-        const emailFull = String(u.email || '').trim().toLowerCase();
         if (uid && currentUid && uid === currentUid) return false;
-        if (emailFull && currentEmail && emailFull === currentEmail) return false;
         if (Array.isArray(myFriends) && myFriends.includes(u.id)) return false;
         const name = getFriendSearchName(u).toLowerCase();
-        const emailLocal = getFriendSearchEmailLocal(u);
-        return name.includes(keyword) || emailLocal.includes(keyword);
+        return name.includes(keyword);
     }).sort((a, b) => {
         const aName = getFriendSearchName(a).toLowerCase();
         const bName = getFriendSearchName(b).toLowerCase();
-        const aEmail = getFriendSearchEmailLocal(a);
-        const bEmail = getFriendSearchEmailLocal(b);
-        const aScore = (aName.startsWith(keyword) ? 3 : 0) + (aEmail.startsWith(keyword) ? 2 : 0) + (aName.includes(keyword) ? 1 : 0);
-        const bScore = (bName.startsWith(keyword) ? 3 : 0) + (bEmail.startsWith(keyword) ? 2 : 0) + (bName.includes(keyword) ? 1 : 0);
+        const aScore = (aName.startsWith(keyword) ? 3 : 0) + (aName.includes(keyword) ? 1 : 0);
+        const bScore = (bName.startsWith(keyword) ? 3 : 0) + (bName.includes(keyword) ? 1 : 0);
         if (bScore !== aScore) return bScore - aScore;
         return aName.localeCompare(bName);
     });

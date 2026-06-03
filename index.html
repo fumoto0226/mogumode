@@ -34,7 +34,7 @@
     <!-- External Libraries -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <link
-        href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&family=Fredoka+One&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700;900&family=Noto+Sans+SC:wght@300;400;500;700;900&family=Fredoka+One&display=swap"
         rel="stylesheet">
 
     <!-- Custom Styles -->
@@ -727,6 +727,8 @@
                         onclick="switchProfileTab('activity')">动态</button>
                     <button class="profile-tab" id="profile-tab-favorites"
                         onclick="switchProfileTab('favorites')">收藏</button>
+                    <button class="profile-tab" id="profile-tab-eaten"
+                        onclick="switchProfileTab('eaten')">吃过</button>
                     <div class="profile-tab-indicator" id="profile-tab-indicator"></div>
                 </div>
 
@@ -773,6 +775,12 @@
                         </div>
                     </div>
                     <div id="profile-fav-list" class="store-list" style="padding: 16px; min-height: 60vh;"></div>
+                </div>
+
+                <!-- 吃过 Tab Content -->
+                <div id="profile-content-eaten" class="profile-tab-content" style="display:none;">
+                    <div id="profile-eaten-summary" class="profile-eaten-summary"></div>
+                    <div id="profile-eaten-list" class="store-list" style="padding: 16px; min-height: 60vh;"></div>
                 </div>
             </div>
 
@@ -989,22 +997,25 @@
                 <!-- 随机结果卡片区域 -->
                 <div id="random-result-wrap" class="random-result-container" style="display:none;"></div>
 
-                <!-- 简单筛选：步行X分钟以内 -->
+                <!-- 池子数 + 已避开 提示（常驻显示，不受抽选结果切换影响）-->
+                <div id="random-persistent-hint" class="random-persistent-hint"></div>
+
+                <!-- 筛选 chip：步行X分钟内 / 3分以上 / 仅餐厅 -->
                 <div class="rf-simple-wrap">
-                    <label class="rf-checkbox random-walk-filter">
+                    <label class="rf-chip">
                         <input type="checkbox" id="rf-walk-15" checked onchange="updateRandomPoolHint()">
-                        <span>步行</span>
+                        <span class="rf-chip-text">步行</span>
                         <input type="number" id="rf-walk-minutes" class="rf-minute-input" value="15" min="1"
                             inputmode="numeric" oninput="updateRandomPoolHint()" onchange="updateRandomPoolHint()">
-                        <span>分钟以内</span>
+                        <span class="rf-chip-text">分</span>
                     </label>
-                    <label class="rf-checkbox">
+                    <label class="rf-chip">
                         <input type="checkbox" id="rf-high-rating" checked onchange="updateRandomPoolHint()">
-                        <span>3分以上</span>
+                        <span class="rf-chip-text">3分以上</span>
                     </label>
-                    <label class="rf-checkbox">
+                    <label class="rf-chip">
                         <input type="checkbox" id="rf-only-eat" checked onchange="updateRandomPoolHint()">
-                        <span>餐厅</span>
+                        <span class="rf-chip-text">仅餐厅</span>
                     </label>
                 </div>
 
@@ -1158,7 +1169,7 @@
                     </button>
                 </div>
                 <div class="friend-search-input-row">
-                    <input id="friend-search-input" class="friend-search-input" placeholder="昵称/电子邮箱">
+                    <input id="friend-search-input" class="friend-search-input" placeholder="搜索昵称">
                     <button class="friend-search-btn friend-search-btn-inside" onclick="doFriendSearch()">搜索</button>
                 </div>
                 <div id="friend-search-results" class="friend-search-results"></div>
@@ -1285,8 +1296,8 @@
     <!-- =========================================
          JAVASCRIPT FILES
          ========================================= -->
-    <script type="module" src="app.js?v=170-top-store-tiebreak"></script>
-    <script src="map.js?v=170-top-store-tiebreak"></script>
+    <script type="module" src="app.js?v=194-chip-emerald"></script>
+    <script src="map.js?v=194-chip-emerald"></script>
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvqupW6XZ7A61lutSD8_GlV31Xdc5ZTLw&callback=initGoogleMap&libraries=geometry">
         </script>
