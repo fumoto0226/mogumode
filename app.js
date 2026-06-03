@@ -16,7 +16,7 @@
 // 这些是 Firebase 提供的功能模块
 // ==========================================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithRedirect, updateProfile, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, updateProfile, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
 import { getFirestore, collection, addDoc, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, query, orderBy, setDoc, where, deleteDoc, getDoc, getDocs, increment } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 
@@ -547,6 +547,15 @@ window.localDislikes = localDislikes;
    3. 用户认证逻辑
    处理用户登录状态变化
    ========================================= */
+
+// 处理 signInWithRedirect 跳转回来的结果（iOS PWA / popup 被拦截时会走这条路径）
+// 不调用 getRedirectResult 会导致用户卡在 firebaseapp.com 的兜底错误页
+getRedirectResult(auth).catch((err) => {
+    // 没有待处理 redirect 时不报错；只在 console 记录其他失败
+    if (err && err.code !== 'auth/no-auth-event') {
+        console.warn('getRedirectResult failed:', err);
+    }
+});
 
 // 监听用户登录状态变化
 // 当用户登录或登出时，这个函数会自动被调用
