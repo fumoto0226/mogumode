@@ -20,6 +20,665 @@ import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, on
 import { getFirestore, collection, addDoc, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, query, orderBy, setDoc, where, deleteDoc, getDoc, getDocs, increment } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 
+/* =========================================
+   i18n 多语言系统
+   ========================================= */
+const LANG_KEY = 'mogumode_lang';
+const SUPPORTED_LANGS = ['zh', 'en'];
+
+const I18N_DICT = {
+    zh: {
+        // 底部导航
+        'nav.home': '主页',
+        'nav.map': '地图',
+        'nav.record': '记录',
+        'nav.profile': '个人',
+        // 顶栏 / 通用
+        'common.search': '搜索',
+        'common.cancel': '取消',
+        'common.confirm': '确认',
+        'common.save': '保存',
+        'common.delete': '删除',
+        'common.edit': '编辑',
+        'common.back': '返回',
+        'common.close': '关闭',
+        'common.loading': '加载中…',
+        'common.ok': '好',
+        // 首页
+        'home.searchPlaceholder': '输入店名或料理种类',
+        'home.sort.distance': '距离',
+        'home.sort.newest': '最新',
+        'home.sort.rating': '评分',
+        'home.sort.price': '价格',
+        'home.empty.noMatch': '没有符合条件的店铺',
+        'home.empty.noNearby': '附近 50 公里内暂时还没有店铺',
+        'home.empty.loading': '正在加载店铺数据…',
+        // 个人页
+        'profile.tab.activity': '动态',
+        'profile.tab.favorites': '收藏',
+        'profile.tab.eaten': '吃过',
+        'profile.favs.want': '想吃',
+        'profile.favs.like': '好吃',
+        'profile.favs.dislike': '难吃',
+        'profile.empty.activity': '暂无动态',
+        'profile.empty.favs': '空空如也',
+        'profile.empty.eaten': '还没有吃过的店',
+        'profile.eaten.total': '一共吃过 <strong>{n}</strong> 家店',
+        'profile.friends': '好友',
+        'profile.loginPrompt': '请先登录',
+        // 菜单
+        'menu.lang': '切换语言',
+        'menu.install': '添加到桌面',
+        'menu.logout': '退出登录',
+        // 地图
+        'map.searchPlaceholder': '搜索附近店铺',
+        'map.chip.all': '全部',
+        'map.chip.mine': '我吃过',
+        'map.chip.friends': '好友',
+        'map.chip.want': '想吃',
+        'map.chip.like': '好吃',
+        'map.chip.dislike': '难吃',
+        // 随机抽选
+        'random.title': '今天吃什么？',
+        'random.resultTitle': '今天吃这个',
+        'random.rerollTitle': '抽过一轮了，重新开始',
+        'random.btnPick': '随机抽选',
+        'random.btnReroll': '再抽一次',
+        'random.chip.walk': '步行',
+        'random.chip.walkUnit': '分',
+        'random.chip.rating': '3分以上',
+        'random.chip.eatery': '仅餐厅',
+        'random.poolAvailable': '可抽选 <span class="random-pool-count">{n}</span> 家',
+        'random.poolExcluded': '已避开本次抽中过的 {n} 家（关闭重开可重置）',
+        'random.poolEmpty.walk': '步行 {n} 分钟以内没有符合条件的店铺，试试放宽筛选条件',
+        'random.poolEmpty.any': '附近没有符合条件的店铺，试试放宽筛选条件',
+        'random.picking': '抽选中...',
+        'detail.recordBtn': '记录',
+        'detail.reviewsTab': '评论',
+        'detail.albumTab': '相册',
+        'detail.userReviews': '{name}的评论',
+        'detail.userReviewsAnon': '用户评论',
+        'detail.emptyReviews': '暂无评论',
+        'detail.noMyReview': '你还没有评论过这家店',
+        'detail.noPhotos': '暂无收录图片',
+        // 详情页/评论
+        'detail.minutes': '{n}分钟',
+        'detail.myReviewCount': '我的评论({n})',
+        'detail.eatAgain': '再吃',
+        'detail.noFriendReview': '暂无好友评论',
+        'detail.tabReviews': '评论({n})',
+        'detail.tabAlbum': '相册({n})',
+        'detail.topEater': '最爱吃这家店的人',
+        'detail.eatenN': '（吃过{n}次）',
+        'detail.budget': '花费',
+        // 时间相对显示
+        'time.yesterday': '昨天',
+        'time.today': '今天',
+        'time.dayBefore': '前天',
+        'time.minsAgo': '{n}分钟前',
+        'time.hoursAgo': '{n}小时前',
+        'time.daysAgo': '{n}天前',
+        'time.weeksAgo': '{n}周前',
+        'time.monthsAgo': '{n}个月前',
+        'time.yearsAgo': '{n}年前',
+        'time.someoneAteHere': '{rel}有人吃过',
+        'time.editedPrefix': '编辑于 ',
+        'time.fresh': '刚刚有人吃过',
+        // 日期格式
+        'date.full': '{y}年{m}月{d}日',
+        'date.monthDay': '{m}月{d}日',
+        // 卡片
+        'card.eatenTimes': '吃过 {n} 次',
+        // 语言选择
+        'lang.title': '选择语言',
+        'lang.zh': '简体中文',
+        'lang.en': 'English',
+        // 添加店铺/评价撰写
+        'add.authPrompt': '请先登录后发布',
+        'add.goLogin': '去登录',
+        'add.pickTitle': '今天吃的哪家店？',
+        'add.searchInput': '在这里输入店铺名',
+        'add.searchNearby': '搜索附近店铺',
+        'add.viewOnMap': '在地图上查看',
+        'add.viewStore': '查看店铺',
+        'add.searchInArea': '在此区域搜索',
+        'add.confirm': '确认',
+        'add.editStore': '修改',
+        'add.ratingHint': '滑动蘑菇评分',
+        'add.budget': '花费',
+        'add.budgetHint': '人均',
+        'add.date': '日期',
+        'add.pickDate': '点击选择',
+        'add.uploadPhoto': '添加照片（可多选）',
+        'add.reviewLabel': '想说点什么',
+        'add.reviewPlaceholder': '今天的味道、感受、推荐菜⋯⋯',
+        'add.cancelEdit': '取消修改',
+        'add.publish': '发布记录',
+        'add.publishSuccess': '记录已发布！',
+        'add.locked': '锁定',
+        'add.republish': '重新发布',
+        'add.loadingNearby': '读取附近店铺中...',
+        'add.viewNearbyOnMap': '在地图上查看附近店铺',
+        // 好友/个人页交互
+        'friend.viewProfile': '查看主页',
+        'friend.ignore': '忽略',
+        'friend.approve': '通过',
+        'friend.sendRequest': '发送好友申请',
+        'friend.requestSentBadge': '已发送好友申请',
+        'friend.badge': '好友',
+        // 评论展开 / 折叠
+        'reviews.expandMore': '展开更多',
+        'reviews.collapse': '收起',
+        'reviews.showAll': '显示全部',
+        'reviews.noMore': '没有更多评论了～',
+        'reviews.empty': '还没有评论',
+        'reviews.pullMore': '下拉加载更多',
+        'reviews.viewAll': '查看全部({n})',
+        // 位置
+        'loc.currentPrefix': '当前位置：',
+        'loc.currentLabel': '当前位置',
+        'loc.toggleClose': '收起地图',
+        // 详情页
+        'detail.provideInfoCta': '提供更多信息',
+        // 营业时间表达
+        'hours.everyday': '每天',
+        'hours.weekdays': '平日',
+        'hours.weekends': '周末',
+        // 个人页陌生人
+        'profile.strangerGate': '添加好友即可查看该用户动态',
+        'friend.alreadyFriend': '已添加好友',
+        'friend.acceptRequest': '通过好友申请',
+        'friend.searchPlaceholder': '搜索昵称',
+        // 表单 placeholder
+        'form.categoryPlaceholder': '给这条信息起个分类名',
+        'form.contentPlaceholder': '在这里输入要追加的信息',
+        // 收藏/想吃/好吃/难吃 — 整 app 复用
+        'pref.want': '想吃',
+        'pref.like': '好吃',
+        'pref.dislike': '难吃',
+        // 登录/注册
+        'auth.googleLogin': '使用 Google 登录',
+        'auth.emailLogin': '邮箱登录',
+        'auth.emailRegister': '邮箱注册',
+        'auth.email': '邮箱',
+        'auth.password': '密码',
+        'auth.login': '登录',
+        'auth.register': '注册',
+        'auth.haveAccount': '已有账号？',
+        'auth.noAccount': '没有账号？',
+        'auth.confirmPassword': '再输入一次密码',
+        'auth.haveAccountBackToLogin': '已有账号？返回登录',
+        'auth.inappNotice': '检测到你正在微信或其他 App 内置浏览器中打开本站，登录可能无法完成。请复制下方网址，到 Safari / Chrome 等浏览器中打开。',
+        'install.iosStep1': '点击底部分享按钮',
+        'install.iosStep2': '选择「添加到主屏幕」',
+        'install.iosStep3': '点击「添加」即可在桌面打开',
+        'delete.confirmTitle': '确定要删除这条信息吗？',
+        'delete.confirmStoreTitle': '删除店铺',
+        'delete.confirmStoreDesc': '"删除店铺"会彻底清理所有相关数据。',
+        'delete.confirmFriend': '确定要删除这个好友吗？',
+        'delete.confirmReviewTitle': '删除评论',
+        'delete.confirmReviewDesc': '确定要删除这条评论吗？',
+        'delete.requested': '已提交删除申请',
+        'delete.btnConfirm': '确定删除',
+        'delete.storeSubtitle': '这家店铺不存在了？请选择操作',
+        'delete.storeDesc': '"仅标记歇业"会隐藏到列表，但仍可搜索查看；"删除店铺"会彻底清理所有相关数据。',
+        'delete.favConflict': '添加"想吃"会移除"好吃/难吃"评价，确定继续吗？',
+        // 记录页 / 日历
+        'record.title': '记录',
+        'record.empty': '这一天还没有用餐记录',
+        // 通用提示
+        'common.eatWhat': '吃什么？',
+        'common.permanentlyClosed': '已永久停业',
+        // 地图筛选 chip
+        'map.searchInArea': '在此区域内搜索',
+        'map.chip.highRated': '高分',
+        'map.chip.eat': '餐厅',
+        'map.chip.drink': '饮品',
+        'map.chip.other': '其他',
+        'map.chip.fav': '收藏',
+        'map.chip.likeFood': '好吃',
+        'map.chip.dislikeFood': '难吃',
+        'friend.add': '添加好友',
+        'friend.title': '好友',
+        'friend.remove': '删除好友',
+        'profile.editName': '修改用户名',
+        'detail.openTime': '营业时间',
+        'detail.openStatus': '营业状态',
+        'detail.address': '位置',
+        'detail.phone': '电话',
+        'detail.useLocation': '使用位置',
+        'detail.openInGoogle': '在谷歌地图查看',
+        'detail.copyUrl': '复制网址',
+        'detail.deleteStore': '删除店铺',
+        'detail.deleteReview': '删除评论',
+        'detail.provideInfo': '提供更多信息',
+        'detail.appendInfo': '追加信息',
+        'detail.myReview': '我的评论',
+        'detail.friendsReviews': '朋友评论',
+        'detail.avgRating': '平均评分',
+        'detail.noRating': '暂无评分',
+        'detail.viewStore': '查看店铺',
+        'detail.viewLog': '查看记录',
+        'detail.todayMain': '今日主图',
+        'detail.setAsMain': '设为今日主图',
+        'detail.start': '开始',
+        'detail.end': '结束',
+        'detail.reload': '重新读取',
+        'detail.reset': '重置',
+        'dialog.tip': '提示',
+        'dialog.gotIt': '知道了',
+        'dialog.ok': '确定',
+        'dialog.confirmDelete': '确定删除',
+        'dialog.addToHome': '添加到主屏幕',
+        'dialog.editName': '修改用户名',
+        'form.usernamePlaceholder': '用户名',
+        'form.categoryName': '分类名称',
+        'form.fillContent': '填写内容',
+        'form.pickCategory': '选择分类',
+        'form.custom': '自定义',
+        'form.customLocation': '自定义位置',
+        'form.cuisineType': '料理种类',
+        'detail.reportClosed': '这家店已经停业了？',
+        'loc.titleConfirm': '你在这里吗？',
+        'loc.reading': '当前位置：读取中...',
+        'loc.searchAddress': '搜索地址或店名',
+        // 星期
+        'week.sun': '周日', 'week.mon': '周一', 'week.tue': '周二',
+        'week.wed': '周三', 'week.thu': '周四', 'week.fri': '周五', 'week.sat': '周六',
+        // 用户提示 / 错误
+        'notice.loginRequired': '请先登录',
+        'notice.fileImageOnly': '只能上传图片文件',
+        'notice.imageMax2mb': '图片不能超过2MB',
+        'notice.publishFailed': '发布失败，请稍后重试',
+        'notice.tooFrequent': '操作太频繁，请稍候再发布',
+        'notice.deleteFailed': '删除失败，请稍后重试',
+        'notice.passwordMismatch': '两次密码输入不一致',
+        'notice.passwordTooShort': '密码至少6位',
+        'notice.locationDenied': '你拒绝了定位权限，请在浏览器设置里允许定位',
+        'notice.locationTimeout': '定位超时，请重试',
+        'notice.locationUnsupported': '当前浏览器不支持读取定位',
+        'notice.locationLocating': '正在定位...',
+        'notice.locationUnavailable': '暂时无法获取当前位置，请检查定位服务',
+        'notice.friendAdded': '已添加好友',
+        'notice.friendRequestSent': '已发送好友申请',
+        'notice.usernameMax28': '用户名最多 28 个字符',
+        'notice.editOwnReviewOnly': '只能编辑自己的评论',
+        'notice.deleteOwnReviewOnly': '只能删除自己的评论',
+        'notice.storeNotFound': '店铺不存在或已删除',
+        'notice.storeDeleted': '店铺已删除',
+        'notice.storeClosed': '店铺已标记为永久歇业',
+        'notice.republished': '已重新发布',
+        'notice.deletedFull': '已删除整条记录',
+        'notice.clearedMedia': '已清空照片和评论内容',
+        'notice.installAdded': '已添加到桌面',
+        // 营业状态
+        'status.closed': '永久歇业',
+        'status.closedToday': '今日休息',
+        'status.suspended': '暂停营业',
+        'status.permanentlyClosed': '已永久停业',
+        // 通用
+        'common.unnamed': '未命名店铺',
+        'common.unrecorded': '暂无',
+        'common.addressUnknown': '地址未收录',
+        'common.reachedEnd': '已经到底了',
+        'common.viewRoute': '查看路线',
+        'common.topStore': '最爱店铺',
+        'record.todayBtn': '回到今天',
+        'record.markPermClosed': '仅标记歇业',
+        'unit.jpy': '日元',
+        'common.add': '添加',
+        'common.filter': '筛选',
+        'common.forgotPassword': '忘记密码了',
+        'common.addThisInfo': '添加这条信息',
+    },
+    en: {
+        'nav.home': 'Home',
+        'nav.map': 'Map',
+        'nav.record': 'Log',
+        'nav.profile': 'Me',
+        'common.search': 'Search',
+        'common.cancel': 'Cancel',
+        'common.confirm': 'OK',
+        'common.save': 'Save',
+        'common.delete': 'Delete',
+        'common.edit': 'Edit',
+        'common.back': 'Back',
+        'common.close': 'Close',
+        'common.loading': 'Loading…',
+        'common.ok': 'OK',
+        'home.searchPlaceholder': 'Search by name or cuisine',
+        'home.sort.distance': 'Near',
+        'home.sort.newest': 'Latest',
+        'home.sort.rating': 'Rating',
+        'home.sort.price': 'Price',
+        'home.empty.noMatch': 'No matching stores',
+        'home.empty.noNearby': 'No stores within 50 km yet',
+        'home.empty.loading': 'Loading stores…',
+        'profile.tab.activity': 'Feed',
+        'profile.tab.favorites': 'Saved',
+        'profile.tab.eaten': 'Eaten',
+        'profile.favs.want': 'Wishlist',
+        'profile.favs.like': 'Liked',
+        'profile.favs.dislike': 'Disliked',
+        'profile.empty.activity': 'No activity yet',
+        'profile.empty.favs': 'Nothing here yet',
+        'profile.empty.eaten': "Haven't eaten anywhere yet",
+        'profile.eaten.total': 'Eaten at <strong>{n}</strong> places',
+        'profile.friends': 'Friends',
+        'profile.loginPrompt': 'Please sign in',
+        'menu.lang': 'Language',
+        'menu.install': 'Install app',
+        'menu.logout': 'Sign out',
+        'map.searchPlaceholder': 'Search nearby',
+        'map.chip.all': 'All',
+        'map.chip.mine': 'Eaten',
+        'map.chip.friends': 'Friends',
+        'map.chip.want': 'Wishlist',
+        'map.chip.like': 'Liked',
+        'map.chip.dislike': 'Disliked',
+        'random.title': 'What to eat?',
+        'random.resultTitle': 'Try this!',
+        'random.rerollTitle': 'Full cycle done — restarting',
+        'random.btnPick': 'Pick one',
+        'random.btnReroll': 'Pick again',
+        'random.chip.walk': 'Walk',
+        'random.chip.walkUnit': 'min',
+        'random.chip.rating': '3+ stars',
+        'random.chip.eatery': 'Restaurant only',
+        'random.poolAvailable': '<span class="random-pool-count">{n}</span> places available',
+        'random.poolExcluded': 'Skipped {n} already picked (reopen to reset)',
+        'random.poolEmpty.walk': 'No stores within {n} min walk — try loosening filters',
+        'random.poolEmpty.any': 'No matching stores nearby — try loosening filters',
+        'random.picking': 'Picking…',
+        'detail.recordBtn': 'Log',
+        'detail.reviewsTab': 'Reviews',
+        'detail.albumTab': 'Album',
+        'detail.userReviews': "{name}'s reviews",
+        'detail.userReviewsAnon': 'User reviews',
+        'detail.emptyReviews': 'No reviews yet',
+        'detail.noMyReview': "You haven't reviewed this place yet",
+        'detail.noPhotos': 'No photos yet',
+        'detail.minutes': '{n} min',
+        'detail.myReviewCount': 'My review ({n})',
+        'detail.eatAgain': 'Again',
+        'detail.noFriendReview': 'No friend reviews yet',
+        'detail.tabReviews': 'Reviews ({n})',
+        'detail.tabAlbum': 'Album ({n})',
+        'detail.topEater': 'Top fan',
+        'detail.eatenN': ' (eaten {n}×)',
+        'detail.budget': 'Cost',
+        'time.yesterday': 'Yesterday',
+        'time.today': 'Today',
+        'time.dayBefore': 'Day before',
+        'time.minsAgo': '{n} min ago',
+        'time.hoursAgo': '{n}h ago',
+        'time.daysAgo': '{n}d ago',
+        'time.weeksAgo': '{n}w ago',
+        'time.monthsAgo': '{n}mo ago',
+        'time.yearsAgo': '{n}y ago',
+        'time.someoneAteHere': 'someone ate here {rel}',
+        'time.editedPrefix': 'edited ',
+        'time.fresh': 'someone just ate here',
+        'date.full': '{m} {d}, {y}',
+        'date.monthDay': '{m} {d}',
+        'card.eatenTimes': 'Eaten {n}×',
+        'lang.title': 'Language',
+        'lang.zh': '简体中文',
+        'lang.en': 'English',
+        'add.authPrompt': 'Please sign in to post',
+        'add.goLogin': 'Sign in',
+        'add.pickTitle': 'Which place today?',
+        'add.searchInput': 'Type store name',
+        'add.searchNearby': 'Search nearby',
+        'add.viewOnMap': 'View on map',
+        'add.viewStore': 'View store',
+        'add.searchInArea': 'Search this area',
+        'add.confirm': 'Confirm',
+        'add.editStore': 'Edit',
+        'add.ratingHint': 'Slide mushrooms to rate',
+        'add.budget': 'Cost',
+        'add.budgetHint': 'per person',
+        'add.date': 'Date',
+        'add.pickDate': 'Pick date',
+        'add.uploadPhoto': 'Add photos (multi)',
+        'add.reviewLabel': "Tell us about it",
+        'add.reviewPlaceholder': 'Taste, vibe, must-orders…',
+        'add.cancelEdit': 'Cancel edit',
+        'add.publish': 'Post',
+        'add.locked': 'Locked',
+        'add.republish': 'Repost',
+        'add.loadingNearby': 'Loading nearby…',
+        'add.viewNearbyOnMap': 'View nearby on map',
+        'friend.viewProfile': 'View profile',
+        'friend.ignore': 'Ignore',
+        'friend.approve': 'Accept',
+        'friend.sendRequest': 'Send request',
+        'friend.requestSentBadge': 'Request sent',
+        'friend.badge': 'Friend',
+        'reviews.expandMore': 'Show more',
+        'reviews.collapse': 'Collapse',
+        'reviews.showAll': 'Show all',
+        'reviews.noMore': 'No more reviews',
+        'reviews.empty': 'No reviews yet',
+        'reviews.pullMore': 'Pull to load more',
+        'reviews.viewAll': 'View all ({n})',
+        'loc.currentPrefix': 'Current location: ',
+        'loc.currentLabel': 'Current location',
+        'loc.toggleClose': 'Hide map',
+        'detail.provideInfoCta': 'Add more info',
+        'hours.everyday': 'Daily',
+        'hours.weekdays': 'Weekdays',
+        'hours.weekends': 'Weekends',
+        'profile.strangerGate': 'Add as friend to see their activity',
+        'friend.alreadyFriend': 'Already friends',
+        'friend.acceptRequest': 'Accept request',
+        'friend.searchPlaceholder': 'Search by nickname',
+        'form.categoryPlaceholder': 'Name this category',
+        'form.contentPlaceholder': 'Type the info you want to add',
+        'add.publishSuccess': 'Posted!',
+        'pref.want': 'Wishlist',
+        'pref.like': 'Liked',
+        'pref.dislike': 'Disliked',
+        'auth.googleLogin': 'Sign in with Google',
+        'auth.emailLogin': 'Sign in with email',
+        'auth.emailRegister': 'Sign up with email',
+        'auth.email': 'Email',
+        'auth.password': 'Password',
+        'auth.login': 'Sign in',
+        'auth.register': 'Sign up',
+        'auth.haveAccount': 'Have an account?',
+        'auth.noAccount': 'No account?',
+        'auth.confirmPassword': 'Confirm password',
+        'auth.haveAccountBackToLogin': 'Have an account? Sign in',
+        'auth.inappNotice': "You're opening this site inside an in-app browser (WeChat/QQ etc). Sign-in may fail — please copy the URL below and open it in Safari or Chrome.",
+        'install.iosStep1': 'Tap the share button at the bottom',
+        'install.iosStep2': 'Choose "Add to Home Screen"',
+        'install.iosStep3': 'Tap "Add" to install on your home screen',
+        'delete.confirmTitle': 'Delete this entry?',
+        'delete.confirmStoreTitle': 'Delete store',
+        'delete.confirmStoreDesc': '"Delete store" will permanently remove all related data.',
+        'delete.confirmFriend': 'Remove this friend?',
+        'delete.confirmReviewTitle': 'Delete review',
+        'delete.confirmReviewDesc': 'Are you sure you want to delete this review?',
+        'delete.requested': 'Deletion requested',
+        'delete.btnConfirm': 'Delete',
+        'delete.storeSubtitle': 'This store no longer exists? Choose an action',
+        'delete.storeDesc': '"Mark closed only" hides it from the list but keeps it searchable. "Delete store" wipes all related data.',
+        'delete.favConflict': 'Adding to Wishlist will remove any Liked/Disliked rating. Continue?',
+        'record.title': 'Log',
+        'record.empty': 'No meals logged this day',
+        'common.eatWhat': 'What to eat?',
+        'common.permanentlyClosed': 'Permanently closed',
+        'map.searchInArea': 'Search this area',
+        'map.chip.highRated': 'Top',
+        'map.chip.eat': 'Food',
+        'map.chip.drink': 'Drinks',
+        'map.chip.other': 'Other',
+        'map.chip.fav': 'Saved',
+        'map.chip.likeFood': 'Liked',
+        'map.chip.dislikeFood': 'Disliked',
+        'friend.add': 'Add friend',
+        'friend.title': 'Friends',
+        'friend.remove': 'Remove friend',
+        'profile.editName': 'Edit name',
+        'detail.openTime': 'Hours',
+        'detail.openStatus': 'Status',
+        'detail.address': 'Address',
+        'detail.phone': 'Phone',
+        'detail.useLocation': 'Use location',
+        'detail.openInGoogle': 'Open in Google Maps',
+        'detail.copyUrl': 'Copy URL',
+        'detail.deleteStore': 'Delete store',
+        'detail.deleteReview': 'Delete review',
+        'detail.provideInfo': 'Add more info',
+        'detail.appendInfo': 'Append info',
+        'detail.myReview': 'My review',
+        'detail.friendsReviews': 'Friends',
+        'detail.avgRating': 'Average',
+        'detail.noRating': 'No rating yet',
+        'detail.viewStore': 'View store',
+        'detail.viewLog': 'View log',
+        'detail.todayMain': 'Today’s cover',
+        'detail.setAsMain': 'Set as cover',
+        'detail.start': 'Start',
+        'detail.end': 'End',
+        'detail.reload': 'Reload',
+        'detail.reset': 'Reset',
+        'dialog.tip': 'Notice',
+        'dialog.gotIt': 'Got it',
+        'dialog.ok': 'OK',
+        'dialog.confirmDelete': 'Delete',
+        'dialog.addToHome': 'Add to Home Screen',
+        'dialog.editName': 'Edit username',
+        'form.usernamePlaceholder': 'Username',
+        'form.categoryName': 'Category',
+        'form.fillContent': 'Content',
+        'form.pickCategory': 'Pick a category',
+        'form.custom': 'Custom',
+        'form.customLocation': 'Custom location',
+        'form.cuisineType': 'Cuisine',
+        'detail.reportClosed': 'This store closed?',
+        'loc.titleConfirm': 'Are you here?',
+        'loc.reading': 'Current location: detecting…',
+        'loc.searchAddress': 'Search address or store',
+        'week.sun': 'Sun', 'week.mon': 'Mon', 'week.tue': 'Tue',
+        'week.wed': 'Wed', 'week.thu': 'Thu', 'week.fri': 'Fri', 'week.sat': 'Sat',
+        'notice.loginRequired': 'Please sign in',
+        'notice.fileImageOnly': 'Only image files are allowed',
+        'notice.imageMax2mb': 'Image must be under 2 MB',
+        'notice.publishFailed': 'Post failed, try again',
+        'notice.tooFrequent': 'Too fast — please wait a moment',
+        'notice.deleteFailed': 'Delete failed, try again',
+        'notice.passwordMismatch': 'Passwords don’t match',
+        'notice.passwordTooShort': 'Password must be 6+ characters',
+        'notice.locationDenied': 'Location permission denied — please allow it in browser settings',
+        'notice.locationTimeout': 'Location timeout, try again',
+        'notice.locationUnsupported': 'Your browser doesn’t support geolocation',
+        'notice.locationLocating': 'Locating…',
+        'notice.locationUnavailable': 'Can’t get current location — check location service',
+        'notice.friendAdded': 'Friend added',
+        'notice.friendRequestSent': 'Friend request sent',
+        'notice.usernameMax28': 'Username up to 28 characters',
+        'notice.editOwnReviewOnly': 'You can only edit your own reviews',
+        'notice.deleteOwnReviewOnly': 'You can only delete your own reviews',
+        'notice.storeNotFound': 'Store not found or deleted',
+        'notice.storeDeleted': 'Store deleted',
+        'notice.storeClosed': 'Marked as permanently closed',
+        'notice.republished': 'Republished',
+        'notice.deletedFull': 'Entry fully deleted',
+        'notice.clearedMedia': 'Photos and review cleared',
+        'notice.installAdded': 'Added to home screen',
+        'status.closed': 'Permanently closed',
+        'status.closedToday': 'Closed today',
+        'status.suspended': 'Temporarily closed',
+        'status.permanentlyClosed': 'Permanently closed',
+        'common.unnamed': 'Unnamed store',
+        'common.unrecorded': 'N/A',
+        'common.addressUnknown': 'Address unknown',
+        'common.reachedEnd': "You've reached the end",
+        'common.viewRoute': 'View route',
+        'common.topStore': 'Top spot',
+        'record.todayBtn': 'Today',
+        'record.markPermClosed': 'Mark closed only',
+        'unit.jpy': 'JPY',
+        'common.add': 'Add',
+        'common.filter': 'Filter',
+        'common.forgotPassword': 'Forgot password?',
+        'common.addThisInfo': 'Add this info',
+    }
+};
+
+let currentLang = (function() {
+    try {
+        const saved = localStorage.getItem(LANG_KEY);
+        if (saved && SUPPORTED_LANGS.includes(saved)) return saved;
+    } catch (_) {}
+    // 默认根据浏览器语言：英文以外都用中文
+    const nav = (navigator.language || 'zh').toLowerCase();
+    return nav.startsWith('en') ? 'en' : 'zh';
+})();
+
+window.t = function t(key, params) {
+    const dict = I18N_DICT[currentLang] || I18N_DICT.zh;
+    let s = dict[key] || I18N_DICT.zh[key] || key;
+    if (params && typeof params === 'object') {
+        Object.keys(params).forEach(k => {
+            s = s.replace(new RegExp(`\\{${k}\\}`, 'g'), params[k]);
+        });
+    }
+    return s;
+};
+
+function applyTranslations(root) {
+    const scope = root || document;
+    scope.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        const html = window.t(key);
+        // 如果翻译里带 HTML（比如 <strong>）就用 innerHTML，否则用 textContent
+        if (/[<>]/.test(html)) el.innerHTML = html;
+        else el.textContent = html;
+    });
+    scope.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        el.setAttribute('placeholder', window.t(el.getAttribute('data-i18n-placeholder')));
+    });
+    scope.querySelectorAll('[data-i18n-aria]').forEach(el => {
+        el.setAttribute('aria-label', window.t(el.getAttribute('data-i18n-aria')));
+    });
+}
+window.applyTranslations = applyTranslations;
+
+window.setLang = (lang) => {
+    if (!SUPPORTED_LANGS.includes(lang)) return;
+    currentLang = lang;
+    try { localStorage.setItem(LANG_KEY, lang); } catch (_) {}
+    document.documentElement.setAttribute('lang', lang === 'zh' ? 'zh-CN' : 'en');
+    document.body?.classList.toggle('lang-en', lang === 'en');
+    applyTranslations();
+    // 刷新动态生成的页面内容
+    try {
+        if (typeof window.applyFilters === 'function') window.applyFilters();
+        if (typeof window.renderProfileActivity === 'function') window.renderProfileActivity();
+        if (typeof window.updateRandomPoolHint === 'function') window.updateRandomPoolHint();
+        if (typeof window.renderRecordCalendar === 'function') window.renderRecordCalendar();
+        const activeTab = document.querySelector('.profile-tab.active')?.id;
+        if (activeTab === 'profile-tab-eaten' && typeof window.renderProfileEaten === 'function') {
+            window.renderProfileEaten();
+        } else if (activeTab === 'profile-tab-favorites' && typeof window.renderProfileFavorites === 'function') {
+            window.renderProfileFavorites();
+        }
+    } catch (err) { console.warn('re-render on lang change failed:', err); }
+    try { window.dispatchEvent(new CustomEvent('mogumode:langchange', { detail: { lang } })); } catch (_) {}
+};
+
+window.getLang = () => currentLang;
+
+// 首次加载时立即生效
+document.addEventListener('DOMContentLoaded', () => {
+    document.documentElement.setAttribute('lang', currentLang === 'zh' ? 'zh-CN' : 'en');
+    document.body.classList.toggle('lang-en', currentLang === 'en');
+    applyTranslations();
+});
+
 // 生产环境屏蔽 console.log / console.debug / console.info，避免泄漏内部状态
 (() => {
     const host = location.hostname;
@@ -45,7 +704,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v38";
+const APP_BUILD_VERSION = "v39";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 const LOCATION_CACHE_STORAGE_KEY = "mogumode:last-origin-v2";
 
@@ -204,7 +863,7 @@ window.toggleExpandableReview = (reviewId) => {
     if (!textEl || !btn) return;
     const expanded = textEl.classList.toggle('is-expanded');
     textEl.classList.toggle('is-collapsed', !expanded);
-    btn.innerText = expanded ? '收起' : '显示全部';
+    btn.innerText = expanded ? window.t('reviews.collapse') : window.t('reviews.showAll');
 };
 
 function getExistingStoreIdSet() {
@@ -567,16 +1226,33 @@ onAuthStateChanged(auth, (u) => {
     updateUIForAuth(u);                 // 更新页面UI
     if (u) {
         loadFavs();                     // 如果已登录，加载收藏数据
-        // 在数据库中创建/更新用户文档
-        setDoc(doc(db, "users", u.uid), {
-            email: u.email,
-            displayName: u.displayName || (u.email ? u.email.split('@')[0] : "")
-        }, { merge: true });
-        // publicUsers 不再存 email，避免对外泄漏
-        setDoc(doc(db, "publicUsers", u.uid), {
-            displayName: u.displayName || (u.email ? u.email.split('@')[0] : ""),
-            avatarUrl: u.photoURL || ""
-        }, { merge: true });
+        // 在数据库中创建/更新用户文档（不强制覆盖 avatarUrl，避免把用户自定义头像盖回 Google 原图）
+        (async () => {
+            try {
+                const userRef = doc(db, "users", u.uid);
+                const publicRef = doc(db, "publicUsers", u.uid);
+                const [userSnap, publicSnap] = await Promise.all([getDoc(userRef), getDoc(publicRef)]);
+
+                // users 文档：保证 email 和 displayName 在
+                const userFields = {
+                    email: u.email,
+                    displayName: u.displayName || (u.email ? u.email.split('@')[0] : "")
+                };
+                setDoc(userRef, userFields, { merge: true });
+
+                // publicUsers 文档：displayName 兜底；avatarUrl 仅在文档不存在或为空时种子写入
+                const publicFields = {
+                    displayName: u.displayName || (u.email ? u.email.split('@')[0] : "")
+                };
+                const existingAvatar = publicSnap.exists() ? (publicSnap.data()?.avatarUrl || "") : "";
+                if (!existingAvatar && u.photoURL) {
+                    publicFields.avatarUrl = u.photoURL;
+                }
+                setDoc(publicRef, publicFields, { merge: true });
+            } catch (err) {
+                console.warn('init user docs failed:', err);
+            }
+        })();
     }
 });
 
@@ -982,15 +1658,15 @@ window.loginWithGoogle = async () => {
  */
 window.uploadAvatar = async (input) => {
     if (!input.files || !input.files[0]) return;
-    if (!currentUser) return alert("请先登录");
+    if (!currentUser) return alert(window.t("notice.loginRequired"));
 
     const file = input.files[0];
     if (!isImageFile(file)) {
         input.value = "";
-        return showAppNoticeModal("只能上传图片文件");
+        return showAppNoticeModal(window.t('notice.fileImageOnly'));
     }
     // 限制文件大小 2MB
-    if (file.size > 2 * 1024 * 1024) return alert("图片不能超过2MB");
+    if (file.size > 2 * 1024 * 1024) return alert(window.t('notice.imageMax2mb'));
 
     try {
         // 上传到 Firebase Storage
@@ -1085,9 +1761,36 @@ window.closeProfileMenu = (event) => {
     document.body.classList.remove('profile-menu-active');
 };
 
-window.handleFakeLanguageSwitch = () => {
-    return;
+window.handleFakeLanguageSwitch = () => { return; }; // 保留兼容，不再使用
+
+window.openLangPicker = () => {
+    closeProfileMenu();
+    const layer = document.getElementById('lang-picker');
+    if (!layer) return;
+    // 标记当前选中项
+    layer.querySelectorAll('.lang-picker-item').forEach(btn => {
+        btn.classList.toggle('is-active', btn.getAttribute('data-lang') === window.getLang());
+    });
+    layer.classList.add('open');
+    if (window.lucide?.createIcons) lucide.createIcons();
 };
+window.closeLangPicker = () => {
+    const layer = document.getElementById('lang-picker');
+    if (layer) layer.classList.remove('open');
+};
+window.pickLang = (lang) => {
+    window.setLang(lang);
+    // 更新菜单里那个 badge
+    const badge = document.getElementById('profile-menu-lang-current');
+    if (badge) badge.textContent = lang === 'en' ? 'EN' : '中';
+    window.closeLangPicker();
+};
+
+// 启动时把"当前语言"显示在菜单 badge 上
+document.addEventListener('DOMContentLoaded', () => {
+    const badge = document.getElementById('profile-menu-lang-current');
+    if (badge) badge.textContent = window.getLang() === 'en' ? 'EN' : '中';
+});
 
 window.logoutFromMenu = () => {
     closeProfileMenu();
@@ -1452,7 +2155,10 @@ function normalizeOpeningValueText(raw) {
 }
 
 function formatDayRangeLabel(startIdx, endIdx) {
-    const labels = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+    const labels = [
+        window.t('week.mon'), window.t('week.tue'), window.t('week.wed'),
+        window.t('week.thu'), window.t('week.fri'), window.t('week.sat'), window.t('week.sun')
+    ];
     if (startIdx === endIdx) return labels[startIdx];
     return `${labels[startIdx]}-${labels[endIdx]}`;
 }
@@ -1465,7 +2171,7 @@ function formatOpeningSummaryLine(label, value) {
 
 function compressWeeklyLines(valuesByDay) {
     const allSame = valuesByDay.every(v => v === valuesByDay[0]);
-    if (allSame) return [formatOpeningSummaryLine('每天', valuesByDay[0])];
+    if (allSame) return [formatOpeningSummaryLine(window.t('hours.everyday'), valuesByDay[0])];
 
     const weekdayValue = valuesByDay[0];
     const weekendValue = valuesByDay[5];
@@ -1474,8 +2180,8 @@ function compressWeeklyLines(valuesByDay) {
 
     if (weekdaySame && weekendSame) {
         return [
-            formatOpeningSummaryLine('平日', weekdayValue),
-            formatOpeningSummaryLine('周末', weekendValue)
+            formatOpeningSummaryLine(window.t('hours.weekdays'), weekdayValue),
+            formatOpeningSummaryLine(window.t('hours.weekends'), weekendValue)
         ];
     }
 
@@ -1682,10 +2388,10 @@ function getStoreLinearDistanceMeters(store) {
 
 function formatStoreDistanceText(store) {
     const meters = getStoreLinearDistanceMeters(store);
-    if (!Number.isFinite(meters) || meters < 0) return '--分钟';
+    if (!Number.isFinite(meters) || meters < 0) return window.t('detail.minutes', { n: '--' });
     const WALK_METERS_PER_MIN = 70;
     const mins = Math.max(1, Math.round(meters / WALK_METERS_PER_MIN));
-    return `${mins}分钟`;
+    return window.t('detail.minutes', { n: mins });
 }
 
 window.getStoreLinearDistanceMeters = getStoreLinearDistanceMeters;
@@ -1865,6 +2571,44 @@ const CUISINE_TYPE_RULES = [
     }
 ];
 
+// 料理种类中→英对照
+const CUISINE_LABEL_EN = {
+    '中餐': 'Chinese',
+    '日料': 'Japanese',
+    '寿司': 'Sushi',
+    '拉面': 'Ramen',
+    '泰国料理': 'Thai',
+    '韩料': 'Korean',
+    '意大利菜': 'Italian',
+    '法餐': 'French',
+    '美式': 'American',
+    '印度料理': 'Indian',
+    '墨西哥菜': 'Mexican',
+    '越南菜': 'Vietnamese',
+    '西班牙菜': 'Spanish',
+    '土耳其菜': 'Turkish',
+    '地中海菜': 'Mediterranean',
+    '披萨': 'Pizza',
+    '汉堡': 'Burger',
+    '快餐': 'Fast food',
+    'BBQ': 'BBQ',
+    '牛排': 'Steak',
+    '海鲜': 'Seafood',
+    '咖啡': 'Café',
+    '面包房': 'Bakery',
+    '蛋糕': 'Cake',
+    '冰淇淋': 'Ice cream',
+    '酒吧': 'Bar'
+};
+function translateCuisineLabel(label) {
+    if (!label) return label;
+    if (window.getLang && window.getLang() === 'en') {
+        return CUISINE_LABEL_EN[label] || label;
+    }
+    return label;
+}
+window.translateCuisineLabel = translateCuisineLabel;
+
 function normalizeSearchKey(value) {
     return String(value || '')
         .trim()
@@ -1992,7 +2736,15 @@ function resolveCuisineSearchIntent(query) {
             const aliasKey = normalizeSearchKey(alias);
             if (!aliasKey) return false;
             const isAsciiAlias = /^[a-z0-9]+$/.test(aliasKey);
-            return queryKey === aliasKey || (!isAsciiAlias && queryKey.includes(aliasKey));
+            if (queryKey === aliasKey) return true;
+            // 非 ASCII（中日文）允许子串匹配
+            if (!isAsciiAlias) return queryKey.includes(aliasKey);
+            // ASCII（英文）：≥ 4 个字符时允许前缀双向匹配
+            // "chines" → 命中 "chinese"，"japan" → 命中 "japanese"
+            if (queryKey.length >= 4 && aliasKey.length >= 4) {
+                return aliasKey.startsWith(queryKey) || queryKey.startsWith(aliasKey);
+            }
+            return false;
         });
         if (matched) {
             return {
@@ -2019,7 +2771,7 @@ function normalizeStoreAdditionalInfoRows(store) {
         ...(getStoreCuisineText(store) ? [{
             id: "base-cuisine",
             category: "料理种类",
-            content: getStoreCuisineText(store),
+            content: translateCuisineLabel(getStoreCuisineText(store)),
             fixed: true
         }] : []),
         {
@@ -2044,6 +2796,19 @@ function normalizeStoreAdditionalInfoRows(store) {
     return [...baseRows, ...extraRows];
 }
 
+// 把固定分类名（中文 key）翻译成当前语言
+function translateInfoCategory(cat) {
+    const map = {
+        '营业时间': 'detail.openTime',
+        '料理种类': 'form.cuisineType',
+        '位置': 'detail.address',
+        '电话': 'detail.phone',
+        '自定义': 'form.custom'
+    };
+    const key = map[cat];
+    return key ? window.t(key) : cat;
+}
+
 window.generateInfoCardHtml = (store) => {
     const rows = normalizeStoreAdditionalInfoRows(store);
     const fixedRows = rows.filter(r => r.fixed);
@@ -2051,11 +2816,11 @@ window.generateInfoCardHtml = (store) => {
     <div class="info-group-card">
         ${fixedRows.map((r) => `
             <div class="info-row-item ${r.id === 'base-open' ? 'row-time' : ''}">
-                <div class="info-label">${r.category} :</div>
+                <div class="info-label">${translateInfoCategory(r.category)} :</div>
                 <div class="info-content ${r.id === 'base-open' && isStorePermanentlyClosed(store) ? 'permanent-closed' : ''}">${r.id === 'base-open' ? renderStoreOpenTimeHtml(store) : r.content}</div>
             </div>
         `).join("")}
-        <div class="more-info-btn" onclick="openProvideInfoModal('${store.id}')">提供更多信息</div>
+        <div class="more-info-btn" onclick="openProvideInfoModal('${store.id}')">${window.t('detail.provideInfoCta')}</div>
     </div>
     `;
 };
@@ -2068,7 +2833,7 @@ function buildProvideInfoRowHtml(storeId, row, store = null) {
             </button>`;
     return `
         <div class="provide-info-row">
-            <div class="fd-info-label">${row.category}：</div>
+            <div class="fd-info-label">${translateInfoCategory(row.category)}：</div>
             <div class="fd-info-content ${row.id === 'base-open' && isStorePermanentlyClosed(store) ? 'permanent-closed' : ''}">${row.content}</div>
             ${deleteBtnHtml}
         </div>
@@ -2271,16 +3036,17 @@ function formatSmartDate(ts, opts = {}) {
     const mm = String(d.getMinutes()).padStart(2, '0');
     let dateStr;
     if (startOfTarget === startOfToday) {
-        dateStr = '今天';
+        dateStr = window.t ? window.t('time.today') : '今天';
     } else if (startOfTarget === startOfToday - oneDay) {
-        dateStr = '昨天';
+        dateStr = window.t ? window.t('time.yesterday') : '昨天';
     } else if (d.getFullYear() === now.getFullYear()) {
         dateStr = `${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
     } else {
         dateStr = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
     }
     const timeStr = withTime ? ` ${hh}:${mm}` : '';
-    return `${editedPrefix ? '编辑于 ' : ''}${dateStr}${timeStr}`;
+    const prefix = editedPrefix ? (window.t ? window.t('time.editedPrefix') : '编辑于 ') : '';
+    return `${prefix}${dateStr}${timeStr}`;
 }
 window.formatSmartDate = formatSmartDate;
 
@@ -2356,29 +3122,34 @@ function formatStoreRecentReviewText(timestamp) {
     const monthMs = 30 * dayMs;
     const yearMs = 365 * dayMs;
 
+    const mkText = (relKey, n, isFresh) => {
+        const rel = window.t(relKey, { n });
+        return { text: window.t('time.someoneAteHere', { rel }), isFresh };
+    };
+
     if (diff < hourMs) {
         const minutes = Math.max(1, Math.floor(diff / minuteMs));
-        return { text: `${minutes}分钟前有人吃过`, isFresh: true };
+        return mkText('time.minsAgo', minutes, true);
     }
     if (diff < dayMs) {
         const hours = Math.max(1, Math.floor(diff / hourMs));
-        return { text: `${hours}小时前有人吃过`, isFresh: false };
+        return mkText('time.hoursAgo', hours, false);
     }
     if (diff < weekMs) {
         const days = Math.max(1, Math.floor(diff / dayMs));
-        return { text: `${days}天前有人吃过`, isFresh: false };
+        return mkText('time.daysAgo', days, false);
     }
     if (diff < monthMs) {
         const weeks = Math.max(1, Math.floor(diff / weekMs));
-        return { text: `${weeks}周前有人吃过`, isFresh: false };
+        return mkText('time.weeksAgo', weeks, false);
     }
     if (diff < yearMs) {
         const months = Math.max(1, Math.floor(diff / monthMs));
-        return { text: `${months}个月前有人吃过`, isFresh: false };
+        return mkText('time.monthsAgo', months, false);
     }
 
     const years = Math.max(1, Math.floor(diff / yearMs));
-    return { text: `${years}年前有人吃过`, isFresh: false };
+    return mkText('time.yearsAgo', years, false);
 }
 
 // 计算"我"在某店的评分平均（如果只有 1 条就是那条的分）
@@ -2914,11 +3685,9 @@ window.renderStores = (list) => {
         let html;
         if (isSearching) {
             const googleHtml = getHomeGoogleCandidatesHtml();
-            // 不再底部追加"找不到想要的？添加这家店"提示：
-            // 如果谷歌有候选，上面已经能添加；如果没有，跳到添加页也搜不到，提示是多余的
             html = googleHtml
                 ? googleHtml
-                : `<div class='home-empty-tip'><div>没有符合条件的店铺</div></div>`;
+                : `<div class='home-empty-tip'><div>${window.t('home.empty.noMatch')}</div></div>`;
         } else if (hasAnyStores) {
             // 用户附近 50 公里内还没有店铺
             html = `
@@ -2928,7 +3697,7 @@ window.renderStores = (list) => {
                 </div>
             `;
         } else {
-            html = "<div class='home-empty-tip'>正在加载店铺数据…</div>";
+            html = `<div class='home-empty-tip'>${window.t('home.empty.loading')}</div>`;
         }
         el.innerHTML = html;
         return;
@@ -3006,7 +3775,7 @@ function renderAdditionalInfoRow(label, content) {
  */
 window.addAdditionalInfo = () => {
     if (!currentUser) {
-        alert("请先登录");
+        alert(window.t("notice.loginRequired"));
         return;
     }
     const catSelect = document.getElementById('provide-new-cat') || document.getElementById('fd-new-cat');
@@ -3215,7 +3984,7 @@ async function cleanupStoreReferencesForCurrentUser(storeId) {
 window.confirmDeleteStore = async (mode = 'delete') => {
     closeDeleteStoreModal();
     if (!currentUser) {
-        showAppNoticeModal("请先登录");
+        showAppNoticeModal(window.t("notice.loginRequired"));
         return;
     }
     const storeId = getDeleteStoreTargetId();
@@ -3290,7 +4059,7 @@ window.confirmDeleteStore = async (mode = 'delete') => {
 
 window.deleteMyStoreReview = async (storeId, reviewIndex) => {
     if (!currentUser) {
-        showAppNoticeModal("请先登录");
+        showAppNoticeModal(window.t("notice.loginRequired"));
         return;
     }
     const sid = String(storeId || '');
@@ -3382,7 +4151,7 @@ window.openPostSuccessModal = (payload = {}) => {
     if (scoreEl) scoreEl.innerText = postSuccessState.rating.toFixed(1);
     if (starsEl) starsEl.innerHTML = renderPostSuccessRatingIcons(postSuccessState.rating);
     if (storeNameEl) storeNameEl.innerText = postSuccessState.storeName || '店铺';
-    if (visitCountEl) visitCountEl.innerText = `（吃过${postSuccessState.visitCount}次）`;
+    if (visitCountEl) visitCountEl.innerText = window.t('detail.eatenN', { n: postSuccessState.visitCount });
     if (badgeEl) badgeEl.classList.toggle('hidden', !postSuccessState.isNewStore);
     if (modal) modal.classList.add('open');
 };
@@ -3615,7 +4384,7 @@ window.toggleFav = async (oid) => {
  * @param {string} type - 'like' 或 'dislike'
  */
 window.toggleLocalAction = async (id, type) => {
-    if (!currentUser) return alert("请先登录"); // 安全检查
+    if (!currentUser) return alert(window.t("notice.loginRequired")); // 安全检查
 
     const userRef = doc(db, "users", currentUser.uid);
     const updates = {}; // 准备要更新到数据库的数据
@@ -3692,7 +4461,7 @@ let isSubmittingReview = false;
 let lastSubmitAt = 0;
 
 window.submitNew = async () => {
-    if (!currentUser) return showAppNoticeModal("请先登录");
+    if (!currentUser) return showAppNoticeModal(window.t("notice.loginRequired"));
     if (!document.getElementById('newName').value.trim()) {
         return showAppNoticeModal("请先选择店铺并确认");
     }
@@ -3701,7 +4470,7 @@ window.submitNew = async () => {
     const now = Date.now();
     if (isSubmittingReview) return;
     if (now - lastSubmitAt < SUBMIT_COOLDOWN_MS) {
-        return showAppNoticeModal("操作太频繁，请稍候再发布");
+        return showAppNoticeModal(window.t('notice.tooFrequent'));
     }
     isSubmittingReview = true;
 
@@ -3906,7 +4675,7 @@ window.submitNew = async () => {
             }
 
             resetAddComposerFlow();
-            showAppFeedbackToast("已重新发布");
+            showAppFeedbackToast(window.t('notice.republished'));
             if (!restoreAddComposerReturnTarget()) {
                 switchView('home');
             }
@@ -4455,10 +5224,10 @@ function refreshAddWalkTimeDisplay() {
     if (!walkEl) return;
     if (Number.isFinite(selectedStoreDistance) && selectedStoreDistance >= 0) {
         const mins = Math.max(1, Math.round(selectedStoreDistance / 70));
-        walkEl.innerText = `${mins}分钟`;
+        walkEl.innerText = window.t('detail.minutes', { n: mins });
         return;
     }
-    walkEl.innerText = selectedStoreLocation ? formatStoreDistanceText(selectedStoreLocation) : '--分钟';
+    walkEl.innerText = selectedStoreLocation ? formatStoreDistanceText(selectedStoreLocation) : window.t('detail.minutes', { n: '--' });
 }
 
 function refreshAddRatingMushrooms() {
@@ -4498,17 +5267,17 @@ function setAddNearbySearchButtonLoading(loading) {
     if (!btn) return;
     btn.disabled = !!loading;
     btn.classList.toggle('is-loading', !!loading);
-    btn.innerText = loading ? '读取附近店铺中...' : '搜索附近店铺';
+    btn.innerText = loading ? window.t('add.loadingNearby') : window.t('add.searchNearby');
 }
 
 function getAddMapToggleClosedLabel() {
-    return addNearbySearchOrigin ? '在地图上查看附近店铺' : '在地图上查看';
+    return addNearbySearchOrigin ? window.t('add.viewNearbyOnMap') : window.t('add.viewOnMap');
 }
 
 function updateAddMapToggleLabel(isOpen = false) {
     const toggleLink = document.getElementById('add-map-toggle-link');
     if (!toggleLink) return;
-    toggleLink.innerText = isOpen ? '收起地图' : getAddMapToggleClosedLabel();
+    toggleLink.innerText = isOpen ? window.t('loc.toggleClose') : getAddMapToggleClosedLabel();
 }
 
 function updateAddSearchClearButton() {
@@ -4567,10 +5336,10 @@ function syncAddComposerModeUI() {
     if (editBtn) {
         editBtn.disabled = isEditMode;
         editBtn.classList.toggle('is-locked', isEditMode);
-        editBtn.innerText = isEditMode ? '锁定' : '修改';
+        editBtn.innerText = isEditMode ? window.t('add.locked') : window.t('add.editStore');
     }
     if (cancelBtn) cancelBtn.classList.toggle('hidden', !isEditMode);
-    if (postBtnText) postBtnText.innerText = isEditMode ? '重新发布' : '发布记录';
+    if (postBtnText) postBtnText.innerText = isEditMode ? window.t('add.republish') : window.t('add.publish');
 }
 
 function renderAddComposerPreview() {
@@ -4585,7 +5354,7 @@ function renderAddComposerPreview() {
         input.value = "";
         uploadPlaceholder.style.display = 'inline-flex';
         previewList.classList.add('hidden');
-        showAppNoticeModal("只能上传图片文件");
+        showAppNoticeModal(window.t('notice.fileImageOnly'));
         return;
     }
     if (files.length > MAX_REVIEW_IMAGES) {
@@ -4891,7 +5660,7 @@ window.openAddComposerForStore = (storeId) => {
 
 window.openEditReviewComposer = (storeId, reviewIndex, opts = {}) => {
     if (!currentUser) {
-        showAppNoticeModal("请先登录");
+        showAppNoticeModal(window.t("notice.loginRequired"));
         return;
     }
     const sid = String(storeId || '');
@@ -6690,7 +7459,7 @@ function setLocationConfirmDetailText(detail = "") {
     const detailEl = document.getElementById('loc-confirm-current');
     if (!detailEl) return;
     const safeDetail = String(detail || currentResolvedLocationDetail || currentResolvedLocationLabel || "读取中...").trim() || "读取中...";
-    detailEl.innerText = `当前位置：${safeDetail}`;
+    detailEl.innerText = `${window.t('loc.currentPrefix')}${safeDetail}`;
     detailEl.title = safeDetail;
 }
 
@@ -7630,6 +8399,11 @@ window.switchView = (v) => {
         const profileView = document.getElementById('view-profile');
         if (friendsPage) resetFriendsPageState();
         resetViewingFriendProfileState();
+        // 关键：清掉好友列表/好友主页之间的滑动残留 class，
+        // 不然 #user-info 子元素 translateX(100%) 会把内容推出屏幕导致页面空白
+        if (profileView) {
+            profileView.classList.remove('friends-page-active', 'friends-page-pushing');
+        }
         if (currentUser) {
             if (profileView) profileView.classList.remove('profile-guest-mode');
             if (userInfo) userInfo.classList.remove('hidden');
@@ -7701,7 +8475,7 @@ window.switchFavTab = (tab) => {
 
     // 渲染筛选后的店铺列表
     if (filteredStores.length === 0) {
-        container.innerHTML = "<div style='text-align:center; padding:40px; color:#ccc;'>空空如也</div>";
+        container.innerHTML = `<div style='text-align:center; padding:40px; color:#ccc;'>${window.t('profile.empty.favs')}</div>`;
     } else {
         // 使用与首页相同的卡片结构
         container.innerHTML = filteredStores.map((s, idx) => {
@@ -7873,18 +8647,15 @@ window.updateRandomPoolHint = () => {
     if (persistEl) {
         if (count === 0) {
             const tip = walkOnly
-                ? `步行 ${walkMinutes} 分钟以内没有符合条件的店铺，试试放宽筛选条件`
-                : `附近没有符合条件的店铺，试试放宽筛选条件`;
+                ? window.t('random.poolEmpty.walk', { n: walkMinutes })
+                : window.t('random.poolEmpty.any');
             persistEl.innerHTML = `<span style="color:#b2bec3;">${tip}</span>`;
         } else {
             const displayRemain = remainingCount > 99 ? '99+' : String(remainingCount);
             const sub = excludedCount > 0
-                ? `<span class="random-persistent-sub">已避开本次抽中过的 ${excludedCount} 家（关闭重开可重置）</span>`
+                ? `<span class="random-persistent-sub">${window.t('random.poolExcluded', { n: excludedCount })}</span>`
                 : '';
-            persistEl.innerHTML = `
-                可抽选 <span class="random-pool-count">${displayRemain}</span> 家
-                ${sub}
-            `;
+            persistEl.innerHTML = `${window.t('random.poolAvailable', { n: displayRemain })} ${sub}`;
         }
     }
 
@@ -7897,8 +8668,8 @@ window.openRandomModal = () => {
     document.getElementById('layer-random').classList.add('open');
     document.getElementById('random-state-empty').style.display = 'flex';
     document.getElementById('random-result-wrap').style.display = 'none';
-    document.getElementById('btn-random-text').innerText = "随机抽选";
-    document.getElementById('random-title').innerText = "今天吃什么？";
+    document.getElementById('btn-random-text').innerText = window.t('random.btnPick');
+    document.getElementById('random-title').innerText = window.t('random.title');
     // 每次打开弹窗都清空"已抽过"会话集合
     randomPickedSessionSet.clear();
     window.updateRandomPoolHint();
@@ -7934,7 +8705,7 @@ window.doRandomPick = async () => {
         didReset = true;
     }
 
-    btn.innerHTML = `<div class="spinner"></div> 抽选中...`;
+    btn.innerHTML = `<div class="spinner"></div> ${window.t('random.picking')}`;
 
     // 动画效果：快速切换显示问号变化
     let step = 0;
@@ -7959,8 +8730,8 @@ window.doRandomPick = async () => {
 
             document.getElementById('random-state-empty').style.display = 'none';
             document.getElementById('random-result-wrap').style.display = 'block';
-            document.getElementById('random-title').innerText = didReset ? "抽过一轮了，重新开始" : "今天吃这个";
-            btn.innerHTML = `🎲<span>再抽一次</span>`;
+            document.getElementById('random-title').innerText = didReset ? window.t('random.rerollTitle') : window.t('random.resultTitle');
+            btn.innerHTML = `🎲<span>${window.t('random.btnReroll')}</span>`;
         }
     }, 80);
 };
@@ -8138,7 +8909,7 @@ function refreshProfileTopStore() {
     const nameEl = document.getElementById('profile-top-store-name');
     const countEl = document.getElementById('profile-top-store-count');
     if (nameEl) nameEl.innerText = top.store.name || '店铺';
-    if (countEl) countEl.innerText = `（吃过${top.count}次）`;
+    if (countEl) countEl.innerText = window.t('detail.eatenN', { n: top.count });
     wrap.dataset.storeId = top.store.id || '';
     wrap.classList.remove('hidden');
 }
@@ -8165,16 +8936,16 @@ function updateFriendActionButton() {
     btn.classList.remove('disabled');
 
     if (isFriend) {
-        btn.innerText = '已添加好友';
+        btn.innerText = window.t('friend.alreadyFriend');
         btn.classList.add('disabled');
     } else if (pendingReq) {
-        btn.innerText = '通过好友申请';
+        btn.innerText = window.t('friend.acceptRequest');
         btn.onclick = () => acceptFriendRequest(pendingReq.id, targetUid);
     } else if (isPending) {
-        btn.innerText = '已发送好友申请';
+        btn.innerText = window.t('friend.requestSentBadge');
         btn.classList.add('disabled');
     } else {
-        btn.innerText = '发送好友申请';
+        btn.innerText = window.t('friend.sendRequest');
         btn.onclick = () => addFriend(targetUid);
     }
 }
@@ -8222,7 +8993,7 @@ window.confirmEditUsername = async () => {
         return;
     }
     if (nextName.length > 28) {
-        alert("用户名最多 28 个字符");
+        alert(window.t('notice.usernameMax28'));
         return;
     }
     try {
@@ -8307,7 +9078,7 @@ window.switchProfileTab = (tab) => {
             activityEl.style.display = 'block';
         }
         if (activityListEl) {
-            activityListEl.innerHTML = `<div class="profile-stranger-gate">添加好友即可查看该用户动态</div>`;
+            activityListEl.innerHTML = `<div class="profile-stranger-gate">${window.t('profile.strangerGate')}</div>`;
         }
         return;
     }
@@ -8377,7 +9148,7 @@ function renderProfileEaten() {
     if (!container) return;
     if (!currentUser) {
         if (summaryEl) summaryEl.innerHTML = '';
-        container.innerHTML = `<div style="text-align:center; padding:40px; color:#ccc;">请先登录</div>`;
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#ccc;">${window.t('profile.loginPrompt')}</div>`;
         return;
     }
     const uid = isViewingFriendProfile() ? viewingFriendUid : currentUser.uid;
@@ -8388,13 +9159,13 @@ function renderProfileEaten() {
 
     if (summaryEl) {
         summaryEl.innerHTML = items.length
-            ? `一共吃过 <strong>${items.length}</strong> 家店`
+            ? window.t('profile.eaten.total', { n: items.length })
             : '';
     }
 
     if (!items.length) {
         profileEatenPagination = { list: [], rendered: 0, container, ctx: null };
-        container.innerHTML = `<div style="text-align:center; padding:40px; color:#ccc;">还没有吃过的店</div>`;
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#ccc;">${window.t('profile.empty.eaten')}</div>`;
         if (window.lucide?.createIcons) lucide.createIcons();
         return;
     }
@@ -8422,6 +9193,9 @@ function renderProfileEaten() {
     if (window.lucide?.createIcons) lucide.createIcons();
 }
 
+window.renderProfileEaten = renderProfileEaten;
+window.renderProfileActivity = (typeof renderProfileActivity === 'function') ? renderProfileActivity : window.renderProfileActivity;
+
 function appendNextEatenPage() {
     const { list, rendered, container, ctx } = profileEatenPagination;
     if (!container || !ctx) return;
@@ -8447,7 +9221,7 @@ function renderProfileActivity() {
     }
     if (!container) return;
     if (!currentUser) {
-        container.innerHTML = `<div style="text-align:center; padding:40px; color:#ccc;">请先登录</div>`;
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#ccc;">${window.t('profile.loginPrompt')}</div>`;
         return;
     }
     const activities = isViewingFriendProfile()
@@ -8455,7 +9229,7 @@ function renderProfileActivity() {
         : buildMyActivities();
 
     if (!activities.length) {
-        container.innerHTML = `<div style="text-align:center; padding:40px; color:#ccc;">暂无动态</div>`;
+        container.innerHTML = `<div style="text-align:center; padding:40px; color:#ccc;">${window.t('profile.empty.activity')}</div>`;
         return;
     }
     renderActivityCards(container, activities);
@@ -8590,8 +9364,8 @@ function renderSingleActivityCardHtml(a) {
         const canDelete = !!currentUser && !isViewingFriendProfile() && Number.isInteger(a.reviewIndex) && a.reviewIndex >= 0;
         const actionBtns = canDelete
             ? `<div class="review-actions">
-                <button class="review-edit-btn activity-delete-btn" onclick="openEditReviewComposer('${s.id}', ${a.reviewIndex}, { source: 'profile-activity' }); event.stopPropagation();">编辑</button>
-                <button class="review-delete-btn activity-delete-btn" onclick="deleteMyStoreReview('${s.id}', ${a.reviewIndex}); event.stopPropagation();">删除</button>
+                <button class="review-edit-btn activity-delete-btn" onclick="openEditReviewComposer('${s.id}', ${a.reviewIndex}, { source: 'profile-activity' }); event.stopPropagation();">${window.t('common.edit')}</button>
+                <button class="review-delete-btn activity-delete-btn" onclick="deleteMyStoreReview('${s.id}', ${a.reviewIndex}); event.stopPropagation();">${window.t('common.delete')}</button>
             </div>`
             : '';
 
@@ -8638,7 +9412,7 @@ function renderSingleActivityCardHtml(a) {
             <div class="activity-store-row">
                 <div class="activity-store-name" onclick="openDetail('${s.id}', { mode: 'full', fromMap: false }); event.stopPropagation();">
                     <span class="activity-store-title">${escapeHtml(s.name)}</span>
-                    <span class="activity-visit-count">（吃过${a.visits}次）</span>
+                    <span class="activity-visit-count">${window.t('detail.eatenN', { n: a.visits })}</span>
                 </div>
             </div>
             <div class="activity-rating-row">
@@ -8697,6 +9471,10 @@ function formatActivityDate(ts, isEdited = false) {
 function formatRecordDateTitle(dayKey) {
     const [y, m, d] = String(dayKey || '').split('-');
     if (!y || !m || !d) return dayKey || '';
+    if (window.getLang && window.getLang() === 'en') {
+        const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        return `${monthNames[Number(m) - 1] || m} ${Number(d)}, ${y}`;
+    }
     return `${y}年${Number(m)}月${Number(d)}日`;
 }
 
@@ -9072,12 +9850,15 @@ window.renderRecordCalendar = () => {
         if (yearRow) yearRow.classList.add('hidden');
         if (recordPage) recordPage.classList.add('record-page-guest');
         wrap.classList.add('record-auth-wrap');
+        const recordAuthMsg = window.getLang && window.getLang() === 'en'
+            ? 'Sign in to view your log'
+            : '请先登录后查看记录';
         wrap.innerHTML = `
             <div class="record-auth-mask auth-mask-card">
                 <i data-lucide="lock" style="color:#b2bec3; width:40px; height:40px; margin-bottom:16px;"></i>
-                <p>请先登录后查看记录</p>
+                <p>${recordAuthMsg}</p>
                 <button onclick="switchView('profile')" class="btn-submit"
-                    style="width:auto; margin:0 auto; padding:10px 30px;">去登录</button>
+                    style="width:auto; margin:0 auto; padding:10px 30px;">${window.t('add.goLogin')}</button>
             </div>
         `;
         yearSelect.innerHTML = "";
@@ -9146,18 +9927,27 @@ window.renderRecordCalendar = () => {
         const monthTotal = monthActs.reduce((sum, a) => sum + (Number(a.budget) || 0), 0);
         const monthStoreCount = new Set(monthActs.map(a => String(a.storeId || '')).filter(Boolean)).size;
 
+        const monthLabel = window.getLang && window.getLang() === 'en'
+            ? new Date(selectedYear, month - 1, 1).toLocaleDateString('en-US', { month: 'short' })
+            : `${month}月`;
+        const isEn = window.getLang && window.getLang() === 'en';
+        const weekHead = isEn
+            ? '<span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>'
+            : '<span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>';
+        const eatenCountLabel = isEn
+            ? `Eaten at <b>${monthStoreCount}</b> places`
+            : `吃过 <b>${monthStoreCount}</b> 家店`;
+        const spendLabel = isEn ? `Total: <b>${monthTotal || 0}</b>` : `总花费: <b>${monthTotal || 0}</b>`;
         return `
             <div class="record-month-block" data-record-month="${month}">
                 <div class="record-month-head">
-                    <h3>${month}月</h3>
+                    <h3>${monthLabel}</h3>
                     <div class="record-month-stats">
-                        ${monthStoreCount > 0 ? `<span class="record-month-store-count">吃过 <b>${monthStoreCount}</b> 家店</span>` : ''}
-                        <span class="record-month-spend">总花费: <b>${monthTotal || 0}</b></span>
+                        ${monthStoreCount > 0 ? `<span class="record-month-store-count">${eatenCountLabel}</span>` : ''}
+                        <span class="record-month-spend">${spendLabel}</span>
                     </div>
                 </div>
-                <div class="record-week-head">
-                    <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
-                </div>
+                <div class="record-week-head">${weekHead}</div>
                 <div class="record-grid">${cells.join('')}</div>
             </div>
         `;
@@ -9202,8 +9992,8 @@ window.openRecordDayView = (dayKey) => {
         }).join('');
         const actionBtns = Number.isInteger(a.reviewIndex) && a.reviewIndex >= 0
             ? `<div class="review-actions">
-                <button class="review-edit-btn activity-delete-btn" onclick="openEditReviewComposer('${a.storeId}', ${a.reviewIndex}, { source: 'record-day', dayKey: '${dayKey}' }); event.stopPropagation();">编辑</button>
-                <button class="review-delete-btn activity-delete-btn" onclick="deleteMyStoreReview('${a.storeId}', ${a.reviewIndex}); event.stopPropagation();">删除</button>
+                <button class="review-edit-btn activity-delete-btn" onclick="openEditReviewComposer('${a.storeId}', ${a.reviewIndex}, { source: 'record-day', dayKey: '${dayKey}' }); event.stopPropagation();">${window.t('common.edit')}</button>
+                <button class="review-delete-btn activity-delete-btn" onclick="deleteMyStoreReview('${a.storeId}', ${a.reviewIndex}); event.stopPropagation();">${window.t('common.delete')}</button>
             </div>`
             : '';
         return `
@@ -9212,11 +10002,11 @@ window.openRecordDayView = (dayKey) => {
                     <div class="record-day-time">${formatSmartDate(a.createdAt, { editedPrefix: a.isEdited })}</div>
                     ${actionBtns}
                 </div>
-                <div class="record-day-store" onclick="openDetail('${a.storeId}', { mode: 'full', fromMap: false }); event.stopPropagation();">${a.store?.name || '店铺'} <span>（吃过${a.visits}次）</span></div>
+                <div class="record-day-store" onclick="openDetail('${a.storeId}', { mode: 'full', fromMap: false }); event.stopPropagation();">${a.store?.name || (window.t ? window.t('common.unnamed') : '店铺')} <span>${window.t('detail.eatenN', { n: a.visits })}</span></div>
                 <div class="record-day-rating">
                     <span>${a.rating}</span>
                     <div class="record-day-mogu">${renderSimpleRatingIcons(Number(a.rating || 0))}</div>
-                    ${(a.budget && Number(a.budget) > 0) ? `<em>花费: ${a.budget}</em>` : ''}
+                    ${(a.budget && Number(a.budget) > 0) ? `<em>${window.t('detail.budget')}: ${a.budget}</em>` : ''}
                 </div>
                 ${a.review ? renderExpandableReviewText(a.review, {
             textClassName: 'record-day-review',
@@ -9688,9 +10478,9 @@ window.switchProfileFavTab = (tab) => {
     setFavTabIconFilled(pDislikeBtn, tab === 'dislike');
 
     // 更新标签数字
-    document.getElementById('profile-txt-want').innerText = `想吃(${favIds.length})`;
-    document.getElementById('profile-txt-like').innerText = `好吃(${likeSet.size})`;
-    document.getElementById('profile-txt-dislike').innerText = `难吃(${dislikeSet.size})`;
+    document.getElementById('profile-txt-want').innerText = `${window.t('pref.want')}(${favIds.length})`;
+    document.getElementById('profile-txt-like').innerText = `${window.t('pref.like')}(${likeSet.size})`;
+    document.getElementById('profile-txt-dislike').innerText = `${window.t('pref.dislike')}(${dislikeSet.size})`;
 
     // 筛选店铺
     let targetIds = [];
@@ -9703,7 +10493,7 @@ window.switchProfileFavTab = (tab) => {
 
     if (filteredStores.length === 0) {
         profileFavPagination = { list: [], rendered: 0, container, ctx: null };
-        container.innerHTML = `<div style='text-align:center; padding:40px; color:#ccc;'>空空如也</div>`;
+        container.innerHTML = `<div style='text-align:center; padding:40px; color:#ccc;'>${window.t('profile.empty.favs')}</div>`;
     } else {
         profileFavPagination = {
             list: filteredStores,
@@ -9741,7 +10531,7 @@ function renderSingleFavCardHtml(s, idx, ctx) {
             const isDisliked = dislikeSet.has(s.id);
             // 吃过 Tab 用自定义底部信息（吃过 N 次），替代默认的"X 周前有人吃过 · N 个朋友吃过此店"
             const bottomMetaHtml = (eatenCounts && eatenCounts.has(s.id))
-                ? `<div class="store-activity-meta"><span class="store-activity-time" style="color:#2d3436;">吃过 ${eatenCounts.get(s.id)} 次</span></div>`
+                ? `<div class="store-activity-meta"><span class="store-activity-time" style="color:#2d3436;">${window.t('card.eatenTimes', { n: eatenCounts.get(s.id) })}</span></div>`
                 : renderStoreActivityMeta(s);
 
             let statusClass = '';
@@ -9815,7 +10605,7 @@ function renderSingleFavCardHtml(s, idx, ctx) {
  */
 window.openFriendsPage = async () => {
     if (!currentUser) {
-        alert("请先登录");
+        alert(window.t("notice.loginRequired"));
         return;
     }
     const friendsPage = document.getElementById('friends-page');
@@ -10025,9 +10815,9 @@ function renderFriendsList() {
                         <span class="friend-request-name">${name}</span>
                         <span class="friend-request-suffix">申请成为好友</span>
                     </div>
-                    <button class="friend-btn primary" onclick="openFriendProfile('${req.fromUid}')">查看主页</button>
-                    <button class="friend-btn secondary" onclick="ignoreFriendRequest('${req.id}')">忽略</button>
-                    <button class="friend-btn primary approve" onclick="acceptFriendRequest('${req.id}', '${req.fromUid}')">通过</button>
+                    <button class="friend-btn primary" onclick="openFriendProfile('${req.fromUid}')">${window.t('friend.viewProfile')}</button>
+                    <button class="friend-btn secondary" onclick="ignoreFriendRequest('${req.id}')">${window.t('friend.ignore')}</button>
+                    <button class="friend-btn primary approve" onclick="acceptFriendRequest('${req.id}', '${req.fromUid}')">${window.t('friend.approve')}</button>
                 </div>`;
             }).join('');
         }
@@ -10067,8 +10857,8 @@ function renderFriendsList() {
                 </div>
             </div>
             <div class="friend-actions">
-                <button class="friend-btn primary" onclick="openFriendProfile('${u.id}')">查看主页</button>
-                <button class="friend-btn secondary" onclick="removeFriend('${u.id}')">删除</button>
+                <button class="friend-btn primary" onclick="openFriendProfile('${u.id}')">${window.t('friend.viewProfile')}</button>
+                <button class="friend-btn secondary" onclick="removeFriend('${u.id}')">${window.t('common.delete')}</button>
             </div>
         </div>`;
     }).join('');
@@ -10117,7 +10907,7 @@ window.ignoreFriendRequest = async (rid) => {
  */
 window.openFriendSearch = async () => {
     if (!currentUser) {
-        alert("请先登录");
+        alert(window.t("notice.loginRequired"));
         return;
     }
     await ensureAllUsersLoaded(true);
@@ -10224,9 +11014,9 @@ window.doFriendSearch = (opts = {}) => {
         const isPending = Array.isArray(mySentFriendRequests) && mySentFriendRequests.includes(u.id);
         let actionHtml = '';
         if (isPending) {
-            actionHtml = `<button class="friend-btn secondary disabled" disabled>已发送好友申请</button>`;
+            actionHtml = `<button class="friend-btn secondary disabled" disabled>${window.t('friend.requestSentBadge')}</button>`;
         } else {
-            actionHtml = `<button class="friend-btn primary approve" onclick="addFriend('${u.id}')">发送好友申请</button>`;
+            actionHtml = `<button class="friend-btn primary approve" onclick="addFriend('${u.id}')">${window.t('friend.sendRequest')}</button>`;
         }
         return `
         <div class="friend-search-item">
@@ -10252,7 +11042,7 @@ window.doFriendSearch = (opts = {}) => {
  */
 window.addFriend = async (uid) => {
     if (!currentUser) {
-        alert("请先登录");
+        alert(window.t("notice.loginRequired"));
         return;
     }
     if (uid === currentUser.uid) return;
@@ -10289,7 +11079,7 @@ window.addFriend = async (uid) => {
  */
 window.removeFriend = async (uid) => {
     if (!currentUser) {
-        alert("请先登录");
+        alert(window.t("notice.loginRequired"));
         return;
     }
     pendingDeleteFriendUid = uid || "";

@@ -639,7 +639,7 @@ function refreshMapFriendSection(store) {
     const ratingWrap = document.getElementById('sheet-friend-rating');
     if (ratingWrap) {
         if (!revs.length) {
-            ratingWrap.innerHTML = `<div class="friend-score">--</div><div class="sheet-friend-empty">暂无好友评论</div>`;
+            ratingWrap.innerHTML = `<div class="friend-score">--</div><div class="sheet-friend-empty">${window.t ? window.t('detail.noFriendReview') : '暂无好友评论'}</div>`;
             return;
         }
 
@@ -909,17 +909,17 @@ function renderMapReviewCardHtml(store, item, opts = {}) {
     const openProfileAttr = canOpenProfile
         ? `onclick="openFriendProfileFromReview('${profileUid}'); event.stopPropagation();"`
         : '';
-    const friendBadge = item.isFriend ? `<span class="review-friend-badge">好友</span>` : '';
+    const friendBadge = item.isFriend ? `<span class="review-friend-badge">${window.t ? window.t('friend.badge') : '好友'}</span>` : '';
     const visitBadge = (item.visitCount && item.visitCount > 0)
-        ? `<span class="review-visit-count">（吃过${item.visitCount}次）</span>`
+        ? `<span class="review-visit-count">${window.t ? window.t('detail.eatenN', { n: item.visitCount }) : `（吃过${item.visitCount}次）`}</span>`
         : '';
     const budgetBadge = item.budget > 0
         ? `<span class="review-budget">¥${item.budget}</span>`
         : '';
     const actionBtns = (item.isMine && item.originalIndex >= 0)
         ? `<div class="review-actions">
-            <button class="review-edit-btn" onclick="openEditReviewComposer('${store.id}', ${item.originalIndex}, { source: '${source}', reviewScope: '${reviewScope}' }); event.stopPropagation();">编辑</button>
-            <button class="review-delete-btn" onclick="deleteMyStoreReview('${store.id}', ${item.originalIndex}); event.stopPropagation();">删除</button>
+            <button class="review-edit-btn" onclick="openEditReviewComposer('${store.id}', ${item.originalIndex}, { source: '${source}', reviewScope: '${reviewScope}' }); event.stopPropagation();">${window.t('common.edit')}</button>
+            <button class="review-delete-btn" onclick="deleteMyStoreReview('${store.id}', ${item.originalIndex}); event.stopPropagation();">${window.t('common.delete')}</button>
         </div>`
         : '';
 
@@ -983,14 +983,14 @@ function renderReviewGroupHtml(store, group) {
         <div class="review-group" data-group-key="${encKey}">
             ${primaryHtml}
             <div class="review-group-expand-row">
-                <button type="button" class="review-group-btn review-group-expand-btn" data-action="expand" data-group="${encKey}">展开更多 ▾</button>
+                <button type="button" class="review-group-btn review-group-expand-btn" data-action="expand" data-group="${encKey}">${window.t ? window.t('reviews.expandMore') : '展开更多'} ▾</button>
             </div>
             <div class="review-group-more" data-group="${encKey}">
                 <div class="review-group-more-inner">
                     ${moreHtml}
                     <div class="review-group-foot-row">
-                        <button type="button" class="review-group-btn" data-action="collapse" data-group="${encKey}">收起 ▴</button>
-                        ${hasMoreThanShown ? `<button type="button" class="review-group-btn review-group-view-all" data-action="view-all" data-group="${encKey}" data-user-name="${encName}">查看全部(${total}) ›</button>` : ''}
+                        <button type="button" class="review-group-btn" data-action="collapse" data-group="${encKey}">${window.t ? window.t('reviews.collapse') : '收起'} ▴</button>
+                        ${hasMoreThanShown ? `<button type="button" class="review-group-btn review-group-view-all" data-action="view-all" data-group="${encKey}" data-user-name="${encName}">${window.t ? window.t('reviews.viewAll', { n: total }) : `查看全部(${total})`} ›</button>` : ''}
                     </div>
                 </div>
             </div>
@@ -1046,7 +1046,9 @@ function appendNextReviewPage(reviewsList) {
     else reviewsList.insertAdjacentHTML('beforeend', html);
     state.rendered = end;
     if (end >= groups.length && placeholder) {
-        placeholder.textContent = groups.length ? '没有更多评论了～' : '还没有评论';
+        placeholder.textContent = groups.length
+            ? (window.t ? window.t('reviews.noMore') : '没有更多评论了～')
+            : (window.t ? window.t('reviews.empty') : '还没有评论');
     }
 }
 
@@ -1101,12 +1103,12 @@ function renderVisitRankingHtml(reviewItems) {
         <div class="visit-rank-row">
             <span class="visit-rank-medal visit-rank-medal-${medalClasses[i]}">${i + 1}</span>
             <span class="visit-rank-name">${escapeHtml(u.userName)}</span>
-            <span class="visit-rank-count">（吃过${u.visitCount}次）</span>
+            <span class="visit-rank-count">${window.t ? window.t('detail.eatenN', { n: u.visitCount }) : `（吃过${u.visitCount}次）`}</span>
             ${avgHtml}
         </div>
         `;
     }).join('');
-    return `<div class="visit-ranking-title">最爱吃这家店的人</div>${rows}`;
+    return `<div class="visit-ranking-title">${window.t ? window.t('detail.topEater') : '最爱吃这家店的人'}</div>${rows}`;
 }
 
 function escapeHtml(s) {
@@ -1129,8 +1131,10 @@ function renderMapReviewsAndAlbum(store) {
         const initial = Math.min(pageSize, groups.length);
         const reviewCards = groups.slice(0, initial).map(g => renderReviewGroupHtml(store, g)).join('');
         const capText = initial >= groups.length
-            ? (revs.length ? '没有更多评论了～' : '还没有评论')
-            : '下拉加载更多';
+            ? (revs.length
+                ? (window.t ? window.t('reviews.noMore') : '没有更多评论了～')
+                : (window.t ? window.t('reviews.empty') : '还没有评论'))
+            : (window.t ? window.t('reviews.pullMore') : '下拉加载更多');
         reviewsList.innerHTML = `${reviewCards}<div class="sheet-list-placeholder">${capText}</div>`;
         reviewsList._reviewPagination = { store, groups, rendered: initial, pageSize };
         bindReviewWheelProxy(reviewsList);
@@ -1191,12 +1195,18 @@ function renderMapReviewSubpage(store, scope = 'mine') {
         const userKey = card?.dataset?.reviewUserKey || '';
         const userName = card?.dataset?.reviewUserName || '';
         items = buildMapReviewItems(store, 'all').filter(it => it.userKey === userKey);
-        title = userName ? `${userName}的评论` : '用户评论';
-        emptyText = '暂无评论';
+        title = userName
+            ? (window.t ? window.t('detail.userReviews', { name: userName }) : `${userName}的评论`)
+            : (window.t ? window.t('detail.userReviewsAnon') : '用户评论');
+        emptyText = window.t ? window.t('detail.emptyReviews') : '暂无评论';
     } else {
         items = buildMapReviewItems(store, scope);
-        title = scope === 'friends' ? '朋友评论' : '我的评论';
-        emptyText = scope === 'friends' ? '这家店还没有好友评论' : '你还没有评论过这家店';
+        title = scope === 'friends'
+            ? (window.t ? window.t('detail.friendsReviews') : '朋友评论')
+            : (window.t ? window.t('detail.myReview') : '我的评论');
+        emptyText = scope === 'friends'
+            ? (window.t ? window.t('detail.noFriendReview') : '这家店还没有好友评论')
+            : (window.t ? window.t('detail.noMyReview') : '你还没有评论过这家店');
     }
     titleEl.innerText = title;
 
@@ -2122,7 +2132,7 @@ window.renderMapCardFromDB = (store, opts = {}) => {
     // 6. 重置按钮状态
     const btnRoute = document.getElementById('btn-check-route');
     if (btnRoute) {
-        btnRoute.innerHTML = "在谷歌地图查看";
+        btnRoute.innerHTML = window.t ? window.t('detail.openInGoogle') : "在谷歌地图查看";
         btnRoute.disabled = false;
     }
 
@@ -2597,10 +2607,10 @@ function renderMapCardData(p) {
         lat: p?.location?.latitude,
         lng: p?.location?.longitude
     });
-    document.getElementById('mp-photos').innerHTML = "<div style='padding:20px; color:#999; text-align:center;'>暂无收录图片</div>";
+    document.getElementById('mp-photos').innerHTML = `<div style='padding:20px; color:#999; text-align:center;'>${window.t ? window.t('detail.noPhotos') : '暂无收录图片'}</div>`;
 
     const btnRoute = document.getElementById('btn-check-route');
-    btnRoute.innerHTML = "<span>在谷歌地图查看</span>";
+    btnRoute.innerHTML = `<span>${window.t ? window.t('detail.openInGoogle') : '在谷歌地图查看'}</span>`;
     btnRoute.disabled = false;
 
     // 标记为"未收录"
@@ -2680,7 +2690,9 @@ function updateCheckInBtnUI() {
     if (txt) {
         txt.innerText = formatCheckInCountLabel(count);
     }
-    if (label) label.innerText = count > 0 ? '再吃' : '记录';
+    if (label) label.innerText = count > 0
+        ? (window.t ? window.t('detail.eatAgain') : '再吃')
+        : (window.t ? window.t('detail.recordBtn') : '记录');
 }
 
 function formatCheckInCountLabel(count) {

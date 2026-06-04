@@ -8170,3 +8170,94 @@ body.profile-menu-active .nav-bar {
     color: #fff;
     font-weight: 700;
 }
+
+/* ========== 语言选择弹窗 ========== */
+.lang-picker-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0);
+    z-index: 12000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    visibility: hidden;
+    pointer-events: none;
+    transition: background-color 0.22s ease, visibility 0s linear 0.22s;
+}
+.lang-picker-overlay.open {
+    background: rgba(15, 23, 42, 0.42);
+    visibility: visible;
+    pointer-events: auto;
+    transition: background-color 0.22s ease, visibility 0s linear 0s;
+}
+.lang-picker-sheet {
+    width: min(280px, calc(100% - 48px));
+    background: #fff;
+    border-radius: 18px;
+    padding: 18px 12px 12px;
+    box-shadow: 0 18px 50px rgba(15, 23, 42, 0.22);
+    transform: scale(0.92);
+    opacity: 0;
+    transition: transform 0.22s ease, opacity 0.22s ease;
+}
+.lang-picker-overlay.open .lang-picker-sheet {
+    transform: scale(1);
+    opacity: 1;
+}
+.lang-picker-title {
+    text-align: center;
+    font-size: 15px;
+    font-weight: 700;
+    color: #2d3436;
+    margin-bottom: 14px;
+}
+.lang-picker-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 14px 16px;
+    border: none;
+    background: transparent;
+    border-radius: 12px;
+    cursor: pointer;
+    color: #2d3436;
+    font-size: 15px;
+    font-weight: 500;
+    transition: background 0.15s ease;
+}
+.lang-picker-item:hover { background: #f1f3f5; }
+.lang-picker-item .lang-picker-check {
+    color: #22c55e;
+    opacity: 0;
+}
+.lang-picker-item.is-active .lang-picker-check { opacity: 1; }
+.lang-picker-item.is-active .lang-picker-name { font-weight: 700; }
+
+/* ========== 英文版布局调整 ==========
+   英文单词通常比中文长，给一些会换行/挤出的位置预留空间 */
+body.lang-en .nav-text {
+    font-size: 10px; /* 中文 11px，英文略小一点防止 Profile/Record 太挤 */
+    letter-spacing: 0.2px;
+}
+body.lang-en .sort-pill {
+    padding-left: 11px;
+    padding-right: 11px;
+}
+body.lang-en .profile-tab {
+    font-size: 15px;
+    letter-spacing: 0.1px;
+}
+body.lang-en .fav-tab-btn {
+    font-size: 12px;
+}
+body.lang-en .rf-chip {
+    font-size: 12px;
+}
+body.lang-en .home-search,
+body.lang-en .map-search-input {
+    font-size: 13px;
+}
+body.lang-en .map-filter-chip {
+    font-size: 12px;
+}

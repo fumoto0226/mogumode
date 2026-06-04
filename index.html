@@ -90,18 +90,18 @@
                         <div id="mini-map-confirm" style="height:200px; background:#eee;"></div>
                         <div style="padding-top:20px;">
                             <div class="loc-confirm-title-row">
-                                <h3 class="loc-confirm-title">你在这里吗？</h3>
+                                <h3 class="loc-confirm-title" data-i18n="loc.titleConfirm">你在这里吗？</h3>
                                 <button type="button" class="loc-custom-toggle" id="loc-custom-toggle"
                                     onclick="toggleLocCustomSearch()">
                                     <i data-lucide="search" width="12"></i>
-                                    <span id="loc-custom-toggle-label">自定义位置</span>
+                                    <span id="loc-custom-toggle-label" data-i18n="form.customLocation">自定义位置</span>
                                 </button>
                             </div>
-                            <div id="loc-confirm-current" class="loc-confirm-current">当前位置：读取中...</div>
+                            <div id="loc-confirm-current" class="loc-confirm-current" data-i18n="loc.reading">当前位置：读取中...</div>
                             <div id="loc-custom-search-panel" class="loc-custom-search-panel hidden">
                                 <div class="loc-custom-search-input-wrap">
                                     <input type="text" id="loc-custom-search-input" class="loc-custom-search-input"
-                                        placeholder="搜索地址或店名">
+                                        placeholder="搜索地址或店名" data-i18n-placeholder="loc.searchAddress">
                                     <button type="button" id="loc-custom-search-clear"
                                         class="loc-custom-search-clear hidden" aria-label="清空"
                                         onclick="clearLocCustomSearch()"></button>
@@ -109,9 +109,9 @@
                                 <div id="loc-custom-search-results" class="loc-custom-search-results"></div>
                             </div>
                             <div class="loc-actions">
-                                <button class="action-btn btn-cancel" onclick="closeLocModals()">取消</button>
-                                <button class="action-btn btn-reread" onclick="startFetchLocation()">重新读取</button>
-                                <button class="action-btn btn-save" onclick="confirmGPSLocation()">使用位置</button>
+                                <button class="action-btn btn-cancel" onclick="closeLocModals()" data-i18n="common.cancel">取消</button>
+                                <button class="action-btn btn-reread" onclick="startFetchLocation()" data-i18n="detail.reload">重新读取</button>
+                                <button class="action-btn btn-save" onclick="confirmGPSLocation()" data-i18n="detail.useLocation">使用位置</button>
                             </div>
                         </div>
                     </div>
@@ -119,7 +119,7 @@
 
                 <!-- Search Bar -->
                 <div class="search-container">
-                    <input type="text" class="search-bar" id="home-search" placeholder="输入店名或料理种类">
+                    <input type="text" class="search-bar" id="home-search" placeholder="输入店名或料理种类" data-i18n-placeholder="home.searchPlaceholder">
                     <button type="button" class="search-clear-btn hidden" id="home-search-clear"
                         aria-label="清空搜索"></button>
                     <button type="button" class="search-submit-btn" id="home-search-submit"
@@ -137,19 +137,19 @@
                     <div class="sort-pill-group" id="sort-pill-group">
                         <button type="button" class="sort-pill is-selected" data-sort-key="distance"
                             onclick="selectSortOption('distance')">
-                            <i data-lucide="footprints" width="14"></i> 距离
+                            <i data-lucide="footprints" width="14"></i> <span data-i18n="home.sort.distance">距离</span>
                         </button>
                         <button type="button" class="sort-pill" data-sort-key="default"
                             onclick="selectSortOption('default')">
-                            <i data-lucide="align-left" width="14"></i> 最新
+                            <i data-lucide="align-left" width="14"></i> <span data-i18n="home.sort.newest">最新</span>
                         </button>
                         <button type="button" class="sort-pill" data-sort-key="rating"
                             onclick="selectSortOption('rating')">
-                            <i data-lucide="heart" width="14"></i> 评分
+                            <i data-lucide="heart" width="14"></i> <span data-i18n="home.sort.rating">评分</span>
                         </button>
                         <button type="button" class="sort-pill" data-sort-key="price"
                             onclick="selectSortOption('price')">
-                            <i data-lucide="coins" width="14"></i> 价格
+                            <i data-lucide="coins" width="14"></i> <span data-i18n="home.sort.price">价格</span>
                         </button>
                     </div>
 
@@ -236,9 +236,9 @@
                                 </div>
                             </div>
                             <div class="filter-actions">
-                                <button class="rf-btn cancel" onclick="resetFilters()">重置</button>
-                                <button class="rf-btn cancel" onclick="toggleFilterPanel()">取消</button>
-                                <button class="action-btn btn-save" onclick="saveFilters()">保存</button>
+                                <button class="rf-btn cancel" onclick="resetFilters()" data-i18n="detail.reset">重置</button>
+                                <button class="rf-btn cancel" onclick="toggleFilterPanel()" data-i18n="common.cancel">取消</button>
+                                <button class="action-btn btn-save" onclick="saveFilters()" data-i18n="common.save">保存</button>
                             </div>
                         </div>
                     </div>
@@ -254,7 +254,7 @@
 
             <button class="fab-dice-btn" onclick="openRandomModal()">
                 <span class="fab-dice-icon">🎲</span>
-                <span class="fab-dice-text">吃什么？</span>
+                <span class="fab-dice-text" data-i18n="common.eatWhat">吃什么？</span>
             </button>
         </section>
 
@@ -263,7 +263,7 @@
              ========================================= -->
         <section id="view-map" class="hidden map-section" style="height:100vh;">
             <div class="map-search-card">
-                <input id="q" class="map-search-input" placeholder="输入店名或料理种类">
+                <input id="q" class="map-search-input" placeholder="输入店名或料理种类" data-i18n-placeholder="home.searchPlaceholder">
                 <button id="map-search-action-btn" class="map-search-action-btn" type="button" aria-label="搜索"
                     onclick="onMapSearchActionClick()">
                     <i data-lucide="search" width="20"></i>
@@ -273,31 +273,31 @@
             <div id="map-search-area-row" class="map-search-area-row hidden">
                 <button class="map-search-area-btn" type="button" onclick="searchInVisibleArea()">
                     <i data-lucide="locate-fixed" width="14"></i>
-                    在此区域内搜索
+                    <span data-i18n="map.searchInArea">在此区域内搜索</span>
                 </button>
             </div>
 
             <div id="map-filter-chips" class="map-filter-chips">
-                <button class="map-chip" type="button" data-rating="3.5" onclick="toggleMapRatingChip()">
+                <button class="map-chip" type="button" data-rating="3.5" onclick="toggleMapRatingChip()" data-i18n="map.chip.highRated">
                     高分
                 </button>
                 <button class="map-chip" type="button" data-cat="eat" onclick="toggleMapCategoryChip('eat')">
-                    <img src="images/map-pin-01.svg" alt="" class="map-chip-icon">餐厅
+                    <img src="images/map-pin-01.svg" alt="" class="map-chip-icon"><span data-i18n="map.chip.eat">餐厅</span>
                 </button>
                 <button class="map-chip" type="button" data-cat="drink" onclick="toggleMapCategoryChip('drink')">
-                    <img src="images/map-pin-02.svg" alt="" class="map-chip-icon">饮品
+                    <img src="images/map-pin-02.svg" alt="" class="map-chip-icon"><span data-i18n="map.chip.drink">饮品</span>
                 </button>
                 <button class="map-chip" type="button" data-cat="other" onclick="toggleMapCategoryChip('other')">
-                    <img src="images/map-pin-03.svg" alt="" class="map-chip-icon">其他
+                    <img src="images/map-pin-03.svg" alt="" class="map-chip-icon"><span data-i18n="map.chip.other">其他</span>
                 </button>
                 <button class="map-chip" type="button" data-cat="fav" onclick="toggleMapCategoryChip('fav')">
-                    <img src="images/map-pin-04.svg" alt="" class="map-chip-icon">收藏
+                    <img src="images/map-pin-04.svg" alt="" class="map-chip-icon"><span data-i18n="map.chip.fav">收藏</span>
                 </button>
                 <button class="map-chip" type="button" data-cat="like" onclick="toggleMapCategoryChip('like')">
-                    <img src="images/map-pin-05.svg" alt="" class="map-chip-icon">好吃
+                    <img src="images/map-pin-05.svg" alt="" class="map-chip-icon"><span data-i18n="map.chip.likeFood">好吃</span>
                 </button>
                 <button class="map-chip" type="button" data-cat="dislike" onclick="toggleMapCategoryChip('dislike')">
-                    <img src="images/map-pin-06.svg" alt="" class="map-chip-icon">难吃
+                    <img src="images/map-pin-06.svg" alt="" class="map-chip-icon"><span data-i18n="map.chip.dislikeFood">难吃</span>
                 </button>
             </div>
 
@@ -354,12 +354,12 @@
                     <div class="sheet-section">
                         <div class="sheet-section-header">
                             <button type="button" class="sheet-section-link"
-                                onclick="openMapReviewSubpage('mine')"><span>我的评论</span><span
+                                onclick="openMapReviewSubpage('mine')"><span data-i18n="detail.myReview">我的评论</span><span
                                     id="mp-my-review-count"></span><span>&nbsp;&gt;</span></button>
                         </div>
                         <div class="sheet-my-rating">
                             <div class="my-rating-left">
-                                <span class="my-score" id="mp-my-score">暂无评分</span>
+                                <span class="my-score" id="mp-my-score" data-i18n="detail.noRating">暂无评分</span>
                                 <img src="images/pingfen.svg" width="14" id="mp-my-score-icon">
                             </div>
                             <div class="sheet-social-btns sheet-social-btns-inline">
@@ -383,7 +383,7 @@
                             <button class="sheet-checkin-btn" onclick="toggleMapCheckIn()">
                                 <span class="checkin-count" id="txt-checkin-count"></span>
                                 <i data-lucide="plus" width="22"></i>
-                                <span class="checkin-label">记录</span>
+                                <span class="checkin-label" data-i18n="detail.recordBtn">记录</span>
                             </button>
                         </div>
                     </div>
@@ -392,7 +392,7 @@
                     <div class="sheet-section sheet-section-clickable" onclick="openMapReviewSubpage('friends')">
                         <div class="sheet-section-header">
                             <button type="button" class="sheet-section-link"
-                                onclick="event.stopPropagation();openMapReviewSubpage('friends')"><span>朋友评论</span><span
+                                onclick="event.stopPropagation();openMapReviewSubpage('friends')"><span data-i18n="detail.friendsReviews">朋友评论</span><span
                                     id="mp-friend-review-count"></span><span>&nbsp;&gt;</span></button>
                             <div class="sheet-friend-avatars">
                                 <img src="images/avatar-placeholder.svg" class="f-avatar">
@@ -425,10 +425,10 @@
                     <!-- 评论/相册标签 -->
                     <div class="sheet-tabs">
                         <div class="sheet-tab active" onclick="switchSheetTab('reviews')">
-                            评论(<span id="mp-review-count">23</span>)
+                            <span data-i18n="detail.reviewsTab">评论</span>(<span id="mp-review-count">23</span>)
                         </div>
                         <div class="sheet-tab" onclick="switchSheetTab('photos')">
-                            相册(<span id="mp-album-count">190</span>)
+                            <span data-i18n="detail.albumTab">相册</span>(<span id="mp-album-count">190</span>)
                         </div>
                     </div>
 
@@ -443,7 +443,7 @@
                                 <img src="images/pingfen.svg" width="14">
                                 <img src="images/pingfen.svg" width="14" style="opacity:0.3;">
                             </div>
-                            <span class="review-label">平均评分</span>
+                            <span class="review-label" data-i18n="detail.avgRating">平均评分</span>
                         </div>
                         <div id="mp-visit-ranking" class="visit-ranking"></div>
                         <div id="mp-reviews-list" class="reviews-list"></div>
@@ -476,9 +476,9 @@
 
             <div id="add-auth-mask" class="hidden auth-mask-card">
                 <i data-lucide="lock" style="color:#b2bec3; width:40px; height:40px; margin-bottom:16px;"></i>
-                <p>请先登录后发布</p>
+                <p data-i18n="add.authPrompt">请先登录后发布</p>
                 <button onclick="switchView('profile')" class="btn-submit"
-                    style="width:auto; margin:0 auto; padding:10px 30px;">去登录</button>
+                    style="width:auto; margin:0 auto; padding:10px 30px;" data-i18n="add.goLogin">去登录</button>
             </div>
 
             <div id="add-form" class="add-composer">
@@ -486,33 +486,33 @@
                 <input type="hidden" id="newTime">
 
                 <div id="add-step-pick" class="add-step-panel">
-                    <h3 class="add-main-title">今天吃的哪家店？</h3>
+                    <h3 class="add-main-title" data-i18n="add.pickTitle">今天吃的哪家店？</h3>
                     <div class="add-search-stage">
                         <div class="add-search-pill-row">
-                            <input id="add-search-input" class="add-search-pill-input" placeholder="在这里输入店铺名">
+                            <input id="add-search-input" class="add-search-pill-input" placeholder="在这里输入店铺名" data-i18n-placeholder="add.searchInput">
                             <img id="add-selected-mogu-inline" src="images/mogu.svg"
                                 class="add-selected-mogu-inline hidden" alt="mogu">
                             <button type="button" id="add-view-store-btn" class="add-view-store-btn hidden"
-                                onclick="openAddSelectedStoreCard()">查看店铺</button>
+                                onclick="openAddSelectedStoreCard()" data-i18n="add.viewStore">查看店铺</button>
                             <button type="button" id="add-search-clear-btn"
                                 class="add-search-clear-btn hidden">✕</button>
                         </div>
                         <div class="add-search-tools-row">
                             <button type="button" id="add-nearby-search-btn" class="add-nearby-search-btn"
-                                onclick="searchNearbyAddStores()">搜索附近店铺</button>
+                                onclick="searchNearbyAddStores()" data-i18n="add.searchNearby">搜索附近店铺</button>
                             <button type="button" id="add-map-toggle-link" class="add-map-toggle-link hidden"
-                                onclick="toggleAddSearchMap()">在地图上查看</button>
+                                onclick="toggleAddSearchMap()" data-i18n="add.viewOnMap">在地图上查看</button>
                         </div>
                         <div id="add-search-results" class="search-results add-search-results"></div>
                         <div id="add-search-map-wrap" class="add-search-map-wrap hidden">
                             <button type="button" id="add-search-in-area-btn" class="add-search-in-area-btn"
-                                onclick="searchAddStoresInMapArea()">在此区域搜索</button>
+                                onclick="searchAddStoresInMapArea()" data-i18n="add.searchInArea">在此区域搜索</button>
                             <div id="add-search-map" class="add-search-map" aria-label="搜索地图预览"></div>
                         </div>
                     </div>
                     <div class="add-step-pick-confirm-wrap">
                         <button id="add-step-pick-confirm-btn" class="add-step-pick-confirm-btn"
-                            onclick="confirmAddStoreSelection()" disabled>确认</button>
+                            onclick="confirmAddStoreSelection()" disabled data-i18n="add.confirm">确认</button>
                     </div>
                 </div>
 
@@ -526,13 +526,13 @@
                             <span id="add-form-store-name">店铺名</span>
                             <img id="add-form-mogu" src="images/mogu.svg" class="add-picked-mogu hidden" alt="mogu">
                             <button id="add-chip-edit-btn" class="add-chip-edit-btn"
-                                onclick="editAddStoreSelection()">修改</button>
+                                onclick="editAddStoreSelection()" data-i18n="add.editStore">修改</button>
                         </div>
                     </div>
 
                     <!-- 评分卡（hero） -->
                     <div class="add-rating-card">
-                        <div class="add-rating-hint">滑动蘑菇评分</div>
+                        <div class="add-rating-hint" data-i18n="add.ratingHint">滑动蘑菇评分</div>
                         <div class="add-rating-number" id="add-rating-number">3.8</div>
                         <input id="add-rating-slider" type="hidden" value="3.8">
                         <div class="add-rating-mushrooms" id="add-rating-mushrooms"></div>
@@ -541,7 +541,7 @@
                     <!-- 花费 + 日期（同一张卡里，左右两栏） -->
                     <div class="add-row-card">
                         <div class="add-row-item">
-                            <div class="add-input-label">花费<span class="add-input-label-hint">人均</span></div>
+                            <div class="add-input-label"><span data-i18n="add.budget">花费</span><span class="add-input-label-hint" data-i18n="add.budgetHint">人均</span></div>
                             <div class="add-budget-input">
                                 <input type="number" id="newBudget" class="add-bare-input" placeholder="0">
                                 <span class="add-budget-suffix">JPY</span>
@@ -549,11 +549,11 @@
                         </div>
                         <div class="add-row-divider" aria-hidden="true"></div>
                         <div class="add-row-item">
-                            <div class="add-input-label">日期</div>
+                            <div class="add-input-label" data-i18n="add.date">日期</div>
                             <div class="custom-date-wrap add-date-inline">
                                 <input type="date" id="newMealDate" class="custom-date-native">
                                 <div class="custom-date-display">
-                                    <span class="custom-date-text is-empty" id="newMealDateText">点击选择</span>
+                                    <span class="custom-date-text is-empty" id="newMealDateText" data-i18n="add.pickDate">点击选择</span>
                                     <i data-lucide="calendar" width="16" class="custom-date-icon"></i>
                                 </div>
                             </div>
@@ -566,22 +566,22 @@
                         <div id="preview-list" class="preview-list hidden"></div>
                         <div id="upload-placeholder" class="upload-placeholder">
                             <i data-lucide="image-plus" width="22"></i>
-                            <span>添加照片（可多选）</span>
+                            <span data-i18n="add.uploadPhoto">添加照片（可多选）</span>
                         </div>
                     </div>
 
                     <!-- 留言 -->
                     <div class="add-input-card">
-                        <div class="add-input-label">想说点什么</div>
+                        <div class="add-input-label" data-i18n="add.reviewLabel">想说点什么</div>
                         <textarea id="newReview" class="input-std add-review-textarea"
-                            placeholder="今天的味道、感受、推荐菜⋯⋯" rows="4"></textarea>
+                            placeholder="今天的味道、感受、推荐菜⋯⋯" rows="4" data-i18n-placeholder="add.reviewPlaceholder"></textarea>
                     </div>
 
                     <button id="edit-cancel-btn" class="btn-submit add-edit-cancel-btn hidden"
-                        onclick="cancelEditReviewComposer()">取消修改</button>
+                        onclick="cancelEditReviewComposer()" data-i18n="add.cancelEdit">取消修改</button>
 
                     <button id="post-btn" class="btn-submit add-post-btn" onclick="submitNew()">
-                        <span id="post-btn-text">发布记录</span>
+                        <span id="post-btn-text" data-i18n="add.publish">发布记录</span>
                         <div class="spinner"></div>
                     </button>
                 </div>
@@ -606,7 +606,7 @@
                         </button>
                     </div>
                     <button type="button" class="record-jump-btn hidden" id="record-jump-btn"
-                        onclick="jumpRecordCalendarFocus()">回到今天</button>
+                        onclick="jumpRecordCalendarFocus()" data-i18n="record.todayBtn">回到今天</button>
                     <select id="record-year-select" class="record-year-select"
                         onchange="renderRecordCalendar()"></select>
                 </div>
@@ -633,7 +633,7 @@
                 <div class="profile-header">
                     <div class="profile-header-left">
                         <button class="profile-back-btn hidden" id="profile-back-btn" onclick="backFromFriendProfile()">
-                            <img src="images/back.svg" width="10"> <span>返回</span>
+                            <img src="images/back.svg" width="10"> <span data-i18n="common.back">返回</span>
                         </button>
                         <button class="profile-menu-btn" onclick="toggleProfileMenu(event)">
                             <i data-lucide="menu" width="24"></i>
@@ -649,7 +649,7 @@
                                 <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
                                 <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                             </svg>
-                            <span class="profile-friends-label">好友</span>
+                            <span class="profile-friends-label" data-i18n="profile.friends">好友</span>
                             <span id="profile-friends-dot" class="profile-friends-dot hidden">0</span>
                         </button>
                     </div>
@@ -662,22 +662,21 @@
                             </button>
                         </div>
                         <div class="profile-menu-section">
-                            <button class="profile-menu-item is-unavailable" onclick="handleFakeLanguageSwitch()"
-                                aria-disabled="true">
+                            <button class="profile-menu-item" onclick="openLangPicker()">
                                 <span class="profile-menu-item-icon">
                                     <i data-lucide="languages" width="18"></i>
                                 </span>
                                 <span class="profile-menu-item-text">
-                                    <span class="profile-menu-item-title">切换语言</span>
+                                    <span class="profile-menu-item-title" data-i18n="menu.lang">切换语言</span>
                                 </span>
-                                <span class="profile-menu-item-badge">即将上线</span>
+                                <span class="profile-menu-item-badge" id="profile-menu-lang-current"></span>
                             </button>
                             <button id="profile-menu-install-btn" class="profile-menu-item hidden" onclick="installPwaFromMenu()">
                                 <span class="profile-menu-item-icon">
                                     <i data-lucide="download" width="18"></i>
                                 </span>
                                 <span class="profile-menu-item-text">
-                                    <span class="profile-menu-item-title">添加到桌面</span>
+                                    <span class="profile-menu-item-title" data-i18n="menu.install">添加到桌面</span>
                                 </span>
                             </button>
                             <button class="profile-menu-item danger" onclick="logoutFromMenu()">
@@ -685,10 +684,25 @@
                                     <i data-lucide="log-out" width="18"></i>
                                 </span>
                                 <span class="profile-menu-item-text">
-                                    <span class="profile-menu-item-title">退出登录</span>
+                                    <span class="profile-menu-item-title" data-i18n="menu.logout">退出登录</span>
                                 </span>
                             </button>
                         </div>
+                    </div>
+                </div>
+
+                <!-- 语言选择弹窗 -->
+                <div id="lang-picker" class="lang-picker-overlay" onclick="if(event.target===this) closeLangPicker()">
+                    <div class="lang-picker-sheet">
+                        <div class="lang-picker-title" data-i18n="lang.title">选择语言</div>
+                        <button class="lang-picker-item" data-lang="zh" onclick="pickLang('zh')">
+                            <span class="lang-picker-name">简体中文</span>
+                            <i class="lang-picker-check" data-lucide="check" width="18"></i>
+                        </button>
+                        <button class="lang-picker-item" data-lang="en" onclick="pickLang('en')">
+                            <span class="lang-picker-name">English</span>
+                            <i class="lang-picker-check" data-lucide="check" width="18"></i>
+                        </button>
                     </div>
                 </div>
 
@@ -724,11 +738,11 @@
                 <!-- Tab Switcher -->
                 <div class="profile-tabs">
                     <button class="profile-tab active" id="profile-tab-activity"
-                        onclick="switchProfileTab('activity')">动态</button>
+                        onclick="switchProfileTab('activity')" data-i18n="profile.tab.activity">动态</button>
                     <button class="profile-tab" id="profile-tab-favorites"
-                        onclick="switchProfileTab('favorites')">收藏</button>
+                        onclick="switchProfileTab('favorites')" data-i18n="profile.tab.favorites">收藏</button>
                     <button class="profile-tab" id="profile-tab-eaten"
-                        onclick="switchProfileTab('eaten')">吃过</button>
+                        onclick="switchProfileTab('eaten')" data-i18n="profile.tab.eaten">吃过</button>
                     <div class="profile-tab-indicator" id="profile-tab-indicator"></div>
                 </div>
 
@@ -736,12 +750,12 @@
                 <div id="friends-page" class="friends-page hidden">
                     <div class="friends-header">
                         <button class="friends-back-btn" onclick="closeFriendsPage()">
-                            <img src="images/back.svg" width="10"> <span>返回</span>
+                            <img src="images/back.svg" width="10"> <span data-i18n="common.back">返回</span>
                         </button>
-                        <div class="friends-title">好友</div>
+                        <div class="friends-title" data-i18n="friend.title">好友</div>
                         <button class="friends-add-btn" onclick="openFriendSearch()">
                             <img src="images/add-friend.svg" width="20">
-                            <span>添加好友</span>
+                            <span data-i18n="friend.add">添加好友</span>
                         </button>
                     </div>
                     <div class="friends-toolbar">
@@ -795,48 +809,48 @@
                 <!-- iOS 添加到桌面引导弹窗 -->
                 <div id="install-ios-guide" class="install-ios-guide hidden" onclick="if(event.target===this) closeInstallIosGuide()">
                     <div class="install-ios-guide-card">
-                        <div class="install-ios-guide-title">添加到主屏幕</div>
+                        <div class="install-ios-guide-title" data-i18n="dialog.addToHome">添加到主屏幕</div>
                         <div class="install-ios-guide-step">
                             <span class="install-ios-step-num">1</span>
-                            点击底部分享按钮 <img src="images/share-ios.svg" alt="分享" onerror="this.style.display='none'" style="height:18px;vertical-align:middle">
+                            <span data-i18n="install.iosStep1">点击底部分享按钮</span> <img src="images/share-ios.svg" alt="" onerror="this.style.display='none'" style="height:18px;vertical-align:middle">
                         </div>
                         <div class="install-ios-guide-step">
                             <span class="install-ios-step-num">2</span>
-                            选择「添加到主屏幕」
+                            <span data-i18n="install.iosStep2">选择「添加到主屏幕」</span>
                         </div>
                         <div class="install-ios-guide-step">
                             <span class="install-ios-step-num">3</span>
-                            点击「添加」即可在桌面打开
+                            <span data-i18n="install.iosStep3">点击「添加」即可在桌面打开</span>
                         </div>
-                        <button class="install-ios-guide-close" onclick="closeInstallIosGuide()">知道了</button>
+                        <button class="install-ios-guide-close" onclick="closeInstallIosGuide()" data-i18n="dialog.gotIt">知道了</button>
                     </div>
                 </div>
 
                 <!-- 内嵌浏览器（微信/QQ等）提示：登录可能失败，建议复制链接到外部浏览器打开 -->
                 <div id="inapp-browser-notice" class="inapp-browser-notice hidden">
-                    <div class="inapp-browser-notice-text">
+                    <div class="inapp-browser-notice-text" data-i18n="auth.inappNotice">
                         检测到你正在微信或其他 App 内置浏览器中打开本站，登录可能无法完成。请复制下方网址，到 Safari / Chrome 等浏览器中打开。
                     </div>
                     <div class="inapp-browser-notice-url" id="inapp-browser-notice-url"></div>
-                    <button class="inapp-browser-notice-btn" onclick="copyCurrentSiteUrl()">复制网址</button>
+                    <button class="inapp-browser-notice-btn" onclick="copyCurrentSiteUrl()" data-i18n="detail.copyUrl">复制网址</button>
                 </div>
 
                 <!-- 首屏登录入口 -->
                 <div class="login-form-container" id="auth-entry">
-                    <h1 class="login-title">登录</h1>
+                    <h1 class="login-title" data-i18n="auth.login">登录</h1>
                     <button class="login-btn-primary auth-entry-btn auth-entry-btn-google" onclick="loginWithGoogle()">
                         <img src="images/google.svg" class="google-icon-img" alt="google">
-                        谷歌账号登录
+                        <span data-i18n="auth.googleLogin">谷歌账号登录</span>
                     </button>
                     <button class="login-btn-primary auth-entry-btn auth-entry-btn-email" onclick="showEmailLogin()">
                         <i data-lucide="mail" width="18"></i>
-                        邮箱登录
+                        <span data-i18n="auth.emailLogin">邮箱登录</span>
                     </button>
                 </div>
 
                 <!-- 登录表单 -->
                 <div class="login-form-container" id="login-form" style="display:none;">
-                    <h1 class="login-title">邮箱登录</h1>
+                    <h1 class="login-title" data-i18n="auth.emailLogin">邮箱登录</h1>
 
                     <!-- 邮箱输入 -->
                     <div class="login-input-group">
@@ -852,33 +866,33 @@
 
                     <!-- 忘记密码 -->
                     <div class="forgot-password">
-                        <a href="#">忘记密码了</a>
+                        <a href="#" data-i18n="common.forgotPassword">忘记密码了</a>
                     </div>
 
                     <!-- 登录按钮 -->
-                    <button class="login-btn-primary" onclick="handleLogin()">登录</button>
+                    <button class="login-btn-primary" onclick="handleLogin()" data-i18n="auth.login">登录</button>
 
                     <!-- 分隔线 -->
                     <div class="login-divider">
-                        <span>新用户注册</span>
+                        <span data-i18n="auth.noAccount">新用户注册</span>
                     </div>
 
                     <!-- 邮箱注册按钮 -->
                     <button class="login-btn-secondary" onclick="showRegisterForm()">
                         <i data-lucide="mail" width="18"></i>
-                        邮箱注册
+                        <span data-i18n="auth.emailRegister">邮箱注册</span>
                     </button>
 
                     <!-- 谷歌注册按钮 -->
                     <button class="login-btn-secondary google-btn" onclick="loginWithGoogle()">
                         <img src="images/google.svg" class="google-icon-img" alt="google">
-                        谷歌账号注册
+                        <span data-i18n="auth.googleLogin">谷歌账号注册</span>
                     </button>
                 </div>
 
                 <!-- 注册表单 -->
                 <div class="login-form-container" id="register-form" style="display:none;">
-                    <h1 class="login-title">注册</h1>
+                    <h1 class="login-title" data-i18n="auth.register">注册</h1>
 
                     <!-- 邮箱输入 -->
                     <div class="login-input-group">
@@ -895,17 +909,17 @@
                     <!-- 确认密码 -->
                     <div class="login-input-group">
                         <i data-lucide="lock" width="20" color="#b2bec3"></i>
-                        <input type="password" id="reg-pass-confirm" placeholder="再输入一次密码">
+                        <input type="password" id="reg-pass-confirm" placeholder="再输入一次密码" data-i18n-placeholder="auth.confirmPassword">
                     </div>
 
                     <!-- 注册按钮 (放在底部) -->
                     <div class="register-btn-bottom">
-                        <button class="login-btn-primary" onclick="handleRegister()">注册</button>
+                        <button class="login-btn-primary" onclick="handleRegister()" data-i18n="auth.register">注册</button>
                     </div>
 
                     <!-- 返回登录 -->
                     <div class="register-back-link">
-                        <a href="#" onclick="showLoginForm(); return false;">已有账号？返回登录</a>
+                        <a href="#" onclick="showLoginForm(); return false;" data-i18n="auth.haveAccountBackToLogin">已有账号？返回登录</a>
                     </div>
                 </div>
             </div>
@@ -952,12 +966,12 @@
             <div class="nav-icon active" id="nav-home" onclick="switchView('home')">
                 <!-- <i data-lucide="utensils-crossed" width="24"></i> -->
                 <img src="images/home-b.svg" alt="home" width="24">
-                <span class="nav-text">主页</span>
+                <span class="nav-text" data-i18n="nav.home">主页</span>
             </div>
             <div class="nav-icon" id="nav-map" onclick="switchView('map')">
                 <!-- <i data-lucide="map" width="24"></i> -->
                 <img src="images/map-g.svg" alt="map" width="22">
-                <span class="nav-text">地图</span>
+                <span class="nav-text" data-i18n="nav.map">地图</span>
             </div>
             <div class="add-btn-circle" onclick="switchView('add')">
                 <i data-lucide="plus" width="28"></i>
@@ -965,7 +979,7 @@
             <div class="nav-icon" id="nav-fav" onclick="switchView('fav')">
                 <!-- <i data-lucide="heart" width="24"></i> -->
                 <img src="images/jilu-g.svg" alt="fav" width="22">
-                <span class="nav-text">记录</span>
+                <span class="nav-text" data-i18n="nav.record">记录</span>
             </div>
             <div class="nav-icon" id="nav-profile" onclick="switchView('profile')">
                 <!-- <i data-lucide="user" width="24"></i> -->
@@ -973,7 +987,7 @@
                     <img src="images/my-g.svg" alt="my" width="22">
                     <span id="nav-profile-friends-dot" class="nav-friends-dot hidden">0</span>
                 </div>
-                <span class="nav-text">个人</span>
+                <span class="nav-text" data-i18n="nav.profile">个人</span>
             </div>
         </nav>
 
@@ -983,7 +997,7 @@
         <div id="layer-random" class="random-panel-layer" onclick="if(event.target===this) closeRandomPanel()">
             <div class="random-card-body">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <h2 id="random-title" style="margin:0; font-size:20px;">今天吃什么？</h2>
+                    <h2 id="random-title" style="margin:0; font-size:20px;" data-i18n="random.title">今天吃什么？</h2>
                     <button onclick="closeRandomPanel()" style="background:none; border:none; padding:4px;">
                         <i data-lucide="x" color="#2d3436"></i>
                     </button>
@@ -1004,24 +1018,24 @@
                 <div class="rf-simple-wrap">
                     <label class="rf-chip">
                         <input type="checkbox" id="rf-walk-15" checked onchange="updateRandomPoolHint()">
-                        <span class="rf-chip-text">步行</span>
+                        <span class="rf-chip-text" data-i18n="random.chip.walk">步行</span>
                         <input type="number" id="rf-walk-minutes" class="rf-minute-input" value="15" min="1"
                             inputmode="numeric" oninput="updateRandomPoolHint()" onchange="updateRandomPoolHint()">
-                        <span class="rf-chip-text">分</span>
+                        <span class="rf-chip-text" data-i18n="random.chip.walkUnit">分</span>
                     </label>
                     <label class="rf-chip">
                         <input type="checkbox" id="rf-high-rating" checked onchange="updateRandomPoolHint()">
-                        <span class="rf-chip-text">3分以上</span>
+                        <span class="rf-chip-text" data-i18n="random.chip.rating">3分以上</span>
                     </label>
                     <label class="rf-chip">
                         <input type="checkbox" id="rf-only-eat" checked onchange="updateRandomPoolHint()">
-                        <span class="rf-chip-text">仅餐厅</span>
+                        <span class="rf-chip-text" data-i18n="random.chip.eatery">仅餐厅</span>
                     </label>
                 </div>
 
                 <button id="btn-do-random" class="btn-random-main" onclick="doRandomPick()">
                     🎲
-                    <span id="btn-random-text">随机抽选</span>
+                    <span id="btn-random-text" data-i18n="random.btnPick">随机抽选</span>
                 </button>
             </div>
         </div>
@@ -1118,8 +1132,8 @@
                 <!-- Additional Info Card -->
                 <div id="fd-info-card" class="fd-info-card">
                     <div class="fd-info-header">
-                        <span class="fd-info-title">追加信息</span>
-                        <span class="fd-report-closed" onclick="showDeleteStoreModal()">这家店已经停业了？</span>
+                        <span class="fd-info-title" data-i18n="detail.appendInfo">追加信息</span>
+                        <span class="fd-report-closed" onclick="showDeleteStoreModal()" data-i18n="detail.reportClosed">这家店已经停业了？</span>
                         <button class="fd-edit-close-btn" onclick="toggleInfoEditMode()">
                             <img src="images/close.svg" style="width:20px;">
                         </button>
@@ -1169,8 +1183,8 @@
                     </button>
                 </div>
                 <div class="friend-search-input-row">
-                    <input id="friend-search-input" class="friend-search-input" placeholder="搜索昵称">
-                    <button class="friend-search-btn friend-search-btn-inside" onclick="doFriendSearch()">搜索</button>
+                    <input id="friend-search-input" class="friend-search-input" placeholder="搜索昵称" data-i18n-placeholder="friend.searchPlaceholder">
+                    <button class="friend-search-btn friend-search-btn-inside" onclick="doFriendSearch()" data-i18n="common.search">搜索</button>
                 </div>
                 <div id="friend-search-results" class="friend-search-results"></div>
             </div>
@@ -1186,11 +1200,11 @@
                     <button class="activity-set-main-btn" id="activity-set-main-btn"
                         onclick="toggleCurrentImageAsMain()">
                         <img id="activity-main-pin-icon" class="activity-main-icon" src="images/main.svg" alt="main">
-                        <span id="activity-main-pin-label">设为今日主图</span>
+                        <span id="activity-main-pin-label" data-i18n="detail.setAsMain">设为今日主图</span>
                     </button>
                     <div class="activity-main-state hidden" id="activity-main-state">
                         <img class="activity-main-icon" src="images/main-f.svg" alt="main">
-                        <span>今日主图</span>
+                        <span data-i18n="detail.todayMain">今日主图</span>
                     </div>
                 </div>
                 <div id="activity-image-counter" class="activity-image-counter hidden"></div>
@@ -1224,7 +1238,7 @@
         <div id="provide-info-modal" class="modal-overlay" onclick="if(event.target===this) closeProvideInfoModal()">
             <div class="provide-info-card" onclick="event.stopPropagation()">
                 <div class="provide-info-head">
-                    <span class="provide-info-title">追加信息</span>
+                    <span class="provide-info-title" data-i18n="detail.appendInfo">追加信息</span>
                     <button class="provide-info-close" onclick="closeProvideInfoModal()" aria-label="关闭">
                         <img src="images/close.svg" width="18" alt="">
                     </button>
@@ -1232,18 +1246,18 @@
                 <div id="provide-info-list" class="provide-info-list"></div>
                 <div class="provide-info-form">
                     <div class="provide-form-section">
-                        <div class="provide-form-section-label">选择分类</div>
+                        <div class="provide-form-section-label" data-i18n="form.pickCategory">选择分类</div>
                         <div class="provide-cat-chips" id="provide-cat-chips">
                             <button type="button" class="provide-cat-chip is-selected"
-                                data-cat="自定义" onclick="selectProvideCategory('自定义')">自定义</button>
+                                data-cat="自定义" onclick="selectProvideCategory('自定义')" data-i18n="form.custom">自定义</button>
                             <button type="button" class="provide-cat-chip" data-cat="营业时间"
-                                onclick="selectProvideCategory('营业时间')">营业时间</button>
+                                onclick="selectProvideCategory('营业时间')" data-i18n="detail.openTime">营业时间</button>
                             <button type="button" class="provide-cat-chip" data-cat="位置"
-                                onclick="selectProvideCategory('位置')">位置</button>
+                                onclick="selectProvideCategory('位置')" data-i18n="detail.address">位置</button>
                             <button type="button" class="provide-cat-chip" data-cat="电话"
-                                onclick="selectProvideCategory('电话')">电话</button>
+                                onclick="selectProvideCategory('电话')" data-i18n="detail.phone">电话</button>
                             <button type="button" class="provide-cat-chip" data-cat="料理种类"
-                                onclick="selectProvideCategory('料理种类')">料理种类</button>
+                                onclick="selectProvideCategory('料理种类')" data-i18n="form.cuisineType">料理种类</button>
                         </div>
                         <select id="provide-new-cat" class="provide-hidden-select" aria-hidden="true">
                             <option value="自定义">自定义</option>
@@ -1255,34 +1269,34 @@
                     </div>
 
                     <div id="provide-mode-custom-name" class="provide-form-section hidden">
-                        <div class="provide-form-section-label">分类名称</div>
+                        <div class="provide-form-section-label" data-i18n="form.categoryName">分类名称</div>
                         <input id="provide-new-cat-custom" class="provide-input"
-                            placeholder="给这条信息起个分类名">
+                            placeholder="给这条信息起个分类名" data-i18n-placeholder="form.categoryPlaceholder">
                     </div>
 
                     <div id="provide-mode-custom" class="provide-form-section">
-                        <div class="provide-form-section-label">填写内容</div>
+                        <div class="provide-form-section-label" data-i18n="form.fillContent">填写内容</div>
                         <textarea id="provide-new-val" class="provide-input-textarea"
-                            placeholder="在这里输入要追加的信息"></textarea>
+                            placeholder="在这里输入要追加的信息" data-i18n-placeholder="form.contentPlaceholder"></textarea>
                     </div>
 
                     <div id="provide-mode-hours" class="provide-form-section hidden">
-                        <div class="provide-form-section-label">营业时间</div>
+                        <div class="provide-form-section-label" data-i18n="detail.openTime">营业时间</div>
                         <div class="provide-hours-wrap">
                             <div class="provide-hour-row">
-                                <span>开始</span>
+                                <span data-i18n="detail.start">开始</span>
                                 <input id="provide-start-time" class="provide-hour-input" type="text"
                                     placeholder="11:00">
                             </div>
                             <div class="provide-hour-row">
-                                <span>结束</span>
+                                <span data-i18n="detail.end">结束</span>
                                 <input id="provide-end-time" class="provide-hour-input" type="text"
                                     placeholder="22:00">
                             </div>
                         </div>
                     </div>
 
-                    <button class="provide-submit-btn" onclick="addAdditionalInfo()">添加这条信息</button>
+                    <button class="provide-submit-btn" onclick="addAdditionalInfo()" data-i18n="common.addThisInfo">添加这条信息</button>
 
                     <button class="provide-info-report" onclick="showDeleteStoreModal()">
                         <img src="images/trash-red.svg" width="12" alt=""> 这家店已经停业了？
@@ -1296,8 +1310,8 @@
     <!-- =========================================
          JAVASCRIPT FILES
          ========================================= -->
-    <script type="module" src="app.js?v=197-revert-ios-check"></script>
-    <script src="map.js?v=197-revert-ios-check"></script>
+    <script type="module" src="app.js?v=206-cuisine-i18n"></script>
+    <script src="map.js?v=206-cuisine-i18n"></script>
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvqupW6XZ7A61lutSD8_GlV31Xdc5ZTLw&callback=initGoogleMap&libraries=geometry">
         </script>
@@ -1325,11 +1339,11 @@
         <div class="delete-confirm-card">
             <div class="delete-confirm-title-row">
                 <img src="images/trash.svg" class="delete-confirm-icon" alt="trash">
-                <div class="delete-confirm-title">确定要删除这条信息吗？</div>
+                <div class="delete-confirm-title" data-i18n="delete.confirmTitle">确定要删除这条信息吗？</div>
             </div>
             <div class="delete-confirm-actions">
-                <button class="delete-btn-cancel" onclick="closeDeleteInfoModal()">取消</button>
-                <button class="delete-btn-confirm" onclick="confirmDeleteInfo()">确定删除</button>
+                <button class="delete-btn-cancel" onclick="closeDeleteInfoModal()" data-i18n="common.cancel">取消</button>
+                <button class="delete-btn-confirm" onclick="confirmDeleteInfo()" data-i18n="delete.btnConfirm">确定删除</button>
             </div>
         </div>
     </div>
@@ -1342,20 +1356,18 @@
                 <div class="delete-review-modal-icon-wrap">
                     <img src="images/trash-red.svg" class="delete-review-modal-icon" alt="trash">
                 </div>
-                <div class="delete-review-modal-title">删除店铺</div>
-                <div class="delete-review-modal-subtitle">这家店铺不存在了？请选择操作</div>
-                <div class="delete-review-modal-desc">“仅标记歇业”会隐藏到列表，但仍可搜索查看；
-                    <br>
-                    “删除店铺”会彻底清理所有相关数据。
+                <div class="delete-review-modal-title" data-i18n="delete.confirmStoreTitle">删除店铺</div>
+                <div class="delete-review-modal-subtitle" data-i18n="delete.storeSubtitle">这家店铺不存在了？请选择操作</div>
+                <div class="delete-review-modal-desc" data-i18n="delete.storeDesc">"仅标记歇业"会隐藏到列表，但仍可搜索查看；"删除店铺"会彻底清理所有相关数据。
                 </div>
             </div>
             <div class="delete-review-modal-actions">
                 <button class="delete-review-action delete-review-action-danger"
-                    onclick="confirmDeleteStore('delete')">删除店铺</button>
+                    onclick="confirmDeleteStore('delete')" data-i18n="detail.deleteStore">删除店铺</button>
                 <button class="delete-review-action delete-review-action-dark"
-                    onclick="confirmDeleteStore('close')">仅标记歇业</button>
+                    onclick="confirmDeleteStore('close')" data-i18n="record.markPermClosed">仅标记歇业</button>
                 <button class="delete-review-action delete-review-action-cancel"
-                    onclick="closeDeleteStoreModal()">取消</button>
+                    onclick="closeDeleteStoreModal()" data-i18n="common.cancel">取消</button>
             </div>
         </div>
     </div>
@@ -1365,11 +1377,11 @@
         <div class="delete-confirm-card">
             <div class="delete-confirm-title-row">
                 <img src="images/bookmark.svg" class="delete-confirm-icon" alt="bookmark">
-                <div class="delete-confirm-title">添加“想吃”会移除“好吃/难吃”评价，确定继续吗？</div>
+                <div class="delete-confirm-title" data-i18n="delete.favConflict">添加"想吃"会移除"好吃/难吃"评价，确定继续吗？</div>
             </div>
             <div class="delete-confirm-actions">
-                <button class="delete-btn-cancel" onclick="cancelFavConflictModal()">取消</button>
-                <button class="delete-btn-confirm" onclick="confirmFavConflictModal()">确定</button>
+                <button class="delete-btn-cancel" onclick="cancelFavConflictModal()" data-i18n="common.cancel">取消</button>
+                <button class="delete-btn-confirm" onclick="confirmFavConflictModal()" data-i18n="dialog.ok">确定</button>
             </div>
         </div>
     </div>
@@ -1380,11 +1392,11 @@
         <div class="delete-confirm-card">
             <div class="delete-confirm-title-row">
                 <img src="images/trash.svg" class="delete-confirm-icon" alt="trash">
-                <div class="delete-confirm-title">确定要删除这个好友吗？</div>
+                <div class="delete-confirm-title" data-i18n="delete.confirmFriend">确定要删除这个好友吗？</div>
             </div>
             <div class="delete-confirm-actions">
-                <button class="delete-btn-cancel" onclick="closeDeleteFriendModal()">取消</button>
-                <button class="delete-btn-confirm" onclick="confirmDeleteFriend()">确定删除</button>
+                <button class="delete-btn-cancel" onclick="closeDeleteFriendModal()" data-i18n="common.cancel">取消</button>
+                <button class="delete-btn-confirm" onclick="confirmDeleteFriend()" data-i18n="delete.btnConfirm">确定删除</button>
             </div>
         </div>
     </div>
@@ -1397,14 +1409,14 @@
                 <div class="delete-review-modal-icon-wrap">
                     <img src="images/trash-red.svg" class="delete-review-modal-icon" alt="trash">
                 </div>
-                <div class="delete-review-modal-title">删除评论</div>
-                <div class="delete-review-modal-subtitle">确定要删除这条评论吗？</div>
+                <div class="delete-review-modal-title" data-i18n="delete.confirmReviewTitle">删除评论</div>
+                <div class="delete-review-modal-subtitle" data-i18n="delete.confirmReviewDesc">确定要删除这条评论吗？</div>
             </div>
             <div class="delete-review-modal-actions">
                 <button class="delete-review-action delete-review-action-danger"
-                    onclick="confirmDeleteReviewRecord('full')">删除</button>
+                    onclick="confirmDeleteReviewRecord('full')" data-i18n="common.delete">删除</button>
                 <button class="delete-review-action delete-review-action-cancel"
-                    onclick="closeDeleteReviewRecordModal()">取消</button>
+                    onclick="closeDeleteReviewRecordModal()" data-i18n="common.cancel">取消</button>
             </div>
         </div>
     </div>
@@ -1414,11 +1426,11 @@
         <div class="delete-confirm-card" onclick="event.stopPropagation()">
             <div class="delete-confirm-title-row">
                 <i data-lucide="alert-circle" class="delete-confirm-icon"></i>
-                <div id="app-notice-title" class="delete-confirm-title">提示</div>
+                <div id="app-notice-title" class="delete-confirm-title" data-i18n="dialog.tip">提示</div>
             </div>
             <div id="app-notice-message" class="delete-review-modal-desc"></div>
             <div class="delete-confirm-actions">
-                <button class="delete-btn-confirm app-notice-btn" onclick="closeAppNoticeModal()">知道了</button>
+                <button class="delete-btn-confirm app-notice-btn" onclick="closeAppNoticeModal()" data-i18n="dialog.gotIt">知道了</button>
             </div>
         </div>
     </div>
@@ -1426,7 +1438,7 @@
     <!-- Delete Request Submitted Toast -->
     <div id="toast-delete-submitted" class="toast-overlay" style="display:none;">
         <div class="toast-card">
-            <div style="font-size:16px; font-weight:bold; margin-bottom:4px;">已提交删除申请</div>
+            <div style="font-size:16px; font-weight:bold; margin-bottom:4px;" data-i18n="delete.requested">已提交删除申请</div>
             <div
                 style="background:#2d3436; color:white; padding:4px 12px; border-radius:12px; font-size:12px; display:inline-block;">
                 完成
@@ -1442,20 +1454,20 @@
 
     <div id="modal-post-success" class="modal-overlay" onclick="if(event.target===this) closePostSuccessModal()">
         <div class="post-success-card" onclick="event.stopPropagation()">
-            <div class="post-success-title">记录已发布！</div>
+            <div class="post-success-title" data-i18n="add.publishSuccess">记录已发布！</div>
             <div id="post-success-score" class="post-success-score">3.8</div>
             <div id="post-success-stars" class="post-success-stars"></div>
             <div class="post-success-store-row">
-                <span id="post-success-new-badge" class="post-success-new-badge hidden">新标记了一个餐厅</span>
+                <span id="post-success-new-badge" class="post-success-new-badge hidden" data-i18n="detail.newStore">新标记了一个餐厅</span>
                 <div class="post-success-store-main">
-                    <span id="post-success-store-name" class="post-success-store-name">店铺名称</span>
+                    <span id="post-success-store-name" class="post-success-store-name"></span>
                     <img src="images/mogu.svg" class="post-success-store-icon" alt="mogu">
-                    <span id="post-success-visit-count" class="post-success-visit-count">（吃过1次）</span>
+                    <span id="post-success-visit-count" class="post-success-visit-count"></span>
                 </div>
             </div>
             <div class="post-success-actions">
-                <button class="post-success-btn secondary" onclick="openPostedRecordView()">查看记录</button>
-                <button class="post-success-btn primary" onclick="closePostSuccessModal()">确认</button>
+                <button class="post-success-btn secondary" onclick="openPostedRecordView()" data-i18n="detail.viewLog">查看记录</button>
+                <button class="post-success-btn primary" onclick="closePostSuccessModal()" data-i18n="add.confirm">确认</button>
             </div>
         </div>
     </div>
@@ -1463,11 +1475,11 @@
     <!-- Edit Username Modal -->
     <div id="modal-edit-username" class="modal-overlay" onclick="if(event.target===this) closeEditUsernameModal()">
         <div class="edit-name-card" onclick="event.stopPropagation()">
-            <div class="edit-name-title">修改用户名</div>
-            <input id="edit-username-input" class="edit-name-input" maxlength="28" placeholder="请输入新的用户名">
+            <div class="edit-name-title" data-i18n="dialog.editName">修改用户名</div>
+            <input id="edit-username-input" class="edit-name-input" maxlength="28" placeholder="请输入新的用户名" data-i18n-placeholder="profile.editName">
             <div class="edit-name-actions">
-                <button class="edit-name-btn cancel" onclick="closeEditUsernameModal()">取消</button>
-                <button class="edit-name-btn save" onclick="confirmEditUsername()">保存</button>
+                <button class="edit-name-btn cancel" onclick="closeEditUsernameModal()" data-i18n="common.cancel">取消</button>
+                <button class="edit-name-btn save" onclick="confirmEditUsername()" data-i18n="common.save">保存</button>
             </div>
         </div>
     </div>
