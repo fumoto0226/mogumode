@@ -24,7 +24,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "http
    i18n 多语言系统
    ========================================= */
 const LANG_KEY = 'mogumode_lang';
-const SUPPORTED_LANGS = ['zh', 'en'];
+const SUPPORTED_LANGS = ['zh', 'en', 'ja'];
 
 const I18N_DICT = {
     zh: {
@@ -352,7 +352,7 @@ const I18N_DICT = {
         'home.sort.rating': 'Rating',
         'home.sort.price': 'Price',
         'home.empty.noMatch': 'No matching stores',
-        'home.empty.noNearby': 'No stores within 50 km yet',
+        'home.empty.noNearby': 'No stores within 50 km',
         'home.empty.loading': 'Loading stores…',
         'profile.tab.activity': 'Feed',
         'profile.tab.favorites': 'Saved',
@@ -362,7 +362,7 @@ const I18N_DICT = {
         'profile.favs.dislike': 'Disliked',
         'profile.empty.activity': 'No activity yet',
         'profile.empty.favs': 'Nothing here yet',
-        'profile.empty.eaten': "Haven't eaten anywhere yet",
+        'profile.empty.eaten': 'No places visited yet',
         'profile.eaten.total': 'Eaten at <strong>{n}</strong> places',
         'profile.friends': 'Friends',
         'profile.loginPrompt': 'Please sign in',
@@ -377,20 +377,20 @@ const I18N_DICT = {
         'map.chip.like': 'Liked',
         'map.chip.dislike': 'Disliked',
         'random.title': 'What to eat?',
-        'random.resultTitle': 'Try this!',
-        'random.rerollTitle': 'Full cycle done — restarting',
-        'random.btnPick': 'Pick one',
+        'random.resultTitle': "Today's pick!",
+        'random.rerollTitle': 'All shown — reshuffling',
+        'random.btnPick': 'Pick',
         'random.btnReroll': 'Pick again',
         'random.chip.walk': 'Walk',
         'random.chip.walkUnit': 'min',
         'random.chip.rating': '3+ stars',
-        'random.chip.eatery': 'Restaurant only',
-        'random.poolAvailable': '<span class="random-pool-count">{n}</span> places available',
-        'random.poolExcluded': 'Skipped {n} already picked (reopen to reset)',
-        'random.poolEmpty.walk': 'No stores within {n} min walk — try loosening filters',
-        'random.poolEmpty.any': 'No matching stores nearby — try loosening filters',
+        'random.chip.eatery': 'Restaurants',
+        'random.poolAvailable': 'Picking from <span class="random-pool-count">{n}</span> places',
+        'random.poolExcluded': 'Skipping {n} already shown (reopen to reset)',
+        'random.poolEmpty.walk': 'No stores within {n} min walk — loosen filters?',
+        'random.poolEmpty.any': 'No matching stores nearby — loosen filters?',
         'random.picking': 'Picking…',
-        'detail.recordBtn': 'Log',
+        'detail.recordBtn': 'Visit',
         'detail.reviewsTab': 'Reviews',
         'detail.albumTab': 'Album',
         'detail.userReviews': "{name}'s reviews",
@@ -427,22 +427,22 @@ const I18N_DICT = {
         'lang.en': 'English',
         'add.authPrompt': 'Please sign in to post',
         'add.goLogin': 'Sign in',
-        'add.pickTitle': 'Which place today?',
-        'add.searchInput': 'Type store name',
+        'add.pickTitle': "Where'd you eat?",
+        'add.searchInput': 'Enter store name',
         'add.searchNearby': 'Search nearby',
         'add.viewOnMap': 'View on map',
         'add.viewStore': 'View store',
         'add.searchInArea': 'Search this area',
         'add.confirm': 'Confirm',
-        'add.editStore': 'Edit',
+        'add.editStore': 'Change',
         'add.ratingHint': 'Slide mushrooms to rate',
         'add.budget': 'Cost',
         'add.budgetHint': 'per person',
         'add.date': 'Date',
         'add.pickDate': 'Pick date',
-        'add.uploadPhoto': 'Add photos (multi)',
-        'add.reviewLabel': "Tell us about it",
-        'add.reviewPlaceholder': 'Taste, vibe, must-orders…',
+        'add.uploadPhoto': 'Add photos',
+        'add.reviewLabel': 'How was it?',
+        'add.reviewPlaceholder': 'Taste, vibe, what to order…',
         'add.cancelEdit': 'Cancel edit',
         'add.publish': 'Post',
         'add.locked': 'Locked',
@@ -487,27 +487,27 @@ const I18N_DICT = {
         'auth.login': 'Sign in',
         'auth.register': 'Sign up',
         'auth.haveAccount': 'Have an account?',
-        'auth.noAccount': 'No account?',
+        'auth.noAccount': 'New here?',
         'auth.confirmPassword': 'Confirm password',
         'auth.haveAccountBackToLogin': 'Have an account? Sign in',
-        'auth.inappNotice': "You're opening this site inside an in-app browser (WeChat/QQ etc). Sign-in may fail — please copy the URL below and open it in Safari or Chrome.",
+        'auth.inappNotice': "You're using an in-app browser (WeChat/QQ etc). Sign-in may fail — copy the URL below and open it in Safari or Chrome.",
         'install.iosStep1': 'Tap the share button at the bottom',
         'install.iosStep2': 'Choose "Add to Home Screen"',
         'install.iosStep3': 'Tap "Add" to install on your home screen',
         'delete.confirmTitle': 'Delete this entry?',
         'delete.confirmStoreTitle': 'Delete store',
-        'delete.confirmStoreDesc': '"Delete store" will permanently remove all related data.',
+        'delete.confirmStoreDesc': '"Delete store" will permanently erase all related data.',
         'delete.confirmFriend': 'Remove this friend?',
         'delete.confirmReviewTitle': 'Delete review',
         'delete.confirmReviewDesc': 'Are you sure you want to delete this review?',
         'delete.requested': 'Deletion requested',
         'delete.btnConfirm': 'Delete',
-        'delete.storeSubtitle': 'This store no longer exists? Choose an action',
-        'delete.storeDesc': '"Mark closed only" hides it from the list but keeps it searchable. "Delete store" wipes all related data.',
-        'delete.favConflict': 'Adding to Wishlist will remove any Liked/Disliked rating. Continue?',
+        'delete.storeSubtitle': "Store gone? Pick an action",
+        'delete.storeDesc': '"Mark closed only" hides it from lists but keeps it searchable. "Delete store" erases everything.',
+        'delete.favConflict': 'Adding to Wishlist will clear your Liked/Disliked rating. Continue?',
         'record.title': 'Log',
         'record.empty': 'No meals logged this day',
-        'common.eatWhat': 'What to eat?',
+        'common.eatWhat': 'Roll',
         'common.permanentlyClosed': 'Permanently closed',
         'map.searchInArea': 'Search this area',
         'map.chip.highRated': 'Top',
@@ -566,9 +566,9 @@ const I18N_DICT = {
         'notice.loginRequired': 'Please sign in',
         'notice.fileImageOnly': 'Only image files are allowed',
         'notice.imageMax2mb': 'Image must be under 2 MB',
-        'notice.publishFailed': 'Post failed, try again',
-        'notice.tooFrequent': 'Too fast — please wait a moment',
-        'notice.deleteFailed': 'Delete failed, try again',
+        'notice.publishFailed': 'Failed to post — try again',
+        'notice.tooFrequent': 'Slow down — please wait',
+        'notice.deleteFailed': 'Failed to delete — try again',
         'notice.passwordMismatch': 'Passwords don’t match',
         'notice.passwordTooShort': 'Password must be 6+ characters',
         'notice.locationDenied': 'Location permission denied — please allow it in browser settings',
@@ -605,6 +605,307 @@ const I18N_DICT = {
         'common.filter': 'Filter',
         'common.forgotPassword': 'Forgot password?',
         'common.addThisInfo': 'Add this info',
+    },
+    ja: {
+        // 导航
+        'nav.home': 'ホーム',
+        'nav.map': '地図',
+        'nav.record': '記録',
+        'nav.profile': 'マイ',
+        // 通用
+        'common.search': '検索',
+        'common.cancel': 'キャンセル',
+        'common.confirm': 'OK',
+        'common.save': '保存',
+        'common.delete': '削除',
+        'common.edit': '編集',
+        'common.back': '戻る',
+        'common.close': '閉じる',
+        'common.loading': '読み込み中…',
+        'common.ok': 'OK',
+        'common.eatWhat': 'おまかせ',
+        'common.permanentlyClosed': '閉店',
+        'common.unnamed': '店名なし',
+        'common.unrecorded': '未登録',
+        'common.addressUnknown': '住所未登録',
+        'common.reachedEnd': '最後まで表示しました',
+        'common.viewRoute': '経路を見る',
+        'common.topStore': 'ベスト店',
+        'common.add': '追加',
+        'common.filter': '絞り込み',
+        'common.forgotPassword': 'パスワードをお忘れ？',
+        'common.addThisInfo': 'この情報を追加',
+        // 首页
+        'home.searchPlaceholder': '店名・ジャンルで検索',
+        'home.sort.distance': '近い',
+        'home.sort.newest': '新着',
+        'home.sort.rating': '評価',
+        'home.sort.price': '価格',
+        'home.empty.noMatch': '該当する店舗なし',
+        'home.empty.noNearby': '近くに登録された店舗がまだありません',
+        'home.empty.loading': '読み込み中…',
+        // 个人页
+        'profile.tab.activity': 'フィード',
+        'profile.tab.favorites': 'お気に入り',
+        'profile.tab.eaten': '食べた',
+        'profile.favs.want': '行きたい',
+        'profile.favs.like': '好き',
+        'profile.favs.dislike': '微妙',
+        'profile.empty.activity': 'まだ投稿がありません',
+        'profile.empty.favs': '何もありません',
+        'profile.empty.eaten': '訪れた店はまだありません',
+        'profile.eaten.total': '訪問した店: <strong>{n}</strong> 軒',
+        'profile.friends': 'フレンド',
+        'profile.loginPrompt': 'ログインしてください',
+        'profile.editName': 'ユーザー名を編集',
+        'profile.strangerGate': 'フレンド追加でアクティビティが見られます',
+        // 菜单
+        'menu.lang': '言語',
+        'menu.install': 'ホーム画面に追加',
+        'menu.logout': 'ログアウト',
+        // 地图
+        'map.searchPlaceholder': '近くの店を検索',
+        'map.searchInArea': 'このエリアで検索',
+        'map.chip.all': '全て',
+        'map.chip.mine': '行った',
+        'map.chip.friends': 'フレンド',
+        'map.chip.want': '行きたい',
+        'map.chip.like': '好き',
+        'map.chip.dislike': '微妙',
+        'map.chip.highRated': '高評価',
+        'map.chip.eat': '食事',
+        'map.chip.drink': 'ドリンク',
+        'map.chip.other': 'その他',
+        'map.chip.fav': '保存',
+        'map.chip.likeFood': '好き',
+        'map.chip.dislikeFood': '微妙',
+        // 随机抽选
+        'random.title': '今日のごはん',
+        'random.resultTitle': 'これに決定！',
+        'random.rerollTitle': '一巡完了、再スタート',
+        'random.btnPick': 'おまかせ',
+        'random.btnReroll': 'もう一回',
+        'random.picking': '抽選中...',
+        'random.chip.walk': '徒歩',
+        'random.chip.walkUnit': '分',
+        'random.chip.rating': '3点以上',
+        'random.chip.eatery': '飲食店のみ',
+        'random.poolAvailable': '<span class="random-pool-count">{n}</span> 軒から選択',
+        'random.poolExcluded': '今回の {n} 軒を除外（再起動でリセット）',
+        'random.poolEmpty.walk': '徒歩 {n} 分圏内に該当店舗なし。条件を緩めてみては？',
+        'random.poolEmpty.any': '近くに該当店舗なし。条件を緩めてみては？',
+        // 卡片
+        'card.eatenTimes': '{n}回食べた',
+        // 语言
+        'lang.title': '言語を選択',
+        'lang.zh': '简体中文',
+        'lang.en': 'English',
+        // 添加店铺/评价撰写
+        'add.authPrompt': 'ログインして投稿してください',
+        'add.goLogin': 'ログイン',
+        'add.pickTitle': '今日のお店は？',
+        'add.searchInput': '店名を入力',
+        'add.searchNearby': '近くの店を検索',
+        'add.viewOnMap': '地図で見る',
+        'add.viewStore': '店舗を見る',
+        'add.searchInArea': 'このエリアで検索',
+        'add.confirm': '確認',
+        'add.editStore': '変更',
+        'add.ratingHint': 'きのこをスライドで評価',
+        'add.budget': '支払い',
+        'add.budgetHint': '一人当たり',
+        'add.date': '日付',
+        'add.pickDate': 'タップして選択',
+        'add.uploadPhoto': '写真を追加',
+        'add.reviewLabel': '感想を一言',
+        'add.reviewPlaceholder': '味、雰囲気、おすすめメニュー…',
+        'add.cancelEdit': '編集をキャンセル',
+        'add.publish': '投稿',
+        'add.publishSuccess': '投稿完了！',
+        'add.locked': 'ロック',
+        'add.republish': '再投稿',
+        'add.loadingNearby': '近くの店を読み込み中...',
+        'add.viewNearbyOnMap': '近くの店を地図で見る',
+        // 偏好
+        'pref.want': '行きたい',
+        'pref.like': '好き',
+        'pref.dislike': '微妙',
+        // 登录
+        'auth.googleLogin': 'Googleでログイン',
+        'auth.emailLogin': 'メールでログイン',
+        'auth.emailRegister': 'メールで登録',
+        'auth.email': 'メール',
+        'auth.password': 'パスワード',
+        'auth.login': 'ログイン',
+        'auth.register': '登録',
+        'auth.haveAccount': 'アカウントあり？',
+        'auth.noAccount': 'はじめての方は',
+        'auth.confirmPassword': 'パスワード（確認）',
+        'auth.haveAccountBackToLogin': 'アカウントをお持ちの方はログイン',
+        'auth.inappNotice': 'アプリ内ブラウザではログインできない場合があります。URLをコピーしてSafariやChromeで開いてください。',
+        // 记录页
+        'record.title': '記録',
+        'record.empty': 'この日の記録はありません',
+        'record.todayBtn': '今日へ',
+        'record.markPermClosed': '閉店としてマーク',
+        // 时间
+        'week.sun': '日', 'week.mon': '月', 'week.tue': '火',
+        'week.wed': '水', 'week.thu': '木', 'week.fri': '金', 'week.sat': '土',
+        'time.yesterday': '昨日',
+        'time.today': '今日',
+        'time.dayBefore': '一昨日',
+        'time.minsAgo': '{n}分前',
+        'time.hoursAgo': '{n}時間前',
+        'time.daysAgo': '{n}日前',
+        'time.weeksAgo': '{n}週間前',
+        'time.monthsAgo': '{n}ヶ月前',
+        'time.yearsAgo': '{n}年前',
+        'time.someoneAteHere': '{rel}に来店',
+        'time.fresh': 'たった今来店',
+        'time.editedPrefix': '編集 ',
+        'date.full': '{y}年{m}月{d}日',
+        'date.monthDay': '{m}月{d}日',
+        // 用户提示
+        'notice.loginRequired': 'ログインしてください',
+        'notice.fileImageOnly': '画像ファイルのみアップロード可',
+        'notice.imageMax2mb': '画像は2MB以下に',
+        'notice.publishFailed': '投稿に失敗しました',
+        'notice.tooFrequent': '少しお待ちください',
+        'notice.deleteFailed': '削除に失敗しました',
+        'notice.passwordMismatch': 'パスワードが一致しません',
+        'notice.passwordTooShort': 'パスワードは6文字以上',
+        'notice.locationDenied': '位置情報が拒否されました。ブラウザ設定で許可してください',
+        'notice.locationTimeout': '位置情報取得タイムアウト、再試行してください',
+        'notice.locationUnsupported': 'このブラウザは位置情報未対応',
+        'notice.locationLocating': '位置情報取得中...',
+        'notice.locationUnavailable': '位置情報を取得できません。位置情報サービスを確認してください',
+        'notice.friendAdded': 'フレンドを追加しました',
+        'notice.friendRequestSent': 'フレンドリクエストを送信しました',
+        'notice.usernameMax28': 'ユーザー名は28文字まで',
+        'notice.editOwnReviewOnly': '自分のレビューのみ編集可',
+        'notice.deleteOwnReviewOnly': '自分のレビューのみ削除可',
+        'notice.storeNotFound': '店舗が見つかりません',
+        'notice.storeDeleted': '店舗を削除しました',
+        'notice.storeClosed': '永久閉店としてマーク',
+        'notice.republished': '再投稿しました',
+        'notice.deletedFull': '全ての記録を削除',
+        'notice.clearedMedia': '写真とレビューをクリア',
+        'notice.installAdded': 'ホーム画面に追加',
+        // 营业状态
+        'status.closed': '永久閉店',
+        'status.closedToday': '本日休業',
+        'status.suspended': '休業中',
+        'status.permanentlyClosed': '閉店',
+        // 详情页
+        'detail.openTime': '営業時間',
+        'detail.openStatus': '営業状態',
+        'detail.address': '住所',
+        'detail.phone': '電話',
+        'detail.useLocation': 'この位置を使用',
+        'detail.openInGoogle': 'Googleマップで見る',
+        'detail.copyUrl': 'URLをコピー',
+        'detail.deleteStore': '店舗を削除',
+        'detail.deleteReview': 'レビューを削除',
+        'detail.provideInfo': '情報を追加',
+        'detail.provideInfoCta': '情報を追加',
+        'detail.appendInfo': '追加情報',
+        'detail.myReview': 'マイレビュー',
+        'detail.friendsReviews': 'フレンド',
+        'detail.avgRating': '平均評価',
+        'detail.noRating': '評価なし',
+        'detail.viewStore': '店舗を見る',
+        'detail.viewLog': '記録を見る',
+        'detail.todayMain': 'メイン画像',
+        'detail.setAsMain': 'メインに設定',
+        'detail.start': '開始',
+        'detail.end': '終了',
+        'detail.reload': '再読み込み',
+        'detail.reset': 'リセット',
+        'detail.minutes': '{n}分',
+        'detail.myReviewCount': 'マイレビュー({n})',
+        'detail.eatAgain': 'リピート',
+        'detail.noFriendReview': 'フレンドのレビューなし',
+        'detail.tabReviews': 'レビュー({n})',
+        'detail.tabAlbum': 'アルバム({n})',
+        'detail.topEater': 'ベストファン',
+        'detail.eatenN': '（{n}回）',
+        'detail.budget': '支払い',
+        'detail.recordBtn': '記録',
+        'detail.reviewsTab': 'レビュー',
+        'detail.albumTab': 'アルバム',
+        'detail.userReviews': '{name}のレビュー',
+        'detail.userReviewsAnon': 'ユーザーレビュー',
+        'detail.emptyReviews': 'レビューなし',
+        'detail.noMyReview': 'まだこの店をレビューしていません',
+        'detail.noPhotos': '写真なし',
+        'detail.reportClosed': 'この店は閉店しましたか？',
+        // 弹窗
+        'dialog.tip': 'お知らせ',
+        'dialog.gotIt': 'OK',
+        'dialog.ok': 'OK',
+        'dialog.confirmDelete': '削除する',
+        'dialog.addToHome': 'ホーム画面に追加',
+        'dialog.editName': 'ユーザー名を編集',
+        // 表单
+        'form.usernamePlaceholder': 'ユーザー名',
+        'form.categoryName': 'カテゴリー名',
+        'form.categoryPlaceholder': 'カテゴリー名を入力',
+        'form.fillContent': '内容',
+        'form.contentPlaceholder': '追加する情報を入力',
+        'form.pickCategory': 'カテゴリーを選択',
+        'form.custom': 'カスタム',
+        'form.customLocation': 'カスタム位置',
+        'form.cuisineType': 'ジャンル',
+        // 单位
+        'unit.jpy': 'JPY',
+        // iOS 安装
+        'install.iosStep1': '下部の共有ボタンをタップ',
+        'install.iosStep2': '「ホーム画面に追加」を選択',
+        'install.iosStep3': '「追加」をタップしてホームに設置',
+        // 删除确认
+        'delete.confirmTitle': 'この情報を削除しますか？',
+        'delete.confirmStoreTitle': '店舗を削除',
+        'delete.confirmStoreDesc': '「削除」を実行すると全データが消去されます。',
+        'delete.confirmFriend': 'このフレンドを削除しますか？',
+        'delete.confirmReviewTitle': 'レビューを削除',
+        'delete.confirmReviewDesc': 'このレビューを削除しますか？',
+        'delete.requested': '削除リクエストを送信しました',
+        'delete.btnConfirm': '削除',
+        'delete.storeSubtitle': '店舗がなくなった？操作を選択',
+        'delete.storeDesc': '「閉店としてマーク」はリストから非表示にしますが検索は可能。「店舗を削除」は全データを消去します。',
+        'delete.favConflict': '「行きたい」を追加すると「好き／微妙」が解除されます。続けますか？',
+        // 位置
+        'loc.titleConfirm': 'ここにいますか？',
+        'loc.reading': '現在地：取得中...',
+        'loc.searchAddress': '住所・店名を検索',
+        'loc.currentPrefix': '現在地：',
+        'loc.currentLabel': '現在地',
+        'loc.toggleClose': '地図を閉じる',
+        // 营业时间
+        'hours.everyday': '毎日',
+        'hours.weekdays': '平日',
+        'hours.weekends': '週末',
+        // 评论展开
+        'reviews.expandMore': 'もっと見る',
+        'reviews.collapse': '閉じる',
+        'reviews.showAll': '全て表示',
+        'reviews.noMore': '他にレビューはありません',
+        'reviews.empty': 'レビューなし',
+        'reviews.pullMore': '下に引いて更新',
+        'reviews.viewAll': '全て見る({n})',
+        // 好友
+        'friend.add': 'フレンド追加',
+        'friend.title': 'フレンド',
+        'friend.remove': 'フレンド削除',
+        'friend.viewProfile': 'プロフィールを見る',
+        'friend.ignore': '無視',
+        'friend.approve': '承認',
+        'friend.sendRequest': 'リクエスト送信',
+        'friend.requestSentBadge': '送信済み',
+        'friend.badge': 'フレンド',
+        'friend.alreadyFriend': 'フレンド済み',
+        'friend.acceptRequest': 'リクエスト承認',
+        'friend.searchPlaceholder': 'ニックネームで検索',
     }
 };
 
@@ -613,9 +914,11 @@ let currentLang = (function() {
         const saved = localStorage.getItem(LANG_KEY);
         if (saved && SUPPORTED_LANGS.includes(saved)) return saved;
     } catch (_) {}
-    // 默认根据浏览器语言：英文以外都用中文
-    const nav = (navigator.language || 'zh').toLowerCase();
-    return nav.startsWith('en') ? 'en' : 'zh';
+    // 默认根据浏览器语言：ja → 日文，zh → 中文，其他全部 → 英文（国际化兜底）
+    const nav = (navigator.language || 'en').toLowerCase();
+    if (nav.startsWith('ja')) return 'ja';
+    if (nav.startsWith('zh')) return 'zh';
+    return 'en';
 })();
 
 window.t = function t(key, params) {
@@ -651,8 +954,10 @@ window.setLang = (lang) => {
     if (!SUPPORTED_LANGS.includes(lang)) return;
     currentLang = lang;
     try { localStorage.setItem(LANG_KEY, lang); } catch (_) {}
-    document.documentElement.setAttribute('lang', lang === 'zh' ? 'zh-CN' : 'en');
+    const langAttr = lang === 'zh' ? 'zh-CN' : (lang === 'ja' ? 'ja' : 'en');
+    document.documentElement.setAttribute('lang', langAttr);
     document.body?.classList.toggle('lang-en', lang === 'en');
+    document.body?.classList.toggle('lang-ja', lang === 'ja');
     applyTranslations();
     // 刷新动态生成的页面内容
     try {
@@ -674,8 +979,10 @@ window.getLang = () => currentLang;
 
 // 首次加载时立即生效
 document.addEventListener('DOMContentLoaded', () => {
-    document.documentElement.setAttribute('lang', currentLang === 'zh' ? 'zh-CN' : 'en');
+    const langAttr = currentLang === 'zh' ? 'zh-CN' : (currentLang === 'ja' ? 'ja' : 'en');
+    document.documentElement.setAttribute('lang', langAttr);
     document.body.classList.toggle('lang-en', currentLang === 'en');
+    document.body.classList.toggle('lang-ja', currentLang === 'ja');
     applyTranslations();
 });
 
@@ -704,7 +1011,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v39";
+const APP_BUILD_VERSION = "v40";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 const LOCATION_CACHE_STORAGE_KEY = "mogumode:last-origin-v2";
 
@@ -1778,18 +2085,22 @@ window.closeLangPicker = () => {
     const layer = document.getElementById('lang-picker');
     if (layer) layer.classList.remove('open');
 };
+function langBadgeText(lang) {
+    if (lang === 'en') return 'EN';
+    if (lang === 'ja') return '日';
+    return '中';
+}
 window.pickLang = (lang) => {
     window.setLang(lang);
-    // 更新菜单里那个 badge
     const badge = document.getElementById('profile-menu-lang-current');
-    if (badge) badge.textContent = lang === 'en' ? 'EN' : '中';
+    if (badge) badge.textContent = langBadgeText(lang);
     window.closeLangPicker();
 };
 
 // 启动时把"当前语言"显示在菜单 badge 上
 document.addEventListener('DOMContentLoaded', () => {
     const badge = document.getElementById('profile-menu-lang-current');
-    if (badge) badge.textContent = window.getLang() === 'en' ? 'EN' : '中';
+    if (badge) badge.textContent = langBadgeText(window.getLang());
 });
 
 window.logoutFromMenu = () => {
@@ -2571,7 +2882,7 @@ const CUISINE_TYPE_RULES = [
     }
 ];
 
-// 料理种类中→英对照
+// 料理种类多语言对照
 const CUISINE_LABEL_EN = {
     '中餐': 'Chinese',
     '日料': 'Japanese',
@@ -2600,11 +2911,39 @@ const CUISINE_LABEL_EN = {
     '冰淇淋': 'Ice cream',
     '酒吧': 'Bar'
 };
+const CUISINE_LABEL_JA = {
+    '中餐': '中華料理',
+    '日料': '和食',
+    '寿司': '寿司',
+    '拉面': 'ラーメン',
+    '泰国料理': 'タイ料理',
+    '韩料': '韓国料理',
+    '意大利菜': 'イタリアン',
+    '法餐': 'フレンチ',
+    '美式': 'アメリカン',
+    '印度料理': 'インド料理',
+    '墨西哥菜': 'メキシカン',
+    '越南菜': 'ベトナム料理',
+    '西班牙菜': 'スペイン料理',
+    '土耳其菜': 'トルコ料理',
+    '地中海菜': '地中海料理',
+    '披萨': 'ピザ',
+    '汉堡': 'ハンバーガー',
+    '快餐': 'ファストフード',
+    'BBQ': 'BBQ',
+    '牛排': 'ステーキ',
+    '海鲜': 'シーフード',
+    '咖啡': 'カフェ',
+    '面包房': 'パン屋',
+    '蛋糕': 'ケーキ',
+    '冰淇淋': 'アイス',
+    '酒吧': 'バー'
+};
 function translateCuisineLabel(label) {
     if (!label) return label;
-    if (window.getLang && window.getLang() === 'en') {
-        return CUISINE_LABEL_EN[label] || label;
-    }
+    const lang = window.getLang && window.getLang();
+    if (lang === 'en') return CUISINE_LABEL_EN[label] || label;
+    if (lang === 'ja') return CUISINE_LABEL_JA[label] || label;
     return label;
 }
 window.translateCuisineLabel = translateCuisineLabel;
@@ -9471,10 +9810,12 @@ function formatActivityDate(ts, isEdited = false) {
 function formatRecordDateTitle(dayKey) {
     const [y, m, d] = String(dayKey || '').split('-');
     if (!y || !m || !d) return dayKey || '';
-    if (window.getLang && window.getLang() === 'en') {
+    const lang = window.getLang ? window.getLang() : 'zh';
+    if (lang === 'en') {
         const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         return `${monthNames[Number(m) - 1] || m} ${Number(d)}, ${y}`;
     }
+    // 中文 / 日文都用 YYYY年M月D日 格式
     return `${y}年${Number(m)}月${Number(d)}日`;
 }
 
@@ -9850,9 +10191,10 @@ window.renderRecordCalendar = () => {
         if (yearRow) yearRow.classList.add('hidden');
         if (recordPage) recordPage.classList.add('record-page-guest');
         wrap.classList.add('record-auth-wrap');
-        const recordAuthMsg = window.getLang && window.getLang() === 'en'
+        const recordLang = window.getLang ? window.getLang() : 'zh';
+        const recordAuthMsg = recordLang === 'en'
             ? 'Sign in to view your log'
-            : '请先登录后查看记录';
+            : (recordLang === 'ja' ? 'ログインして記録を見る' : '请先登录后查看记录');
         wrap.innerHTML = `
             <div class="record-auth-mask auth-mask-card">
                 <i data-lucide="lock" style="color:#b2bec3; width:40px; height:40px; margin-bottom:16px;"></i>
@@ -9927,17 +10269,25 @@ window.renderRecordCalendar = () => {
         const monthTotal = monthActs.reduce((sum, a) => sum + (Number(a.budget) || 0), 0);
         const monthStoreCount = new Set(monthActs.map(a => String(a.storeId || '')).filter(Boolean)).size;
 
-        const monthLabel = window.getLang && window.getLang() === 'en'
+        const curLang = window.getLang ? window.getLang() : 'zh';
+        const isEn = curLang === 'en';
+        const isJa = curLang === 'ja';
+        const monthLabel = isEn
             ? new Date(selectedYear, month - 1, 1).toLocaleDateString('en-US', { month: 'short' })
             : `${month}月`;
-        const isEn = window.getLang && window.getLang() === 'en';
         const weekHead = isEn
             ? '<span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>'
-            : '<span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>';
+            : '<span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span>';
+        // 中文版用"日一二三四五六"，日文/默认走"日月火水木金土"。中文页面切回中文式标签：
+        const weekHeadFinal = !isEn && !isJa
+            ? '<span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>'
+            : weekHead;
         const eatenCountLabel = isEn
             ? `Eaten at <b>${monthStoreCount}</b> places`
-            : `吃过 <b>${monthStoreCount}</b> 家店`;
-        const spendLabel = isEn ? `Total: <b>${monthTotal || 0}</b>` : `总花费: <b>${monthTotal || 0}</b>`;
+            : (isJa ? `<b>${monthStoreCount}</b> 軒` : `吃过 <b>${monthStoreCount}</b> 家店`);
+        const spendLabel = isEn
+            ? `Total: <b>${monthTotal || 0}</b>`
+            : (isJa ? `合計: <b>${monthTotal || 0}</b>` : `总花费: <b>${monthTotal || 0}</b>`);
         return `
             <div class="record-month-block" data-record-month="${month}">
                 <div class="record-month-head">
@@ -9947,7 +10297,7 @@ window.renderRecordCalendar = () => {
                         <span class="record-month-spend">${spendLabel}</span>
                     </div>
                 </div>
-                <div class="record-week-head">${weekHead}</div>
+                <div class="record-week-head">${weekHeadFinal}</div>
                 <div class="record-grid">${cells.join('')}</div>
             </div>
         `;

@@ -703,6 +703,10 @@
                             <span class="lang-picker-name">English</span>
                             <i class="lang-picker-check" data-lucide="check" width="18"></i>
                         </button>
+                        <button class="lang-picker-item" data-lang="ja" onclick="pickLang('ja')">
+                            <span class="lang-picker-name">日本語</span>
+                            <i class="lang-picker-check" data-lucide="check" width="18"></i>
+                        </button>
                     </div>
                 </div>
 
@@ -1299,7 +1303,7 @@
                     <button class="provide-submit-btn" onclick="addAdditionalInfo()" data-i18n="common.addThisInfo">添加这条信息</button>
 
                     <button class="provide-info-report" onclick="showDeleteStoreModal()">
-                        <img src="images/trash-red.svg" width="12" alt=""> 这家店已经停业了？
+                        <img src="images/trash-red.svg" width="12" alt=""> <span data-i18n="detail.reportClosed">这家店已经停业了？</span>
                     </button>
                 </div>
             </div>
@@ -1310,8 +1314,8 @@
     <!-- =========================================
          JAVASCRIPT FILES
          ========================================= -->
-    <script type="module" src="app.js?v=206-cuisine-i18n"></script>
-    <script src="map.js?v=206-cuisine-i18n"></script>
+    <script type="module" src="app.js?v=211-i18n-polish"></script>
+    <script src="map.js?v=211-i18n-polish"></script>
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvqupW6XZ7A61lutSD8_GlV31Xdc5ZTLw&callback=initGoogleMap&libraries=geometry">
         </script>

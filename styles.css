@@ -3416,7 +3416,7 @@ header {
 /* Friend Rating Section */
 .sheet-friend-rating {
     overflow: hidden;
-    min-height: 34px;
+    height: 34px;
 }
 
 .sheet-friend-rating-frame {
@@ -4663,6 +4663,8 @@ header {
     font-size: 10px;
     color: #2d3436;
     margin-top: 0;
+    letter-spacing: 0;
+    line-height: 1.15;
 }
 
 /* =========================================
@@ -8260,4 +8262,12 @@ body.lang-en .map-search-input {
 }
 body.lang-en .map-filter-chip {
     font-size: 12px;
+}
+
+/* ========== 日文版微调 ==========
+   日文常见的两/三字标签和中文长度差不多，多数情况下可以照搬中文版排版。
+   差异点：少量片假名词（カスタム / ファミリー）较长，按需要再补 */
+body.lang-ja .nav-text {
+    font-size: 11px;
+    letter-spacing: 0;
 }
