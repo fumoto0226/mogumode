@@ -17,7 +17,7 @@
 // ==========================================
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, updateProfile, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-auth.js";
-import { getFirestore, collection, addDoc, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, query, orderBy, setDoc, where, deleteDoc, getDoc, getDocs, increment } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+import { getFirestore, collection, addDoc, doc, updateDoc, arrayUnion, arrayRemove, onSnapshot, query, orderBy, setDoc, where, deleteDoc, getDoc, getDocs, increment, runTransaction } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-storage.js";
 
 /* =========================================
@@ -28,6 +28,7 @@ const SUPPORTED_LANGS = ['zh', 'en', 'ja'];
 
 const I18N_DICT = {
     zh: {
+        'detail.newStore': '新标记了一个餐厅',
         // 底部导航
         'nav.home': '主页',
         'nav.map': '地图',
@@ -330,8 +331,115 @@ const I18N_DICT = {
         'common.filter': '筛选',
         'common.forgotPassword': '忘记密码了',
         'common.addThisInfo': '添加这条信息',
+        // Additional interface and interaction translations
+        "home.pullRefresh": "下拉刷新位置",
+        "home.releaseRefresh": "松开刷新位置",
+        "home.refreshing": "正在刷新...",
+        "home.loadMore": "下拉加载更多",
+        "home.searchAddHint": "找不到想要的？",
+        "home.addNamedStore": "添加「{name}」这家店",
+        "home.googleCandidates": "附近还有这些未收录的店：",
+        "home.empty.guide": "点击下方 <span class=\"home-empty-plus\">+</span> 添加你常去的店铺，<br>或前往「地图」页面查看其他地区的店铺。",
+        "filter.preference": "偏好",
+        "filter.none": "无",
+        "filter.any": "不限",
+        "filter.friendGood": "朋友好评",
+        "filter.friendBad": "朋友差评",
+        "filter.friendWant": "朋友想吃",
+        "filter.min": "最低",
+        "filter.max": "最高",
+        "filter.input": "输入",
+        "filter.withinMeters": "{n}m内",
+        "filter.metersUnit": "m以内",
+        "filter.ratingRange": "{min}-{max}分",
+        "filter.summary": "筛选: {summary}",
+        "status.open": "营业中",
+        "status.openSoon": "即将营业",
+        "status.unknown": "未知",
+        "hours.closed": "定休",
+        "hours.today": "今日 {time}",
+        "loc.readCurrent": "读取当前位置",
+        "loc.readLocation": "读取位置",
+        "loc.loading": "位置读取中...",
+        "loc.searching": "搜索中…",
+        "loc.noMatch": "没有匹配的位置",
+        "loc.searchError": "搜索出错，请稍后再试",
+        "common.clear": "清空",
+        "common.clearSearch": "清空搜索",
+        "common.store": "店铺",
+        "common.storeName": "店铺名称",
+        "common.user": "用户",
+        "common.noResults": "没有结果",
+        "map.recenter": "回到当前位置",
+        "map.previewLabel": "搜索地图预览",
+        "map.pickPreview": "选择店铺后显示地图预览",
+        "map.noPreview": "暂无地图预览",
+        "map.loading": "地图加载中...",
+        "map.recordedOnly": "只包含mogumode已标记店铺",
+        "map.unrecorded": "(未收录)",
+        "map.noNearby": "100米内没有 Google 地图店铺",
+        "photos.noMore": "没有更多图片了～",
+        "photos.empty": "还没有图片",
+        "record.thisYearBtn": "回到今年",
+        "record.previousYear": "上一年",
+        "record.nextYear": "下一年",
+        "friend.requestSuffix": "申请成为好友",
+        "friend.empty": "${window.t('friend.empty')}",
+        "friend.noMatch": "没有匹配的好友",
+        "friend.loading": "好友数据加载中，请稍后再试",
+        "friend.noUser": "没有匹配的用户",
+        "friend.searchAll": "搜索全部",
+        "friend.loadError": "用户列表读取失败{code}",
+        "friend.permissionHint": "请检查 Firestore 读取权限",
+        "notice.emailPasswordRequired": "请填写邮箱和密码",
+        "notice.allFieldsRequired": "请填写所有字段",
+        "notice.loginFailed": "登录失败",
+        "notice.registerFailed": "注册失败",
+        "notice.googleLoginFailed": "Google 登录失败",
+        "notice.uploadFailed": "上传失败",
+        "notice.copyUrlSuccess": "网址已复制，请到浏览器中粘贴打开",
+        "notice.copyUrlFailed": "复制失败，请长按下方网址手动复制：",
+        "notice.installManual": "当前浏览器暂不支持一键添加，请在浏览器菜单中选择\"添加到主屏幕\"",
+        "notice.locationFailed": "读取定位失败，请重试",
+        "notice.locationMissing": "未找到店铺位置信息",
+        "notice.selectStore": "请先选择一个店铺",
+        "notice.confirmStore": "请先选择店铺并确认",
+        "notice.recordMissing": "这条记录不存在或已更新",
+        "notice.completeInfo": "请输入完整信息",
+        "notice.addFailed": "添加失败，请重试",
+        "notice.actionFailed": "操作失败，请稍后重试",
+        "notice.favoriteFailed": "收藏失败",
+        "notice.reviewFailed": "保存评论失败",
+        "notice.usernameFailed": "修改用户名失败",
+        "notice.friendApproveFailed": "通过失败",
+        "notice.friendIgnoreFailed": "忽略失败",
+        "notice.friendAddFailed": "添加好友失败",
+        "notice.friendDeleteFailed": "删除好友失败",
+        "notice.userMissing": "该用户不存在",
+        "notice.friendLoadFailed": "加载好友信息失败",
+        "notice.maxImages": "一次最多上传 {n} 张图片",
+        "notice.maxImageSize": "单张图片不能超过 {n}MB",
+        "notice.maxReviewLength": "评论文字最多 {n} 个字符",
+        "notice.coverRequired": "新建店铺需要一张Google封面图，请重新搜索并选择带图片的店铺",
+        "add.loadingCover": "获取店铺封面中...",
+        "notice.imageCompressFailed": "图片压缩失败",
+        "notice.imageReadFailed": "图片读取失败",
+        "notice.canvasFailed": "Canvas 初始化失败",
+        "notice.uploadLoginRequired": "请先登录后再上传图片",
+        "notice.photoRefMissing": "缺少 Google 图片引用",
+        "notice.photoDownloadFailed": "Google图片下载失败({status})",
+        "notice.mapNotReady": "地图模块未就绪，请先打开一次地图页后重试",
+        "notice.storeNameCopied": "店名已复制: {name}",
+        "detail.savedWant": "已想吃",
+        "detail.saveWant": "收藏(想吃)",
+        "detail.myRating": "我的评分",
+        "detail.friendEaters": "{n} 位好友吃过",
+        "form.category": "分类",
+        "form.info": "信息",
+        "common.done": "完成",
     },
     en: {
+        'detail.newStore': 'New restaurant added',
         'nav.home': 'Home',
         'nav.map': 'Map',
         'nav.record': 'Log',
@@ -605,8 +713,115 @@ const I18N_DICT = {
         'common.filter': 'Filter',
         'common.forgotPassword': 'Forgot password?',
         'common.addThisInfo': 'Add this info',
+        // Additional interface and interaction translations
+        "home.pullRefresh": "Pull down to refresh location",
+        "home.releaseRefresh": "Release to refresh location",
+        "home.refreshing": "Refreshing…",
+        "home.loadMore": "Scroll down for more",
+        "home.searchAddHint": "Can’t find the place?",
+        "home.addNamedStore": "Add “{name}”",
+        "home.googleCandidates": "Other nearby places not yet added:",
+        "home.empty.guide": "Tap <span class=\"home-empty-plus\">+</span> below to add a place you visit,<br>or explore other areas on the Map.",
+        "filter.preference": "Preferences",
+        "filter.none": "None",
+        "filter.any": "Any",
+        "filter.friendGood": "Friends liked",
+        "filter.friendBad": "Friends disliked",
+        "filter.friendWant": "Friends’ wishlist",
+        "filter.min": "Min",
+        "filter.max": "Max",
+        "filter.input": "Enter",
+        "filter.withinMeters": "Within {n} m",
+        "filter.metersUnit": "m radius",
+        "filter.ratingRange": "{min}-{max} stars",
+        "filter.summary": "Filter: {summary}",
+        "status.open": "Open",
+        "status.openSoon": "Opening soon",
+        "status.unknown": "Unknown",
+        "hours.closed": "Closed",
+        "hours.today": "Today: {time}",
+        "loc.readCurrent": "Get current location",
+        "loc.readLocation": "Get location",
+        "loc.loading": "Getting location…",
+        "loc.searching": "Searching…",
+        "loc.noMatch": "No matching locations",
+        "loc.searchError": "Search failed. Please try again later",
+        "common.clear": "Clear",
+        "common.clearSearch": "Clear search",
+        "common.store": "Store",
+        "common.storeName": "Store name",
+        "common.user": "User",
+        "common.noResults": "No results",
+        "map.recenter": "Back to current location",
+        "map.previewLabel": "Search map preview",
+        "map.pickPreview": "Select a place to preview it on the map",
+        "map.noPreview": "Map preview unavailable",
+        "map.loading": "Loading map…",
+        "map.recordedOnly": "Only places added to MoguMode",
+        "map.unrecorded": "(Not added)",
+        "map.noNearby": "No Google Maps places within 100 m",
+        "photos.noMore": "No more photos",
+        "photos.empty": "No photos yet",
+        "record.thisYearBtn": "This year",
+        "record.previousYear": "Previous year",
+        "record.nextYear": "Next year",
+        "friend.requestSuffix": "wants to be your friend",
+        "friend.empty": "No friends yet. Tap <b>Add friend</b> at the top right",
+        "friend.noMatch": "No matching friends",
+        "friend.loading": "Loading friends. Please try again shortly",
+        "friend.noUser": "No matching users",
+        "friend.searchAll": "Search all",
+        "friend.loadError": "Could not load users{code}",
+        "friend.permissionHint": "Please check Firestore read permissions",
+        "notice.emailPasswordRequired": "Please enter your email and password",
+        "notice.allFieldsRequired": "Please fill in all fields",
+        "notice.loginFailed": "Sign-in failed",
+        "notice.registerFailed": "Registration failed",
+        "notice.googleLoginFailed": "Google sign-in failed",
+        "notice.uploadFailed": "Upload failed",
+        "notice.copyUrlSuccess": "URL copied. Paste it into your browser",
+        "notice.copyUrlFailed": "Could not copy. Press and hold the URL below to copy it:",
+        "notice.installManual": "Choose “Add to Home Screen” from your browser’s menu",
+        "notice.locationFailed": "Could not get location. Please try again",
+        "notice.locationMissing": "Store location unavailable",
+        "notice.selectStore": "Please select a store first",
+        "notice.confirmStore": "Please select and confirm a store",
+        "notice.recordMissing": "This entry no longer exists or has changed",
+        "notice.completeInfo": "Please fill in all the information",
+        "notice.addFailed": "Could not add. Please try again",
+        "notice.actionFailed": "Action failed. Please try again later",
+        "notice.favoriteFailed": "Could not save favorite",
+        "notice.reviewFailed": "Could not save review",
+        "notice.usernameFailed": "Could not change username",
+        "notice.friendApproveFailed": "Could not accept request",
+        "notice.friendIgnoreFailed": "Could not dismiss request",
+        "notice.friendAddFailed": "Could not add friend",
+        "notice.friendDeleteFailed": "Could not remove friend",
+        "notice.userMissing": "User not found",
+        "notice.friendLoadFailed": "Could not load friend information",
+        "notice.maxImages": "Upload up to {n} photos at a time",
+        "notice.maxImageSize": "Each photo must be under {n} MB",
+        "notice.maxReviewLength": "Reviews can contain up to {n} characters",
+        "notice.coverRequired": "New places need a Google cover photo. Search again and select a place with a photo",
+        "add.loadingCover": "Fetching cover photo…",
+        "notice.imageCompressFailed": "Image compression failed",
+        "notice.imageReadFailed": "Could not read image",
+        "notice.canvasFailed": "Could not initialize image canvas",
+        "notice.uploadLoginRequired": "Please sign in before uploading photos",
+        "notice.photoRefMissing": "Google photo reference missing",
+        "notice.photoDownloadFailed": "Google photo download failed ({status})",
+        "notice.mapNotReady": "Open the Map page, then try again",
+        "notice.storeNameCopied": "Store name copied: {name}",
+        "detail.savedWant": "On wishlist",
+        "detail.saveWant": "Save to wishlist",
+        "detail.myRating": "My rating",
+        "detail.friendEaters": "Visited by {n} friends",
+        "form.category": "Category",
+        "form.info": "Information",
+        "common.done": "Done",
     },
     ja: {
+        'detail.newStore': '新しいお店を登録しました',
         // 导航
         'nav.home': 'ホーム',
         'nav.map': '地図',
@@ -906,6 +1121,112 @@ const I18N_DICT = {
         'friend.alreadyFriend': 'フレンド済み',
         'friend.acceptRequest': 'リクエスト承認',
         'friend.searchPlaceholder': 'ニックネームで検索',
+        // Additional interface and interaction translations
+        "home.pullRefresh": "下に引いて現在地を更新",
+        "home.releaseRefresh": "指を離して現在地を更新",
+        "home.refreshing": "更新中…",
+        "home.loadMore": "下にスクロールしてもっと見る",
+        "home.searchAddHint": "お探しのお店がありませんか？",
+        "home.addNamedStore": "「{name}」を追加",
+        "home.googleCandidates": "近くの未登録のお店：",
+        "home.empty.guide": "下の <span class=\"home-empty-plus\">+</span> からお店を追加するか、<br>「地図」で他の地域のお店を探してください。",
+        "filter.preference": "好み",
+        "filter.none": "なし",
+        "filter.any": "指定なし",
+        "filter.friendGood": "フレンドの高評価",
+        "filter.friendBad": "フレンドの低評価",
+        "filter.friendWant": "フレンドが行きたい",
+        "filter.min": "下限",
+        "filter.max": "上限",
+        "filter.input": "入力",
+        "filter.withinMeters": "{n}m以内",
+        "filter.metersUnit": "m以内",
+        "filter.ratingRange": "{min}-{max}点",
+        "filter.summary": "絞り込み: {summary}",
+        "status.open": "営業中",
+        "status.openSoon": "まもなく営業",
+        "status.unknown": "不明",
+        "hours.closed": "定休日",
+        "hours.today": "本日 {time}",
+        "loc.readCurrent": "現在地を取得",
+        "loc.readLocation": "位置情報を取得",
+        "loc.loading": "位置情報を取得中…",
+        "loc.searching": "検索中…",
+        "loc.noMatch": "一致する場所がありません",
+        "loc.searchError": "検索に失敗しました。しばらくしてから再試行してください",
+        "common.clear": "クリア",
+        "common.clearSearch": "検索をクリア",
+        "common.store": "お店",
+        "common.storeName": "店名",
+        "common.user": "ユーザー",
+        "common.noResults": "結果がありません",
+        "map.recenter": "現在地に戻る",
+        "map.previewLabel": "検索地図プレビュー",
+        "map.pickPreview": "お店を選ぶと地図を表示します",
+        "map.noPreview": "地図プレビューはありません",
+        "map.loading": "地図を読み込み中…",
+        "map.recordedOnly": "MoguModeに登録されたお店のみ",
+        "map.unrecorded": "（未登録）",
+        "map.noNearby": "100m以内にGoogleマップのお店がありません",
+        "photos.noMore": "他に写真はありません",
+        "photos.empty": "まだ写真はありません",
+        "record.thisYearBtn": "今年へ",
+        "record.previousYear": "前年",
+        "record.nextYear": "翌年",
+        "friend.requestSuffix": "からフレンドリクエスト",
+        "friend.empty": "まだフレンドがいません。右上の<b>フレンド追加</b>をタップしてください",
+        "friend.noMatch": "一致するフレンドがいません",
+        "friend.loading": "フレンドを読み込み中です。しばらくしてから再試行してください",
+        "friend.noUser": "一致するユーザーがいません",
+        "friend.searchAll": "すべて検索",
+        "friend.loadError": "ユーザー一覧の読み込みに失敗しました{code}",
+        "friend.permissionHint": "Firestoreの読み取り権限を確認してください",
+        "notice.emailPasswordRequired": "メールとパスワードを入力してください",
+        "notice.allFieldsRequired": "すべての項目を入力してください",
+        "notice.loginFailed": "ログインに失敗しました",
+        "notice.registerFailed": "登録に失敗しました",
+        "notice.googleLoginFailed": "Googleログインに失敗しました",
+        "notice.uploadFailed": "アップロードに失敗しました",
+        "notice.copyUrlSuccess": "URLをコピーしました。ブラウザに貼り付けて開いてください",
+        "notice.copyUrlFailed": "コピーできませんでした。下のURLを長押ししてコピーしてください：",
+        "notice.installManual": "ブラウザのメニューから「ホーム画面に追加」を選択してください",
+        "notice.locationFailed": "位置情報を取得できませんでした。再試行してください",
+        "notice.locationMissing": "お店の位置情報がありません",
+        "notice.selectStore": "先にお店を選択してください",
+        "notice.confirmStore": "お店を選択して確定してください",
+        "notice.recordMissing": "この記録は削除または更新されています",
+        "notice.completeInfo": "情報をすべて入力してください",
+        "notice.addFailed": "追加に失敗しました。再試行してください",
+        "notice.actionFailed": "操作に失敗しました。しばらくしてから再試行してください",
+        "notice.favoriteFailed": "お気に入りの保存に失敗しました",
+        "notice.reviewFailed": "レビューの保存に失敗しました",
+        "notice.usernameFailed": "ユーザー名の変更に失敗しました",
+        "notice.friendApproveFailed": "リクエストの承認に失敗しました",
+        "notice.friendIgnoreFailed": "リクエストの無視に失敗しました",
+        "notice.friendAddFailed": "フレンドの追加に失敗しました",
+        "notice.friendDeleteFailed": "フレンドの削除に失敗しました",
+        "notice.userMissing": "ユーザーが見つかりません",
+        "notice.friendLoadFailed": "フレンド情報の読み込みに失敗しました",
+        "notice.maxImages": "一度にアップロードできる写真は{n}枚までです",
+        "notice.maxImageSize": "写真1枚のサイズは{n}MB以下にしてください",
+        "notice.maxReviewLength": "レビューは{n}文字以内にしてください",
+        "notice.coverRequired": "新しいお店にはGoogleのカバー写真が必要です。再検索して写真のあるお店を選んでください",
+        "add.loadingCover": "カバー写真を取得中…",
+        "notice.imageCompressFailed": "画像の圧縮に失敗しました",
+        "notice.imageReadFailed": "画像を読み込めませんでした",
+        "notice.canvasFailed": "画像処理を初期化できませんでした",
+        "notice.uploadLoginRequired": "写真をアップロードするにはログインしてください",
+        "notice.photoRefMissing": "Googleの写真情報がありません",
+        "notice.photoDownloadFailed": "Googleの写真をダウンロードできませんでした（{status}）",
+        "notice.mapNotReady": "地図ページを開いてから再試行してください",
+        "notice.storeNameCopied": "店名をコピーしました: {name}",
+        "detail.savedWant": "行きたいに追加済み",
+        "detail.saveWant": "行きたいに追加",
+        "detail.myRating": "自分の評価",
+        "detail.friendEaters": "フレンド{n}人が訪問",
+        "form.category": "カテゴリー",
+        "form.info": "情報",
+        "common.done": "完了",
     }
 };
 
@@ -936,13 +1257,18 @@ function applyTranslations(root) {
     const scope = root || document;
     scope.querySelectorAll('[data-i18n]').forEach(el => {
         const key = el.getAttribute('data-i18n');
-        const html = window.t(key);
+        let params;
+        try { params = JSON.parse(el.getAttribute('data-i18n-params') || 'null'); } catch (_) {}
+        const html = window.t(key, params);
         // 如果翻译里带 HTML（比如 <strong>）就用 innerHTML，否则用 textContent
         if (/[<>]/.test(html)) el.innerHTML = html;
         else el.textContent = html;
     });
     scope.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
         el.setAttribute('placeholder', window.t(el.getAttribute('data-i18n-placeholder')));
+    });
+    scope.querySelectorAll('[data-i18n-title]').forEach(el => {
+        el.setAttribute('title', window.t(el.getAttribute('data-i18n-title')));
     });
     scope.querySelectorAll('[data-i18n-aria]').forEach(el => {
         el.setAttribute('aria-label', window.t(el.getAttribute('data-i18n-aria')));
@@ -962,9 +1288,22 @@ window.setLang = (lang) => {
     // 刷新动态生成的页面内容
     try {
         if (typeof window.applyFilters === 'function') window.applyFilters();
+        refreshMealDateButtonText();
+        updateRecordJumpButton();
+        setCurrentLocationText(currentResolvedLocationLabel || '读取位置', currentResolvedLocationDetail);
+        const locationConfirm = document.getElementById('loc-confirm-modal');
+        const confirmDetail = locationConfirm?.style.display === 'flex' ? tempLocationMeta?.detail : currentResolvedLocationDetail;
+        setLocationConfirmDetailText(confirmDetail || '读取中...');
+        renderFriendsList();
+        document.querySelectorAll('.expandable-review').forEach(root => {
+            const button = root.querySelector('.expandable-review-toggle');
+            const expanded = root.querySelector('.expandable-review-text')?.classList.contains('is-expanded');
+            if (button) button.innerText = window.t(expanded ? 'reviews.collapse' : 'reviews.showAll');
+        });
         if (typeof window.renderProfileActivity === 'function') window.renderProfileActivity();
         if (typeof window.updateRandomPoolHint === 'function') window.updateRandomPoolHint();
         if (typeof window.renderRecordCalendar === 'function') window.renderRecordCalendar();
+        if (currentRecordDayKey) openRecordDayView(currentRecordDayKey);
         const activeTab = document.querySelector('.profile-tab.active')?.id;
         if (activeTab === 'profile-tab-eaten' && typeof window.renderProfileEaten === 'function') {
             window.renderProfileEaten();
@@ -984,6 +1323,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.body.classList.toggle('lang-en', currentLang === 'en');
     document.body.classList.toggle('lang-ja', currentLang === 'ja');
     applyTranslations();
+    refreshMealDateButtonText();
+    setCurrentLocationText(currentResolvedLocationLabel || '读取位置', currentResolvedLocationDetail);
+    setLocationConfirmDetailText(currentResolvedLocationDetail || '读取中...');
 });
 
 // 生产环境屏蔽 console.log / console.debug / console.info，避免泄漏内部状态
@@ -1011,7 +1353,7 @@ const firebaseConfig = {
     appId: "1:597216581346:web:e293e1a6420e50fd5a70bb"      // 应用ID
 };
 
-const APP_BUILD_VERSION = "v40";
+const APP_BUILD_VERSION = "v41";
 const DEFAULT_AVATAR_URL = "images/avatar-placeholder.svg";
 const LOCATION_CACHE_STORAGE_KEY = "mogumode:last-origin-v2";
 
@@ -1046,7 +1388,8 @@ let currentFavTab = 'want';         // 收藏页当前选中的标签（want/lik
 let myFriends = [];                 // 我的好友ID列表（用户UID数组）
 let mySentFriendRequests = [];      // 我已发送的好友申请UID列表（可选字段）
 let allUsersCache = [];             // 所有用户缓存（用于好友列表和搜索）
-let usersLoadErrorMsg = "";         // 加载用户列表时的错误信息
+let usersLoadErrorMsg = "";
+let usersLoadErrorCode = "";         // 加载用户列表时的错误信息
 let incomingFriendRequests = [];
 let outgoingPendingFriendUids = new Set();
 let friendReqUnsubIncoming = null;
@@ -1155,7 +1498,7 @@ function renderExpandableReviewText(text, opts = {}) {
     return `
         <div class="${wrapperClasses}" data-review-id="${reviewId}">
             <div class="${textClasses}" style="--review-lines:${Math.max(1, Number(lines) || 3)};">${safeText}</div>
-            ${shouldCollapse ? `<button class="${buttonClasses}" type="button" onclick="toggleExpandableReview('${reviewId}'); event.stopPropagation();">显示全部</button>` : ''}
+            ${shouldCollapse ? `<button class="${buttonClasses}" type="button" onclick="toggleExpandableReview('${reviewId}'); event.stopPropagation();">${window.t('reviews.showAll')}</button>` : ''}
         </div>
     `;
 }
@@ -1313,7 +1656,7 @@ function canvasToBlob(canvas, type = 'image/jpeg', quality = 0.82) {
     return new Promise((resolve, reject) => {
         canvas.toBlob((blob) => {
             if (blob) resolve(blob);
-            else reject(new Error('图片压缩失败'));
+            else reject(new Error(window.t('notice.imageCompressFailed')));
         }, type, quality);
     });
 }
@@ -1328,7 +1671,7 @@ function loadImageFromBlob(blob) {
         };
         img.onerror = () => {
             URL.revokeObjectURL(url);
-            reject(new Error('图片读取失败'));
+            reject(new Error(window.t('notice.imageReadFailed')));
         };
         img.src = url;
     });
@@ -1366,7 +1709,7 @@ async function compressImageForUpload(fileOrBlob, options = {}) {
         canvas.width = targetWidth;
         canvas.height = targetHeight;
         const ctx = canvas.getContext('2d');
-        if (!ctx) throw new Error('Canvas 初始化失败');
+        if (!ctx) throw new Error(window.t('notice.canvasFailed'));
         ctx.fillStyle = background;
         ctx.fillRect(0, 0, targetWidth, targetHeight);
         ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
@@ -1448,7 +1791,7 @@ async function uploadImageAssetPair(fileOrBlob, basename) {
     });
 
     const uid = currentUser?.uid;
-    if (!uid) throw new Error('请先登录后再上传图片');
+    if (!uid) throw new Error(window.t('notice.uploadLoginRequired'));
     const fullRef = ref(storage, `p/${uid}/${basename}_full.jpg`);
     const thumbRef = ref(storage, `p/${uid}/${basename}_thumb.jpg`);
     await Promise.all([
@@ -1467,10 +1810,10 @@ async function copyGooglePlacePhotoToStorage(photoRef, options = {}) {
         maxHeightPx = 800,
         maxWidthPx = 800
     } = options;
-    if (!photoRef) throw new Error('缺少 Google 图片引用');
+    if (!photoRef) throw new Error(window.t('notice.photoRefMissing'));
     const googleUrl = `https://places.googleapis.com/v1/${photoRef}/media?maxHeightPx=${maxHeightPx}&maxWidthPx=${maxWidthPx}&key=${MAPS_API_KEY}`;
     const response = await fetch(googleUrl);
-    if (!response.ok) throw new Error(`Google图片下载失败(${response.status})`);
+    if (!response.ok) throw new Error(window.t('notice.photoDownloadFailed', { status: response.status }));
     const blob = await response.blob();
     const compressedBlob = await compressImageForUpload(blob, {
         maxWidth: 1600,
@@ -1487,7 +1830,7 @@ async function copyGooglePlacePhotoToStorage(photoRef, options = {}) {
         maxBytes: 56 * 1024
     });
     const uid = currentUser?.uid;
-    if (!uid) throw new Error('请先登录后再上传图片');
+    if (!uid) throw new Error(window.t('notice.uploadLoginRequired'));
     const basename = `google_${Date.now()}`;
     const fullRef = ref(storage, `p/${uid}/${basename}_full.jpg`);
     const thumbRef = ref(storage, `p/${uid}/${basename}_thumb.jpg`);
@@ -1649,13 +1992,13 @@ function updateUIForAuth(user) {
 window.handleLogin = async () => {
     const e = document.getElementById('auth-email').value;
     const p = document.getElementById('auth-pass').value;
-    if (!e || !p) return alert("请填写邮箱和密码");
+    if (!e || !p) return alert(window.t('notice.emailPasswordRequired'));
 
     try {
         await signInWithEmailAndPassword(auth, e, p);
         switchView('home');
     } catch (err) {
-        alert('登录失败: ' + err.message);
+        alert(window.t('notice.loginFailed') + ': ' + err.message);
     }
 };
 
@@ -1666,15 +2009,15 @@ window.handleRegister = async () => {
     const e = document.getElementById('reg-email').value;
     const p = document.getElementById('reg-pass').value;
     const p2 = document.getElementById('reg-pass-confirm').value;
-    if (!e || !p || !p2) return alert("请填写所有字段");
-    if (p !== p2) return alert("两次密码输入不一致");
-    if (p.length < 6) return alert("密码至少6位");
+    if (!e || !p || !p2) return alert(window.t('notice.allFieldsRequired'));
+    if (p !== p2) return alert(window.t('notice.passwordMismatch'));
+    if (p.length < 6) return alert(window.t('notice.passwordTooShort'));
 
     try {
         await createUserWithEmailAndPassword(auth, e, p);
         switchView('home');
     } catch (err) {
-        alert('注册失败: ' + err.message);
+        alert(window.t('notice.registerFailed') + ': ' + err.message);
     }
 };
 
@@ -1741,9 +2084,9 @@ function isInAppBrowser() {
 
 function formatMealDateDisplay(value) {
     const v = String(value || '').trim();
-    if (!v) return { text: '点击选择日期', empty: true };
+    if (!v) return { text: window.t('add.pickDate'), empty: true };
     const [y, m, d] = v.split('-');
-    if (!y || !m || !d) return { text: '点击选择日期', empty: true };
+    if (!y || !m || !d) return { text: window.t('add.pickDate'), empty: true };
     return { text: `${y}/${m}/${d}`, empty: false };
 }
 
@@ -1802,12 +2145,12 @@ window.copyCurrentSiteUrl = async () => {
             document.body.removeChild(ta);
         }
         if (typeof showAppFeedbackToast === 'function') {
-            showAppFeedbackToast('网址已复制，请到浏览器中粘贴打开');
+            showAppFeedbackToast(window.t('notice.copyUrlSuccess'));
         } else {
-            alert('网址已复制，请到浏览器中粘贴打开');
+            alert(window.t('notice.copyUrlSuccess'));
         }
     } catch (err) {
-        alert('复制失败，请长按下方网址手动复制：\n' + url);
+        alert(window.t('notice.copyUrlFailed') + '\n' + url);
     }
 };
 
@@ -1875,7 +2218,7 @@ window.addEventListener('appinstalled', () => {
     const btn = document.getElementById('profile-menu-install-btn');
     if (btn) btn.classList.add('hidden');
     if (typeof showAppFeedbackToast === 'function') {
-        showAppFeedbackToast('已添加到桌面');
+        showAppFeedbackToast(window.t('notice.installAdded'));
     }
 });
 
@@ -1901,7 +2244,7 @@ window.installPwaFromMenu = async () => {
         return;
     }
     if (typeof showAppFeedbackToast === 'function') {
-        showAppFeedbackToast('当前浏览器暂不支持一键添加，请在浏览器菜单中选择"添加到主屏幕"');
+        showAppFeedbackToast(window.t('notice.installManual'));
     }
 };
 
@@ -1952,11 +2295,11 @@ window.loginWithGoogle = async () => {
             try {
                 await signInWithRedirect(auth, provider);
             } catch (err) {
-                alert(`Google 登录失败: ${err.message || err}`);
+                alert(`${window.t('notice.googleLoginFailed')}: ${err.message || err}`);
             }
             return;
         }
-        alert(`Google 登录失败: ${msg}`);
+        alert(`${window.t('notice.googleLoginFailed')}: ${msg}`);
     }
 };
 
@@ -2004,7 +2347,7 @@ window.uploadAvatar = async (input) => {
         renderHeaderAvatar(url);
     } catch (err) {
         console.error('头像上传失败:', err);
-        alert('上传失败: ' + err.message);
+        alert(window.t('notice.uploadFailed') + ': ' + err.message);
     }
 };
 
@@ -2409,7 +2752,7 @@ function getTodayDescriptionOpenTime(openingHours) {
     const idx = (today + 6) % 7;
     const line = String(lines[idx] || lines[today] || '').trim();
     if (!line) return null;
-    if (/closed|休息|定休日|暂停|歇业/i.test(line)) return "今日休息";
+    if (/closed|休息|定休日|暂停|歇业/i.test(line)) return window.t('status.closedToday');
 
     const m = line.match(/(\d{1,2})[:：](\d{2})/);
     if (!m) return null;
@@ -2451,8 +2794,8 @@ function mergeDailyIntervals(intervals = []) {
 
 function normalizeOpeningValueText(raw) {
     const text = String(raw || '').trim();
-    if (!text) return '定休';
-    if (/closed|休息|定休|暂停|歇业/i.test(text)) return '定休';
+    if (!text) return window.t('hours.closed');
+    if (/closed|休息|定休|暂停|歇业/i.test(text)) return window.t('hours.closed');
     if (/24\s*hours|24小时|24時間/i.test(text)) return '00:00-24:00';
     return text
         .replace(/(\d{1,2})\s*[时時]\s*(\d{1,2})\s*分?/g, (_, hour, minute) => `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`)
@@ -2515,7 +2858,7 @@ function buildWeeklyLinesFromDescriptions(openingHours) {
         : (Array.isArray(openingHours?.weekdayText) ? openingHours.weekdayText : []);
     if (!descLines.length) return [];
 
-    const values = new Array(7).fill('定休'); // index 0..6 => Mon..Sun
+    const values = new Array(7).fill(window.t('hours.closed')); // index 0..6 => Mon..Sun
     const dayIndexMap = {
         monday: 0, mon: 0, mondays: 0, 月曜日: 0, 周一: 0, 星期一: 0,
         tuesday: 1, tue: 1, tues: 1, 火曜日: 1, 周二: 1, 星期二: 1,
@@ -2582,7 +2925,7 @@ function buildWeeklyOpeningLines(openingHours) {
         [1, 2, 3, 4, 5, 6, 0].forEach((day) => {
             const intervals = mergeDailyIntervals(byDay.get(day) || []);
             if (!intervals.length) {
-                valuesMonToSun.push('定休');
+                valuesMonToSun.push(window.t('hours.closed'));
                 return;
             }
             const ranges = intervals.map((it) =>
@@ -2597,20 +2940,21 @@ function buildWeeklyOpeningLines(openingHours) {
 }
 
 function getStoreOpenTimeText(store) {
-    if (!store) return "暂无";
-    if (isStorePermanentlyClosed(store)) return "永久歇业";
+    if (!store) return window.t('common.unrecorded');
+    if (isStorePermanentlyClosed(store)) return window.t('status.closed');
     const weeklyLines = buildWeeklyOpeningLines(store.openingHours);
     if (weeklyLines.length) return weeklyLines.join("\n");
     const fallbackTime = getTodayDescriptionOpenTime(store.openingHours);
-    if (fallbackTime) return `今日 ${fallbackTime}`;
-    if (store.businessStatus === 'CLOSED_TEMPORARILY') return "暂停营业";
-    return "暂无";
+    if (fallbackTime) return window.t('hours.today', { time: fallbackTime });
+    if (store.businessStatus === 'CLOSED_TEMPORARILY') return window.t('status.suspended');
+    return window.t('common.unrecorded');
 }
 
 function renderStoreOpenTimeHtml(store) {
     const text = getStoreOpenTimeText(store);
-    if (!text || /^(暂无|暂停营业|永久歇业|今日 )/.test(text)) {
-        return escapeHtml(text || '暂无');
+    const weeklyLines = buildWeeklyOpeningLines(store?.openingHours);
+    if (!text || !weeklyLines.length || isStorePermanentlyClosed(store)) {
+        return escapeHtml(text || window.t('common.unrecorded'));
     }
 
     const groups = text
@@ -2618,13 +2962,17 @@ function renderStoreOpenTimeHtml(store) {
         .map(line => line.trim())
         .filter(Boolean);
 
+    const dayLabels = Array.from({ length: 7 }, (_, i) => formatDayRangeLabel(i, i));
+    const groupLabels = ['hours.everyday', 'hours.weekdays', 'hours.weekends'].map(key => window.t(key));
+    const isDayLabel = value => groupLabels.includes(value) || dayLabels.includes(value)
+        || dayLabels.some(start => dayLabels.some(end => value === `${start}-${end}`));
     const parsed = [];
     for (let i = 0; i < groups.length; i++) {
         const line = groups[i];
-        if (/^(每天|平日|周末|周[一二三四五六日](?:-周[一二三四五六日])?)$/.test(line)) {
+        if (isDayLabel(line)) {
             const times = [];
             let j = i + 1;
-            while (j < groups.length && !/^(每天|平日|周末|周[一二三四五六日](?:-周[一二三四五六日])?)$/.test(groups[j])) {
+            while (j < groups.length && !isDayLabel(groups[j])) {
                 times.push(groups[j]);
                 j += 1;
             }
@@ -2651,9 +2999,9 @@ function isStorePermanentlyClosed(store) {
 }
 
 function renderStoreNameWithStatus(store) {
-    const baseName = String(store?.name || '').trim() || '未命名店铺';
+    const baseName = String(store?.name || '').trim() || window.t('common.unnamed');
     if (!isStorePermanentlyClosed(store)) return baseName;
-    return `${baseName}<span class="store-closed-mogu" title="永久歇业"><img src="images/mogu.svg" alt="closed"></span>`;
+    return `${baseName}<span class="store-closed-mogu" title="${window.t('status.closed')}"><img src="images/mogu.svg" alt="closed"></span>`;
 }
 
 window.isStorePermanentlyClosed = isStorePermanentlyClosed;
@@ -2661,7 +3009,7 @@ window.renderStoreNameWithStatus = renderStoreNameWithStatus;
 window.getStoreOpenTimeText = getStoreOpenTimeText;
 
 function getStoreAddressText(store) {
-    return store?.address || store?.formattedAddress || "地址未收录";
+    return store?.address || store?.formattedAddress || window.t('common.addressUnknown');
 }
 
 function haversineDistanceMeters(from, to) {
@@ -3554,13 +3902,13 @@ function renderStoreActivityMeta(store) {
     const friends = getStoreFriendsRatingSummary(store);
 
     const meChip = me.count > 0 ? `
-        <span class="store-stat-chip is-me" title="我的评分">
+        <span class="store-stat-chip is-me" title="${window.t('detail.myRating')}">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 5-6 8-6s6.5 2 8 6"/></svg>
             ${me.avg > 0 ? me.avg.toFixed(1) : '—'}
         </span>` : '';
 
     const friendChip = friends.count > 0 ? `
-        <span class="store-stat-chip is-friends" title="${friends.count} 位好友吃过">
+        <span class="store-stat-chip is-friends" title="${window.t('detail.friendEaters', { n: friends.count })}">
             <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             ${friends.avg > 0 ? friends.avg.toFixed(1) : '—'}
             <span class="store-stat-chip-num">·${friends.count}</span>
@@ -3956,7 +4304,7 @@ function appendNextStorePage() {
     storeListPagination.rendered = end;
     if (end >= list.length) {
         const cap = el.querySelector('.store-list-endcap');
-        if (cap) cap.textContent = '已经到底了';
+        if (cap) cap.textContent = window.t('common.reachedEnd');
     }
     if (window.lucide?.createIcons) lucide.createIcons();
 }
@@ -3983,7 +4331,7 @@ function getHomeSearchAddHintHtml() {
     const attr = escapeAttrHtml(raw);
     return `
         <div class="home-search-add-hint">
-            找不到想要的？<a href="javascript:void(0)" onclick="openAddComposerWithQuery('${attr}')">添加「${escapeAttrHtml(display)}」这家店</a>
+            ${window.t('home.searchAddHint')}<a href="javascript:void(0)" onclick="openAddComposerWithQuery('${attr}')">${window.t('home.addNamedStore', { name: escapeAttrHtml(display) })}</a>
         </div>
     `;
 }
@@ -4002,13 +4350,13 @@ function getHomeGoogleCandidatesHtml() {
                     <div class="home-google-candidate-name">${escapeAttrHtml(c.name)}</div>
                     <div class="home-google-candidate-sub">${distText}${escapeAttrHtml(c.address || '')}</div>
                 </div>
-                <button type="button" class="home-google-candidate-add" onclick="openAddComposerWithQuery('${safeName}')">添加</button>
+                <button type="button" class="home-google-candidate-add" onclick="openAddComposerWithQuery('${safeName}')">${window.t('common.add')}</button>
             </div>
         `;
     }).join('');
     return `
         <div class="home-google-candidates">
-            <div class="home-google-candidates-title">附近还有这些未收录的店：</div>
+            <div class="home-google-candidates-title">${window.t('home.googleCandidates')}</div>
             ${rows}
         </div>
     `;
@@ -4031,8 +4379,8 @@ window.renderStores = (list) => {
             // 用户附近 50 公里内还没有店铺
             html = `
                 <div class="home-empty-tip">
-                    <div class="home-empty-title">附近 50 公里内暂时还没有店铺</div>
-                    <div class="home-empty-sub">点击下方 <span class="home-empty-plus">+</span> 添加你常去的店铺，<br>或前往「地图」页面查看其他地区的店铺。</div>
+                    <div class="home-empty-title">${window.t('home.empty.noNearby')}</div>
+                    <div class="home-empty-sub">${window.t('home.empty.guide')}</div>
                 </div>
             `;
         } else {
@@ -4044,7 +4392,7 @@ window.renderStores = (list) => {
     storeListPagination = { list, rendered: 0 };
     const initialCount = Math.min(STORE_PAGE_SIZE, list.length);
     const initialHtml = list.slice(0, initialCount).map((s, i) => renderSingleStoreCardHtml(s, i)).join('');
-    const capText = initialCount >= list.length ? '已经到底了' : '下拉加载更多';
+    const capText = initialCount >= list.length ? window.t('common.reachedEnd') : window.t('home.loadMore');
     // 搜索时：顶部展示 Google 上还未收录的同名候选；底部附加"添加这家店"入口
     const googleCandHtml = homeSearchQuery ? getHomeGoogleCandidatesHtml() : '';
     const searchHintHtml = homeSearchQuery ? getHomeSearchAddHintHtml() : '';
@@ -4133,7 +4481,7 @@ window.addAdditionalInfo = () => {
     }
 
     if (!category || !content) {
-        alert("请输入完整信息");
+        alert(window.t('notice.completeInfo'));
         return;
     }
 
@@ -4164,7 +4512,7 @@ window.addAdditionalInfo = () => {
         renderProvideInfoModal(currentInfoStoreId);
     }).catch((err) => {
         console.error("添加附加信息失败:", err);
-        alert("添加失败，请重试");
+        alert(window.t('notice.addFailed'));
     });
 };
 
@@ -4180,7 +4528,7 @@ window.deleteAdditionalInfo = (storeId, infoId) => {
             renderProvideInfoModal(storeId);
         } catch (err) {
             console.error("删除附加信息失败:", err);
-            alert("删除失败，请稍后重试");
+            alert(window.t('notice.deleteFailed'));
         }
     };
     document.getElementById('modal-confirm-delete-info').classList.add('open');
@@ -4328,13 +4676,13 @@ window.confirmDeleteStore = async (mode = 'delete') => {
     }
     const storeId = getDeleteStoreTargetId();
     if (!storeId) {
-        showAppNoticeModal("未找到店铺");
+        showAppNoticeModal(window.t('notice.storeNotFound'));
         return;
     }
     const storeRef = doc(db, "stores", storeId);
     const snap = await getDoc(storeRef);
     if (!snap.exists()) {
-        showAppNoticeModal("店铺不存在或已删除");
+        showAppNoticeModal(window.t('notice.storeNotFound'));
         return;
     }
     const store = { id: snap.id, ...snap.data() };
@@ -4366,7 +4714,7 @@ window.confirmDeleteStore = async (mode = 'delete') => {
         applyFilters();
         renderRecordCalendar();
         renderProfileActivity();
-        showAppNoticeModal("店铺已标记为永久歇业");
+        showAppNoticeModal(window.t('notice.storeClosed'));
         return;
     }
 
@@ -4379,7 +4727,7 @@ window.confirmDeleteStore = async (mode = 'delete') => {
         await deleteStorageFilesByUrls(allUrls);
     } catch (err) {
         console.error("删除店铺失败:", err);
-        showAppNoticeModal("删除失败，请稍后重试");
+        showAppNoticeModal(window.t('notice.deleteFailed'));
         return;
     }
 
@@ -4393,7 +4741,7 @@ window.confirmDeleteStore = async (mode = 'delete') => {
     applyFilters();
     renderRecordCalendar();
     renderProfileActivity();
-    showAppNoticeModal("店铺已删除");
+    showAppNoticeModal(window.t('notice.storeDeleted'));
 };
 
 window.deleteMyStoreReview = async (storeId, reviewIndex) => {
@@ -4407,7 +4755,7 @@ window.deleteMyStoreReview = async (storeId, reviewIndex) => {
 
     const store = localStores.find(s => s.id === sid);
     if (!store) {
-        showAppNoticeModal("店铺不存在");
+        showAppNoticeModal(window.t('notice.storeNotFound'));
         return;
     }
     const revs = Array.isArray(store.revs) ? store.revs : [];
@@ -4415,7 +4763,7 @@ window.deleteMyStoreReview = async (storeId, reviewIndex) => {
     const targetRev = revs[idx];
     const aliases = getCurrentUserAliases();
     if (!isReviewMine(targetRev, aliases)) {
-        showAppNoticeModal("只能删除自己的评论");
+        showAppNoticeModal(window.t('notice.deleteOwnReviewOnly'));
         return;
     }
     pendingDeleteReviewAction = { storeId: sid, reviewIndex: idx };
@@ -4433,7 +4781,7 @@ window.closeDeleteReviewRecordModal = () => {
     pendingDeleteReviewAction = null;
 };
 
-window.showAppNoticeModal = (message, title = '提示') => {
+window.showAppNoticeModal = (message, title = window.t('dialog.tip')) => {
     const modal = document.getElementById('modal-app-notice');
     const titleEl = document.getElementById('app-notice-title');
     const messageEl = document.getElementById('app-notice-message');
@@ -4489,7 +4837,7 @@ window.openPostSuccessModal = (payload = {}) => {
     const badgeEl = document.getElementById('post-success-new-badge');
     if (scoreEl) scoreEl.innerText = postSuccessState.rating.toFixed(1);
     if (starsEl) starsEl.innerHTML = renderPostSuccessRatingIcons(postSuccessState.rating);
-    if (storeNameEl) storeNameEl.innerText = postSuccessState.storeName || '店铺';
+    if (storeNameEl) storeNameEl.innerText = postSuccessState.storeName || window.t('common.store');
     if (visitCountEl) visitCountEl.innerText = window.t('detail.eatenN', { n: postSuccessState.visitCount });
     if (badgeEl) badgeEl.classList.toggle('hidden', !postSuccessState.isNewStore);
     if (modal) modal.classList.add('open');
@@ -4518,14 +4866,14 @@ window.confirmDeleteReviewRecord = async (mode) => {
     const store = localStores.find(s => s.id === sid);
     if (!store) {
         closeDeleteReviewRecordModal();
-        showAppNoticeModal("店铺不存在");
+        showAppNoticeModal(window.t('notice.storeNotFound'));
         return;
     }
 
     const revs = Array.isArray(store.revs) ? store.revs : [];
     if (!Number.isInteger(idx) || idx < 0 || idx >= revs.length) {
         closeDeleteReviewRecordModal();
-        showAppNoticeModal("这条记录不存在或已更新");
+        showAppNoticeModal(window.t('notice.recordMissing'));
         return;
     }
 
@@ -4533,7 +4881,7 @@ window.confirmDeleteReviewRecord = async (mode) => {
     const aliases = getCurrentUserAliases();
     if (!isReviewMine(targetRev, aliases)) {
         closeDeleteReviewRecordModal();
-        showAppNoticeModal("只能删除自己的评论");
+        showAppNoticeModal(window.t('notice.deleteOwnReviewOnly'));
         return;
     }
 
@@ -4567,7 +4915,7 @@ window.confirmDeleteReviewRecord = async (mode) => {
     } catch (err) {
         console.error("删除评论记录失败:", err);
         closeDeleteReviewRecordModal();
-        showAppNoticeModal("删除失败，请稍后重试");
+        showAppNoticeModal(window.t('notice.deleteFailed'));
         return;
     }
 
@@ -4590,7 +4938,7 @@ window.confirmDeleteReviewRecord = async (mode) => {
         const modeName = mapSheet.classList.contains('full') ? 'full' : (mapSheet.classList.contains('peek') ? 'peek' : 'half');
         window.renderMapCardFromDB(nextStore, { mode: modeName });
     }
-    showAppFeedbackToast(normalizedMode === 'content-only' ? '已清空照片和评论内容' : '已删除整条记录');
+    showAppFeedbackToast(normalizedMode === 'content-only' ? window.t('notice.clearedMedia') : window.t('notice.deletedFull'));
 };
 
 // Handle Custom Category Input Toggle
@@ -4671,7 +5019,7 @@ window.closeDetail = () => document.getElementById('modal-detail').classList.rem
  * @param {string} oid - 店铺ID（可选，默认使用当前店铺）
  */
 window.toggleFav = async (oid) => {
-    if (!currentUser) return alert("Login first");
+    if (!currentUser) return alert(window.t('notice.loginRequired'));
     const id = oid || currentStoreId;
     const hadLike = localLikes.has(id);
     const hadDislike = localDislikes.has(id);
@@ -4701,7 +5049,7 @@ window.toggleFav = async (oid) => {
         }
     } catch (err) {
         console.error("收藏写入失败:", err);
-        alert("收藏失败: " + err.message);
+        alert(window.t('notice.favoriteFailed') + ': ' + err.message);
         return;
     }
 
@@ -4765,7 +5113,7 @@ window.toggleLocalAction = async (id, type) => {
         await setDoc(userRef, updates, { merge: true });
     } catch (err) {
         console.error("保存评论失败:", err);
-        alert("保存评论失败: " + err.message);
+        alert(window.t('notice.reviewFailed') + ': ' + err.message);
         return;
     }
 
@@ -4799,10 +5147,57 @@ const SUBMIT_COOLDOWN_MS = 3000;         // 提交后至少 3 秒才能再点
 let isSubmittingReview = false;
 let lastSubmitAt = 0;
 
+// A shared document path makes concurrent first visits contend on the same store.
+// Keep existing random IDs for stores already recorded in older versions.
+async function getNewStoreDocumentId(store) {
+    const placeId = String(store.googlePlaceId || '').trim();
+    if (placeId) return `google_${encodeURIComponent(placeId)}`;
+
+    // Legacy Google results may lack a Place ID. Include coordinates so separate
+    // branches with the same name do not share a document path.
+    const identity = JSON.stringify([
+        normalizeStoreName(store.name), Number(store.lat), Number(store.lng)
+    ]);
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(identity));
+    return `location_${Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')}`;
+}
+
+async function saveStoreReviewTransaction(storeRef, review, metadata, createData = null) {
+    return runTransaction(db, async transaction => {
+        const snapshot = await transaction.get(storeRef);
+        if (!snapshot.exists()) {
+            if (!createData) throw new Error(window.t('notice.storeNotFound'));
+            transaction.set(storeRef, createData);
+            return { store: createData, isNewStore: true };
+        }
+
+        const store = snapshot.data();
+        const nextReview = {
+            ...review,
+            rating: Number(review.rating || store.rating || 3.8)
+        };
+        const updates = { revs: arrayUnion(nextReview) };
+        if (Array.isArray(review.images) && review.images.length) {
+            updates.images = arrayUnion(...review.images);
+        }
+        for (const field of ['googlePlaceId', 'openingHours', 'distance', 'address', 'cuisineLabel', 'primaryType']) {
+            if (!store[field] && metadata[field]) updates[field] = metadata[field];
+        }
+        if ((!Array.isArray(store.types) || !store.types.length) && Array.isArray(metadata.types) && metadata.types.length) {
+            updates.types = metadata.types;
+        }
+        transaction.update(storeRef, updates);
+        return {
+            store: { ...store, revs: [...(Array.isArray(store.revs) ? store.revs : []), nextReview] },
+            isNewStore: false
+        };
+    });
+}
+
 window.submitNew = async () => {
     if (!currentUser) return showAppNoticeModal(window.t("notice.loginRequired"));
     if (!document.getElementById('newName').value.trim()) {
-        return showAppNoticeModal("请先选择店铺并确认");
+        return showAppNoticeModal(window.t('notice.confirmStore'));
     }
 
     // 防双击 / 刷量
@@ -4822,22 +5217,22 @@ window.submitNew = async () => {
 
         if (files.length) {
             if (files.length > MAX_REVIEW_IMAGES) {
-                throw new Error(`一次最多上传 ${MAX_REVIEW_IMAGES} 张图片`);
+                throw new Error(window.t('notice.maxImages', { n: MAX_REVIEW_IMAGES }));
             }
             const invalidFile = [...files].find(f => !isImageFile(f));
             if (invalidFile) {
                 document.getElementById('fileInput').value = "";
                 previewImg(document.getElementById('fileInput'));
-                throw new Error("只能上传图片文件");
+                throw new Error(window.t('notice.fileImageOnly'));
             }
             const oversized = [...files].find(f => f.size > MAX_IMAGE_BYTES);
             if (oversized) {
-                throw new Error(`单张图片不能超过 ${Math.floor(MAX_IMAGE_BYTES / 1024 / 1024)}MB`);
+                throw new Error(window.t('notice.maxImageSize', { n: Math.floor(MAX_IMAGE_BYTES / 1024 / 1024) }));
             }
             // 评论文字长度上限
             const reviewTextRaw = String(document.getElementById('newReview').value || '');
             if (reviewTextRaw.length > MAX_REVIEW_TEXT_LEN) {
-                throw new Error(`评论文字最多 ${MAX_REVIEW_TEXT_LEN} 个字符`);
+                throw new Error(window.t('notice.maxReviewLength', { n: MAX_REVIEW_TEXT_LEN }));
             }
             // 用户上传了图片，上传到 Firebase Storage
             reviewImageUrls = await Promise.all([...files].map(async (f, index) => {
@@ -4849,12 +5244,10 @@ window.submitNew = async () => {
         // 保存店铺数据到 Firestore
         // 优先使用搜索阶段选中的本地店铺ID，确保不会重复创建
         let existingStoreId = null;
-        let existingStoreData = null;
         if (selectedExistingStoreId) {
             const existing = localStores.find(s => s.id === selectedExistingStoreId);
             if (existing) {
                 existingStoreId = existing.id;
-                existingStoreData = existing;
             }
         }
 
@@ -4862,16 +5255,15 @@ window.submitNew = async () => {
             const existing = localStores.find(s => s.googlePlaceId === selectedStorePlaceId);
             if (existing) {
                 existingStoreId = existing.id;
-                existingStoreData = existing;
             }
         }
 
         if (!existingStoreId) {
             const typedName = normalizeStoreName(document.getElementById('newName').value);
-            const existingByName = localStores.find(s => normalizeStoreName(s.name) === typedName);
+            const existingByName = localStores.find(s => normalizeStoreName(s.name) === typedName
+                && !(selectedStorePlaceId && s.googlePlaceId && s.googlePlaceId !== selectedStorePlaceId));
             if (existingByName) {
                 existingStoreId = existingByName.id;
-                existingStoreData = existingByName;
             }
         }
 
@@ -4887,7 +5279,6 @@ window.submitNew = async () => {
                     if (!dupSnap.empty) {
                         const d = dupSnap.docs[0];
                         existingStoreId = d.id;
-                        existingStoreData = { id: d.id, ...d.data() };
                     }
                 }
                 if (!existingStoreId) {
@@ -4897,15 +5288,18 @@ window.submitNew = async () => {
                             collection(db, "stores"),
                             where("name", "==", typedNameForRemote)
                         ));
-                        if (!dupNameSnap.empty) {
-                            const d = dupNameSnap.docs[0];
+                        const d = dupNameSnap.docs.find(candidate => {
+                            const placeId = candidate.data().googlePlaceId;
+                            return !(selectedStorePlaceId && placeId && placeId !== selectedStorePlaceId);
+                        });
+                        if (d) {
                             existingStoreId = d.id;
-                            existingStoreData = { id: d.id, ...d.data() };
                         }
                     }
                 }
             } catch (err) {
-                console.warn("查重失败，继续按本地缓存判断:", err);
+                console.warn("店铺查重失败，停止发布以避免重复创建:", err);
+                throw err;
             }
         }
 
@@ -4931,12 +5325,12 @@ window.submitNew = async () => {
             const store = localStores.find(item => item.id === sid);
             const revs = Array.isArray(store?.revs) ? store.revs : [];
             if (!store || !Number.isInteger(idx) || idx < 0 || idx >= revs.length) {
-                throw new Error("这条记录不存在或已更新");
+                throw new Error(window.t('notice.recordMissing'));
             }
 
             const targetRev = revs[idx];
             if (!isReviewMine(targetRev, getCurrentUserAliases())) {
-                throw new Error("只能编辑自己的评论");
+                throw new Error(window.t('notice.editOwnReviewOnly'));
             }
 
             const nextReviewImages = reviewImageUrls.length
@@ -5024,68 +5418,33 @@ window.submitNew = async () => {
 
         let postSuccessPayload = null;
 
+        const storeMetadata = {
+            googlePlaceId: selectedStorePlaceId,
+            openingHours: selectedStoreOpeningHours,
+            distance: selectedStoreDistance,
+            address: selectedStoreAddress,
+            cuisineLabel: selectedStoreCuisineLabel,
+            primaryType: selectedStorePrimaryType,
+            types: selectedStoreTypes
+        };
         if (existingStoreId) {
-            // === 已存在：合并数据 ===
-            const storeRef = doc(db, "stores", existingStoreId);
-            const updates = {};
-
-            // 合并评论（即使没有文字，也记录一条“评分动态”）
-            updates.revs = arrayUnion({
-                ...newReview,
-                rating: Number(newReview.rating || existingStoreData?.rating || 3.8)
-            });
-
-            // 合并图片
-            if (reviewImageUrls.length > 0) {
-                updates.images = arrayUnion(...reviewImageUrls);
-            }
-
-            // 更新Google数据（如果原来没有）
-            if (!existingStoreData.googlePlaceId && selectedStorePlaceId) {
-                updates.googlePlaceId = selectedStorePlaceId;
-            }
-            if (!existingStoreData.openingHours && selectedStoreOpeningHours) {
-                updates.openingHours = selectedStoreOpeningHours;
-            }
-            if (!existingStoreData.distance && selectedStoreDistance) {
-                updates.distance = selectedStoreDistance;
-            }
-            if (!existingStoreData.address && selectedStoreAddress) {
-                updates.address = selectedStoreAddress;
-            }
-            if (!existingStoreData.cuisineLabel && selectedStoreCuisineLabel) {
-                updates.cuisineLabel = selectedStoreCuisineLabel;
-            }
-            if (!existingStoreData.primaryType && selectedStorePrimaryType) {
-                updates.primaryType = selectedStorePrimaryType;
-            }
-            if ((!Array.isArray(existingStoreData.types) || !existingStoreData.types.length) && Array.isArray(selectedStoreTypes) && selectedStoreTypes.length) {
-                updates.types = selectedStoreTypes;
-            }
-
-            await updateDoc(storeRef, updates);
-
-            const predictedRevs = [
-                ...(Array.isArray(existingStoreData?.revs) ? existingStoreData.revs : []),
-                {
-                    ...newReview,
-                    rating: Number(newReview.rating || existingStoreData?.rating || 3.8)
-                }
-            ];
-            const myVisitCount = predictedRevs.filter(rev => isReviewMine(rev, getCurrentUserAliases())).length || 1;
+            const result = await saveStoreReviewTransaction(
+                doc(db, "stores", existingStoreId), newReview, storeMetadata
+            );
+            const myVisitCount = result.store.revs.filter(rev => isReviewMine(rev, getCurrentUserAliases())).length || 1;
             postSuccessPayload = {
                 rating: addRating,
-                storeName: existingStoreData?.name || document.getElementById('newName').value,
+                storeName: result.store.name || document.getElementById('newName').value,
                 visitCount: myVisitCount,
-                isNewStore: false
+                isNewStore: result.isNewStore
             };
         } else {
             if (!fetchedPhotoRef) {
-                throw new Error("新建店铺需要一张Google封面图，请重新搜索并选择带图片的店铺");
+                throw new Error(window.t('notice.coverRequired'));
             }
 
             const originalText = btn.innerHTML;
-            btn.innerHTML = `<div class="spinner"></div> <span>获取店铺封面中...</span>`;
+            btn.innerHTML = `<div class="spinner"></div> <span>${window.t('add.loadingCover')}</span>`;
             let googleCoverAsset = "";
             try {
                 googleCoverAsset = await copyGooglePlacePhotoToStorage(fetchedPhotoRef);
@@ -5135,12 +5494,23 @@ window.submitNew = async () => {
                 createdAt: Date.now(),                                    // 创建时间戳
                 revs: [newReview]
             };
-            await addDoc(collection(db, "stores"), createdStore);
+            const storeId = await getNewStoreDocumentId(createdStore);
+            const result = await saveStoreReviewTransaction(
+                doc(db, "stores", storeId), newReview, storeMetadata, createdStore
+            );
+            if (!result.isNewStore) {
+                // Another publisher supplied the cover. Clean up only this
+                // request's unused copy, keeping every image the store uses.
+                const retainedUrls = new Set(collectStoreAllImageUrls(result.store));
+                await deleteStorageFilesByUrls(collectImageAssetUrls([googleCoverAsset])
+                    .filter(url => !retainedUrls.has(url)));
+            }
+            const myVisitCount = result.store.revs.filter(rev => isReviewMine(rev, getCurrentUserAliases())).length || 1;
             postSuccessPayload = {
                 rating: addRating,
-                storeName: createdStore.name,
-                visitCount: 1,
-                isNewStore: true
+                storeName: result.store.name,
+                visitCount: myVisitCount,
+                isNewStore: result.isNewStore
             };
         }
         switchView('home');      // 跳转到首页
@@ -5159,7 +5529,7 @@ window.submitNew = async () => {
             openPostSuccessModal(postSuccessPayload);
         }
     } catch (e) {
-        showAppNoticeModal(e.message || "发布失败，请稍后重试");
+        showAppNoticeModal(e.message || window.t('notice.publishFailed'));
     } finally {
         isSubmittingReview = false;
         lastSubmitAt = Date.now();
@@ -5447,7 +5817,7 @@ function renderAddPickedMapPreview(retry = 0) {
     if (!mapWrap) return;
 
     if (!selectedStoreLocation || !selectedStoreLocation.lat || !selectedStoreLocation.lng) {
-        mapWrap.innerHTML = `<div class="add-picked-map-empty">选择店铺后显示地图预览</div>`;
+        mapWrap.innerHTML = `<div class="add-picked-map-empty">${window.t('map.pickPreview')}</div>`;
         addPreviewMap = null;
         addPreviewMarker = null;
         return;
@@ -5456,7 +5826,7 @@ function renderAddPickedMapPreview(retry = 0) {
     const lat = Number(selectedStoreLocation.lat);
     const lng = Number(selectedStoreLocation.lng);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-        mapWrap.innerHTML = `<div class="add-picked-map-empty">暂无地图预览</div>`;
+        mapWrap.innerHTML = `<div class="add-picked-map-empty">${window.t('map.noPreview')}</div>`;
         return;
     }
 
@@ -5492,7 +5862,7 @@ function renderAddPickedMapPreview(retry = 0) {
         return;
     }
 
-    mapWrap.innerHTML = `<div class="add-picked-map-empty">地图加载中...</div>`;
+    mapWrap.innerHTML = `<div class="add-picked-map-empty">${window.t('map.loading')}</div>`;
     if (retry < 8) {
         if (addMapRetryTimer) clearTimeout(addMapRetryTimer);
         addMapRetryTimer = setTimeout(() => renderAddPickedMapPreview(retry + 1), 280);
@@ -5700,7 +6070,7 @@ function renderAddComposerPreview() {
         input.value = "";
         uploadPlaceholder.style.display = 'inline-flex';
         previewList.classList.add('hidden');
-        showAppNoticeModal(`一次最多上传 ${MAX_REVIEW_IMAGES} 张图片`);
+        showAppNoticeModal(window.t('notice.maxImages', { n: MAX_REVIEW_IMAGES }));
         return;
     }
     const oversized = files.find(f => f.size > MAX_IMAGE_BYTES);
@@ -5708,7 +6078,7 @@ function renderAddComposerPreview() {
         input.value = "";
         uploadPlaceholder.style.display = 'inline-flex';
         previewList.classList.add('hidden');
-        showAppNoticeModal(`单张图片不能超过 ${Math.floor(MAX_IMAGE_BYTES / 1024 / 1024)}MB`);
+        showAppNoticeModal(window.t('notice.maxImageSize', { n: Math.floor(MAX_IMAGE_BYTES / 1024 / 1024) }));
         return;
     }
 
@@ -6008,11 +6378,11 @@ window.openEditReviewComposer = (storeId, reviewIndex, opts = {}) => {
     const revs = Array.isArray(store?.revs) ? store.revs : [];
     const targetRev = (Number.isInteger(idx) && idx >= 0 && idx < revs.length) ? revs[idx] : null;
     if (!store || !targetRev) {
-        showAppNoticeModal("这条记录不存在或已更新");
+        showAppNoticeModal(window.t('notice.recordMissing'));
         return;
     }
     if (!isReviewMine(targetRev, getCurrentUserAliases())) {
-        showAppNoticeModal("只能编辑自己的评论");
+        showAppNoticeModal(window.t('notice.editOwnReviewOnly'));
         return;
     }
 
@@ -6361,7 +6731,7 @@ function buildLocalAddSearchItem(store, listEl, opts = {}) {
         source: 'local',
         name: store.name,
         address: addressText,
-        secondaryText: distanceText ? `${distanceText} · ${addressText || "地址未收录"}` : (addressText || "地址未收录"),
+        secondaryText: distanceText ? `${distanceText} · ${addressText || window.t('common.addressUnknown')}` : (addressText || window.t('common.addressUnknown')),
         lat: Number(store.lat),
         lng: Number(store.lng),
         onClick: () => {
@@ -6414,7 +6784,7 @@ function buildGoogleAddSearchItem(place, listEl, opts = {}) {
         source: 'google',
         name: preferredName,
         address: addressText,
-        secondaryText: distanceText ? `${distanceText} · ${addressText || "地址未收录"}` : (addressText || "地址未收录"),
+        secondaryText: distanceText ? `${distanceText} · ${addressText || window.t('common.addressUnknown')}` : (addressText || window.t('common.addressUnknown')),
         lat: Number(place.location?.latitude),
         lng: Number(place.location?.longitude),
         placeId: place.id || "",
@@ -6553,7 +6923,7 @@ window.addEventListener('resize', () => {
 
 function renderAddSearchResultList(items, listEl) {
     if (!items.length) {
-        listEl.innerHTML = "<div style='padding:10px'>没有结果</div>";
+        listEl.innerHTML = `<div style='padding:10px'>${window.t('common.noResults')}</div>`;
         return;
     }
 
@@ -6568,7 +6938,7 @@ function renderAddSearchResultList(items, listEl) {
 
         d.innerHTML = `
             <div class="result-item-name"><b>${escapeHtml(item.name)}</b>${badge}</div>
-            <small>${escapeHtml(item.secondaryText || item.address || "地址未收录")}</small>
+            <small>${escapeHtml(item.secondaryText || item.address || window.t('common.addressUnknown'))}</small>
         `;
 
         d.onclick = item.onClick;
@@ -6701,23 +7071,23 @@ window.searchStoreForAdd = async (queryText = null, opts = {}) => {
 function getCurrentPositionOnce() {
     return new Promise((resolve, reject) => {
         if (!navigator.geolocation) {
-            reject(new Error("当前浏览器不支持读取定位"));
+            reject(new Error(window.t('notice.locationUnsupported')));
             return;
         }
         navigator.geolocation.getCurrentPosition((position) => {
             const lat = Number(position?.coords?.latitude);
             const lng = Number(position?.coords?.longitude);
             if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-                reject(new Error("读取定位失败，请重试"));
+                reject(new Error(window.t('notice.locationFailed')));
                 return;
             }
             resolve({ lat, lng });
         }, (error) => {
             const code = Number(error?.code);
-            if (code === 1) reject(new Error("你拒绝了定位权限，请在浏览器设置里允许定位"));
-            else if (code === 2) reject(new Error("暂时无法获取当前位置，请检查定位服务"));
-            else if (code === 3) reject(new Error("定位超时，请重试"));
-            else reject(new Error("读取定位失败，请重试"));
+            if (code === 1) reject(new Error(window.t('notice.locationDenied')));
+            else if (code === 2) reject(new Error(window.t('notice.locationUnavailable')));
+            else if (code === 3) reject(new Error(window.t('notice.locationTimeout')));
+            else reject(new Error(window.t('notice.locationFailed')));
         }, {
             enableHighAccuracy: true,
             timeout: 10000,
@@ -6762,7 +7132,7 @@ window.searchNearbyAddStores = async () => {
                 toggleLink.classList.add('hidden');
                 updateAddMapToggleLabel(false);
             }
-            list.innerHTML = "<div style='padding:10px'>100米内没有 Google 地图店铺</div>";
+            list.innerHTML = `<div style='padding:10px'>${window.t('map.noNearby')}</div>`;
             hideAddSearchMap();
             return;
         }
@@ -6770,7 +7140,7 @@ window.searchNearbyAddStores = async () => {
         const items = buildAddItemsFromGooglePlaces(nearbyPlaces, list, origin);
         applyAddSearchResults(items, list, "", { forceMapToggle: true });
     } catch (err) {
-        showAppNoticeModal(err?.message || "读取定位失败，请重试");
+        showAppNoticeModal(err?.message || window.t('notice.locationFailed'));
     } finally {
         isAddNearbySearchLoading = false;
         setAddNearbySearchButtonLoading(false);
@@ -6793,7 +7163,7 @@ window.migrateStoreNamesToPreferredLanguage = async (opts = {}) => {
     } = opts || {};
 
     if (typeof window.fetchPreferredPlaceNameById !== 'function') {
-        throw new Error('地图模块未就绪，请先打开一次地图页后重试');
+        throw new Error(window.t('notice.mapNotReady'));
     }
 
     const targets = (localStores || []).filter((store) => String(store?.googlePlaceId || '').trim());
@@ -6876,7 +7246,7 @@ async function searchLocationForConfirm(keyword = null) {
     list.classList.add('active');
 
     if (!ps.length) {
-        list.innerHTML = "<div style='padding:10px'>No results</div>";
+        list.innerHTML = `<div style='padding:10px'>${window.t('common.noResults')}</div>`;
         return;
     }
 
@@ -7649,36 +8019,36 @@ function applyFilters() {
 
     // 偏好
     if (filterState.pref !== 'none') {
-        if (filterState.pref === 'good') textParts.push('朋友好评');
-        else if (filterState.pref === 'bad') textParts.push('朋友差评');
-        else if (filterState.pref === 'want') textParts.push('朋友想吃');
+        if (filterState.pref === 'good') textParts.push(window.t('filter.friendGood'));
+        else if (filterState.pref === 'bad') textParts.push(window.t('filter.friendBad'));
+        else if (filterState.pref === 'want') textParts.push(window.t('filter.friendWant'));
     }
 
     // 价格
     if (filterState.priceMin || filterState.priceMax) {
         const pMin = filterState.priceMin || '0';
         const pMax = filterState.priceMax || '∞';
-        textParts.push(`${pMin}-${pMax}日元`);
+        textParts.push(`${pMin}-${pMax} ${window.t('unit.jpy')}`);
     }
 
     // 距离
     if (filterState.dist === 'custom') {
         const customVal = filterState.distCustom || '0';
-        textParts.push(`${customVal}m内`);
+        textParts.push(window.t('filter.withinMeters', { n: customVal }));
     } else if (filterState.dist === 'infinite') {
         // textParts.push('距离不限'); // Optional: Don't show text if unlimited
     } else if (filterState.dist !== '200') {
-        textParts.push(`${filterState.dist}m内`);
+        textParts.push(window.t('filter.withinMeters', { n: filterState.dist }));
     }
 
     // 评分
     if (filterState.ratingMin > 0 || filterState.ratingMax < 5) {
-        textParts.push(`${filterState.ratingMin}-${filterState.ratingMax}分`);
+        textParts.push(window.t('filter.ratingRange', { min: filterState.ratingMin, max: filterState.ratingMax }));
     }
 
     // 营业状态
     if (filterState.openStatus && filterState.openStatus !== 'any') {
-        textParts.push(filterState.openStatus === 'open' ? '营业中' : '即将营业');
+        textParts.push(filterState.openStatus === 'open' ? window.t('status.open') : window.t('status.openSoon'));
     }
 
 
@@ -7687,10 +8057,10 @@ function applyFilters() {
     const masterBtn = document.getElementById('filter-master-btn');
 
     if (textParts.length > 0) {
-        btnText.innerText = "筛选: " + textParts.join(' / ');
+        btnText.innerText = window.t('filter.summary', { summary: textParts.join(' / ') });
         masterBtn.classList.add('active-filter');
     } else {
-        btnText.innerText = "筛选";
+        btnText.innerText = window.t('common.filter');
         masterBtn.classList.remove('active-filter');
     }
 }
@@ -7785,26 +8155,38 @@ function saveCachedLocationState(coords, meta = {}) {
     }
 }
 
+function translateLocationText(text) {
+    const value = String(text || '').trim();
+    // Includes old cached labels and labels saved under a different UI language.
+    const keys = ['loc.currentLabel', 'loc.readLocation', 'notice.locationLocating', 'common.loading', 'form.customLocation'];
+    if (value === '读取中...') return window.t('common.loading');
+    for (const key of keys) {
+        if (SUPPORTED_LANGS.some(lang => I18N_DICT[lang][key] === value)) return window.t(key);
+    }
+    return value;
+}
+
 function setCurrentLocationText(label, detail = "") {
     const textEl = document.getElementById('current-location-text');
     if (!textEl) return;
-    const safeLabel = String(label || "读取位置").trim() || "读取位置";
+    const safeLabel = String(label || window.t('loc.readLocation')).trim() || window.t('loc.readLocation');
     const safeDetail = String(detail || safeLabel).trim() || safeLabel;
-    textEl.innerText = safeLabel;
-    textEl.title = safeDetail;
+    textEl.innerText = translateLocationText(safeLabel);
+    textEl.title = translateLocationText(safeDetail);
 }
 
 function setLocationConfirmDetailText(detail = "") {
     const detailEl = document.getElementById('loc-confirm-current');
     if (!detailEl) return;
     const safeDetail = String(detail || currentResolvedLocationDetail || currentResolvedLocationLabel || "读取中...").trim() || "读取中...";
-    detailEl.innerText = `${window.t('loc.currentPrefix')}${safeDetail}`;
-    detailEl.title = safeDetail;
+    detailEl.innerText = `${window.t('loc.currentPrefix')}${translateLocationText(safeDetail)}`;
+    detailEl.title = translateLocationText(safeDetail);
 }
 
 function isGenericCurrentLocationText(text = "") {
     const normalized = String(text || "").trim();
-    return !normalized || normalized === "当前位置" || normalized === "读取位置" || normalized === "正在定位...";
+    return !normalized || ['loc.currentLabel', 'loc.readLocation', 'notice.locationLocating'].some(key =>
+        SUPPORTED_LANGS.some(lang => I18N_DICT[lang][key] === normalized));
 }
 
 function normalizeFullWidthDigits(text) {
@@ -8175,7 +8557,7 @@ window.startFetchLocation = (options = {}) => {
     const showLoading = opts.showLoading !== false;
     if (isFetchingCurrentLocation) return;
     if (!navigator.geolocation) {
-        if (!silentError) showAppNoticeModal("当前浏览器不支持读取定位");
+        if (!silentError) showAppNoticeModal(window.t('notice.locationUnsupported'));
         return;
     }
 
@@ -8206,7 +8588,7 @@ window.startFetchLocation = (options = {}) => {
         const lng = Number(position?.coords?.longitude);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
             finalizeFetch();
-            if (!silentError) showAppNoticeModal("读取定位失败，请重试");
+            if (!silentError) showAppNoticeModal(window.t('notice.locationFailed'));
             return;
         }
 
@@ -8224,18 +8606,18 @@ window.startFetchLocation = (options = {}) => {
         finalizeFetch();
         const code = Number(error?.code);
         if (code === 1) {
-            if (!silentError) showAppNoticeModal("你拒绝了定位权限，请在浏览器设置里允许定位");
+            if (!silentError) showAppNoticeModal(window.t('notice.locationDenied'));
             return;
         }
         if (code === 2) {
-            if (!silentError) showAppNoticeModal("暂时无法获取当前位置，请检查定位服务");
+            if (!silentError) showAppNoticeModal(window.t('notice.locationUnavailable'));
             return;
         }
         if (code === 3) {
-            if (!silentError) showAppNoticeModal("定位超时，请重试");
+            if (!silentError) showAppNoticeModal(window.t('notice.locationTimeout'));
             return;
         }
-        if (!silentError) showAppNoticeModal("读取定位失败，请重试");
+        if (!silentError) showAppNoticeModal(window.t('notice.locationFailed'));
     }, {
         enableHighAccuracy: true,
         timeout: 10000,
@@ -8256,7 +8638,10 @@ window.toggleLocCustomSearch = () => {
     const willShow = panel.classList.contains('hidden');
     panel.classList.toggle('hidden', !willShow);
     toggle.classList.toggle('is-active', willShow);
-    if (label) label.innerText = willShow ? '收起' : '自定义位置';
+    if (label) {
+        label.dataset.i18n = willShow ? 'reviews.collapse' : 'form.customLocation';
+        label.innerText = window.t(label.dataset.i18n);
+    }
     if (willShow && input) {
         if (!input.dataset.bound) {
             input.dataset.bound = '1';
@@ -8299,7 +8684,7 @@ window.clearLocCustomSearch = () => {
 async function runLocCustomSearch(q) {
     const list = document.getElementById('loc-custom-search-results');
     if (!list) return;
-    list.innerHTML = `<div class="loc-custom-search-item" style="color:#9aa3ad">搜索中…</div>`;
+    list.innerHTML = `<div class="loc-custom-search-item" style="color:#9aa3ad">${window.t('loc.searching')}</div>`;
     try {
         const origin = typeof getCurrentOriginCoords === 'function' ? getCurrentOriginCoords() : null;
         let places = [];
@@ -8309,7 +8694,7 @@ async function runLocCustomSearch(q) {
             places = await placesSearchTextCached(q, false);
         }
         if (!Array.isArray(places) || !places.length) {
-            list.innerHTML = `<div class="loc-custom-search-item" style="color:#9aa3ad">没有匹配的位置</div>`;
+            list.innerHTML = `<div class="loc-custom-search-item" style="color:#9aa3ad">${window.t('loc.noMatch')}</div>`;
             return;
         }
         const haversine = (a, b) => {
@@ -8345,9 +8730,9 @@ async function runLocCustomSearch(q) {
                     <div class="loc-custom-search-item-sub">${escapeAttrHtml(addr)}</div>
                 </div>
             `;
-        }).join('') || `<div class="loc-custom-search-item" style="color:#9aa3ad">没有匹配的位置</div>`;
+        }).join('') || `<div class="loc-custom-search-item" style="color:#9aa3ad">${window.t('loc.noMatch')}</div>`;
     } catch (e) {
-        list.innerHTML = `<div class="loc-custom-search-item" style="color:#c92a2a">搜索出错，请稍后再试</div>`;
+        list.innerHTML = `<div class="loc-custom-search-item" style="color:#c92a2a">${window.t('loc.searchError')}</div>`;
     }
 }
 
@@ -8406,7 +8791,10 @@ window.closeLocModals = () => {
     const customResults = document.getElementById('loc-custom-search-results');
     if (customPanel) customPanel.classList.add('hidden');
     if (customToggle) customToggle.classList.remove('is-active');
-    if (customLabel) customLabel.innerText = '自定义位置';
+    if (customLabel) {
+        customLabel.dataset.i18n = 'form.customLocation';
+        customLabel.innerText = window.t('form.customLocation');
+    }
     if (customInput) customInput.value = '';
     if (customResults) customResults.innerHTML = '';
 };
@@ -8423,7 +8811,7 @@ async function initPreferredLocationOnStartup() {
             { persist: false, refresh: false }
         );
     } else {
-        setCurrentLocationText("读取位置", "读取位置");
+        setCurrentLocationText(window.t('loc.readLocation'), window.t('loc.readLocation'));
         setLocationConfirmDetailText("读取中...");
         syncLocationTriggerIcon();
     }
@@ -8480,7 +8868,7 @@ function resetViewingFriendProfileState() {
 function restoreOwnProfileIdentity() {
     if (!currentUser) return;
     setProfileIdentity(
-        currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : '用户'),
+        currentUser.displayName || (currentUser.email ? currentUser.email.split('@')[0] : window.t('common.user')),
         currentUser.photoURL || ''
     );
     loadUserAvatar(currentUser.uid);
@@ -8799,9 +9187,9 @@ window.switchFavTab = (tab) => {
     setFavTabIconFilled(dislikeBtn, tab === 'dislike');
 
     // 更新标签上的数字
-    document.getElementById('txt-want').innerText = `想吃(${validFavIds.length})`;
-    document.getElementById('txt-like').innerText = `好吃(${validLikeIds.length})`;
-    document.getElementById('txt-dislike').innerText = `难吃(${validDislikeIds.length})`;
+    document.getElementById('txt-want').innerText = `${window.t('pref.want')}(${validFavIds.length})`;
+    document.getElementById('txt-like').innerText = `${window.t('pref.like')}(${validLikeIds.length})`;
+    document.getElementById('txt-dislike').innerText = `${window.t('pref.dislike')}(${validDislikeIds.length})`;
 
     // 根据标签筛选店铺
     let targetIds = [];
@@ -9139,11 +9527,11 @@ function updateDetailFavBtn(id) {
     if (isFav) {
         btn.style.background = "#ffce00";
         btn.style.color = "#2d3436";
-        btn.innerHTML = `<i data-lucide="bookmark" width="18" fill="currentColor"></i> 已想吃`;
+        btn.innerHTML = `<i data-lucide="bookmark" width="18" fill="currentColor"></i> ${window.t('detail.savedWant')}`;
     } else {
         btn.style.background = "#f0f0f0";
         btn.style.color = "#2d3436";
-        btn.innerHTML = `<i data-lucide="bookmark" width="18"></i> 收藏(想吃)`;
+        btn.innerHTML = `<i data-lucide="bookmark" width="18"></i> ${window.t('detail.saveWant')}`;
     }
     lucide.createIcons();
 }
@@ -9247,7 +9635,7 @@ function refreshProfileTopStore() {
     if (!top) { wrap.classList.add('hidden'); wrap.dataset.storeId = ''; return; }
     const nameEl = document.getElementById('profile-top-store-name');
     const countEl = document.getElementById('profile-top-store-count');
-    if (nameEl) nameEl.innerText = top.store.name || '店铺';
+    if (nameEl) nameEl.innerText = top.store.name || window.t('common.store');
     if (countEl) countEl.innerText = window.t('detail.eatenN', { n: top.count });
     wrap.dataset.storeId = top.store.id || '';
     wrap.classList.remove('hidden');
@@ -9292,7 +9680,7 @@ function updateFriendActionButton() {
 function setProfileIdentity(name, avatarUrl) {
     const nameEl = document.getElementById('profile-username');
     const avatarImg = document.getElementById('profile-avatar-display');
-    if (nameEl) nameEl.innerText = name || '用户';
+    if (nameEl) nameEl.innerText = name || window.t('common.user');
     if (avatarImg) avatarImg.src = avatarUrl || DEFAULT_AVATAR_URL;
 }
 
@@ -9352,7 +9740,7 @@ window.confirmEditUsername = async () => {
         });
     } catch (err) {
         console.error("修改用户名失败:", err);
-        alert("修改用户名失败: " + err.message);
+        alert(window.t('notice.usernameFailed') + ': ' + err.message);
     }
 };
 
@@ -9980,7 +10368,7 @@ function syncActivityImageModalImage() {
     if (pinIcon && pinLabel && state && canSetMain) {
         const isMain = getMainImageForDay(currentImageModalDateKey) === src;
         pinIcon.src = isMain ? 'images/main-f.svg' : 'images/main.svg';
-        pinLabel.innerText = '设为今日主图';
+        pinLabel.innerText = window.t('detail.setAsMain');
         if (setMainBtn) setMainBtn.classList.toggle('hidden', isMain);
         state.classList.toggle('hidden', !isMain);
     } else if (setMainBtn && state) {
@@ -10128,14 +10516,14 @@ function updateRecordJumpButton() {
     const todayYear = new Date().getFullYear();
     const selectedYear = Number(yearSelect.value || todayYear);
     if (selectedYear !== todayYear) {
-        jumpButton.innerText = '回到今年';
+        jumpButton.innerText = window.t('record.thisYearBtn');
         jumpButton.classList.remove('hidden');
         return;
     }
 
     const todayCell = getRecordTodayTarget();
     const shouldShowJump = !!todayCell && !isRecordElementVisibleInPage(todayCell);
-    jumpButton.innerText = '回到今天';
+    jumpButton.innerText = window.t('record.todayBtn');
     jumpButton.classList.toggle('hidden', !shouldShowJump);
 }
 
@@ -10365,7 +10753,7 @@ window.openRecordDayView = (dayKey) => {
                 ${photos ? `<div class="record-day-photos">${photos}</div>` : ''}
             </div>
         `;
-    }).join('') : `<div class="record-empty">当天暂无记录</div>`;
+    }).join('') : `<div class="record-empty">${window.t('record.empty')}</div>`;
     if (recordDayViewHideTimer) {
         clearTimeout(recordDayViewHideTimer);
         recordDayViewHideTimer = null;
@@ -11130,7 +11518,8 @@ async function ensureAllUsersLoaded(forceReload = false) {
             (err) => {
                 console.error("加载用户列表失败:", err);
                 const code = err && err.code ? ` (${err.code})` : "";
-                usersLoadErrorMsg = `用户列表读取失败${code}`;
+                usersLoadErrorCode = code;
+                usersLoadErrorMsg = window.t('friend.loadError', { code });
                 allUsersCache = [];
                 window.allUsersCache = allUsersCache;
                 finish();
@@ -11156,14 +11545,14 @@ function renderFriendsList() {
             pendingEl.classList.remove('hidden');
             pendingEl.innerHTML = incomingFriendRequests.map(req => {
                 const from = allUsersCache.find(u => u.id === req.fromUid) || {};
-                const name = from.displayName || (from.email ? from.email.split('@')[0] : (req.fromUid || '用户'));
+                const name = from.displayName || (from.email ? from.email.split('@')[0] : (req.fromUid || window.t('common.user')));
                 const avatar = from.avatarUrl || DEFAULT_AVATAR_URL;
                 return `
                 <div class="friend-request-row">
                     <img src="${avatar}" class="friend-avatar" alt="${name}">
                     <div class="friend-request-text">
                         <span class="friend-request-name">${name}</span>
-                        <span class="friend-request-suffix">申请成为好友</span>
+                        <span class="friend-request-suffix">${window.t('friend.requestSuffix')}</span>
                     </div>
                     <button class="friend-btn primary" onclick="openFriendProfile('${req.fromUid}')">${window.t('friend.viewProfile')}</button>
                     <button class="friend-btn secondary" onclick="ignoreFriendRequest('${req.id}')">${window.t('friend.ignore')}</button>
@@ -11175,7 +11564,7 @@ function renderFriendsList() {
 
     if (!myFriends || myFriends.length === 0) {
         listEl.innerHTML = `<div style="text-align:center; padding:40px; color:#b2bec3; font-size:13px;">
-            还没有好友，点击右上角 <b>添加好友</b> 吧
+            ${window.t('friend.empty')}
         </div>`;
         return;
     }
@@ -11190,13 +11579,13 @@ function renderFriendsList() {
         });
     if (!friendUsers.length) {
         listEl.innerHTML = `<div style="text-align:center; padding:40px; color:#b2bec3; font-size:13px;">
-            ${keyword ? '没有匹配的好友' : '好友数据加载中，请稍后再试'}
+            ${keyword ? window.t('friend.noMatch') : window.t('friend.loading')}
         </div>`;
         return;
     }
 
     listEl.innerHTML = friendUsers.map(u => {
-        const name = u.displayName || (u.email ? u.email.split('@')[0] : '好友');
+        const name = u.displayName || (u.email ? u.email.split('@')[0] : window.t('friend.badge'));
         const avatar = u.avatarUrl || DEFAULT_AVATAR_URL;
         return `
         <div class="friend-item">
@@ -11234,7 +11623,7 @@ window.acceptFriendRequest = async (rid, fromUid) => {
         if (modal && modal.classList.contains('open')) doFriendSearch();
     } catch (err) {
         console.error("通过好友申请失败:", err);
-        alert("通过失败: " + err.message);
+        alert(window.t('notice.friendApproveFailed') + ': ' + err.message);
     }
 };
 
@@ -11248,7 +11637,7 @@ window.ignoreFriendRequest = async (rid) => {
         if (modal && modal.classList.contains('open')) doFriendSearch();
     } catch (err) {
         console.error("忽略好友申请失败:", err);
-        alert("忽略失败: " + err.message);
+        alert(window.t('notice.friendIgnoreFailed') + ': ' + err.message);
     }
 };
 
@@ -11281,7 +11670,7 @@ window.openFriendSearch = async () => {
             else results.innerHTML = '';
         };
         if (usersLoadErrorMsg) {
-            results.innerHTML = `<div style="padding:16px; text-align:center; color:#e17055; font-size:13px;">${usersLoadErrorMsg}，请检查 Firestore 读取权限</div>`;
+            results.innerHTML = `<div style="padding:16px; text-align:center; color:#e17055; font-size:13px;">${window.t('friend.loadError', { code: usersLoadErrorCode })} — ${window.t('friend.permissionHint')}</div>`;
         }
     }
 };
@@ -11346,10 +11735,10 @@ window.doFriendSearch = (opts = {}) => {
 
     if (!hits.length) {
         if (!allUsersCache.length && usersLoadErrorMsg) {
-            results.innerHTML = `<div style="padding:16px; text-align:center; color:#e17055; font-size:13px;">${usersLoadErrorMsg}，请检查 Firestore 读取权限</div>`;
+            results.innerHTML = `<div style="padding:16px; text-align:center; color:#e17055; font-size:13px;">${window.t('friend.loadError', { code: usersLoadErrorCode })} — ${window.t('friend.permissionHint')}</div>`;
             return;
         }
-        results.innerHTML = `<div style="padding:16px; text-align:center; color:#b2bec3; font-size:13px;">没有匹配的用户</div>`;
+        results.innerHTML = `<div style="padding:16px; text-align:center; color:#b2bec3; font-size:13px;">${window.t('friend.noUser')}</div>`;
         return;
     }
 
@@ -11359,7 +11748,7 @@ window.doFriendSearch = (opts = {}) => {
     const renderList = hasMore ? hits.slice(0, limit) : hits;
 
     results.innerHTML = renderList.map(u => {
-        const name = getFriendSearchName(u) || '好友';
+        const name = getFriendSearchName(u) || window.t('friend.badge');
         const avatar = u.avatarUrl || DEFAULT_AVATAR_URL;
         const isPending = Array.isArray(mySentFriendRequests) && mySentFriendRequests.includes(u.id);
         let actionHtml = '';
@@ -11382,7 +11771,7 @@ window.doFriendSearch = (opts = {}) => {
         </div>`;
     }).join('') + (hasMore ? `
         <div class="friend-search-more-wrap">
-            <button class="friend-search-more" onclick="doFriendSearch({ searchAll: true })">搜索全部</button>
+            <button class="friend-search-more" onclick="doFriendSearch({ searchAll: true })">${window.t('friend.searchAll')}</button>
         </div>
     ` : '');
 };
@@ -11420,7 +11809,7 @@ window.addFriend = async (uid) => {
         updateFriendActionButton();
     } catch (err) {
         console.error("添加好友失败:", err);
-        alert("添加好友失败: " + err.message);
+        alert(window.t('notice.friendAddFailed') + ': ' + err.message);
     }
 };
 
@@ -11457,7 +11846,7 @@ window.confirmDeleteFriend = async () => {
         closeDeleteFriendModal();
     } catch (err) {
         console.error("删除好友失败:", err);
-        alert("删除好友失败: " + err.message);
+        alert(window.t('notice.friendDeleteFailed') + ': ' + err.message);
     }
 };
 
@@ -11479,7 +11868,7 @@ window.openFriendProfile = async (uid, opts = {}) => {
             if (snap.exists()) target = { id: snap.id, ...snap.data() };
         }
         if (!target) {
-            alert("该用户不存在");
+            alert(window.t('notice.userMissing'));
             return;
         }
         if (hasLoadedStoresSnapshot) {
@@ -11518,7 +11907,7 @@ window.openFriendProfile = async (uid, opts = {}) => {
         if (guestInfo) guestInfo.classList.add('hidden');
 
         setProfileIdentity(
-            target.displayName || (target.email ? target.email.split('@')[0] : '用户'),
+            target.displayName || (target.email ? target.email.split('@')[0] : window.t('common.user')),
             target.avatarUrl || DEFAULT_AVATAR_URL
         );
         updateProfileHeaderMode();
@@ -11541,7 +11930,7 @@ window.openFriendProfile = async (uid, opts = {}) => {
         }
     } catch (err) {
         console.error("加载好友信息失败:", err);
-        alert("加载好友信息失败: " + err.message);
+        alert(window.t('notice.friendLoadFailed') + ': ' + err.message);
     }
 };
 

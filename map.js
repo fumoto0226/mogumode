@@ -297,7 +297,7 @@ function buildGoogleMapsWebPlaceUrl(placeLike = {}) {
 function openGoogleMapsPlace(placeLike = {}) {
     const webUrl = buildGoogleMapsWebPlaceUrl(placeLike);
     if (!webUrl) {
-        alert("未找到店铺位置信息");
+        alert(window.t('notice.locationMissing'));
         return;
     }
 
@@ -344,10 +344,10 @@ function formatMapDistanceText(storeLike) {
         return window.formatStoreDistanceText(storeLike);
     }
     const fallback = Number(storeLike?.distance);
-    if (!Number.isFinite(fallback) || fallback < 0) return '--分钟';
+    if (!Number.isFinite(fallback) || fallback < 0) return window.t('detail.minutes', { n: '--' });
     const WALK_METERS_PER_MIN = 80;
     const mins = Math.max(1, Math.round(fallback / WALK_METERS_PER_MIN));
-    return `${mins}分钟`;
+    return window.t('detail.minutes', { n: mins });
 }
 
 function createOriginPinOverlayClass() {
@@ -1161,7 +1161,7 @@ function renderMapReviewsAndAlbum(store) {
                 return `<img src="${String(thumbSrc).replace(/"/g, '&quot;')}" loading="lazy" decoding="async" onclick="openActivityImageModal('${String(fullSrc).replace(/'/g, "\\'")}', '', '${albumGalleryKey}', ${index}); event.stopPropagation();">`;
             }).join('')
             : '';
-        const photoPlaceholderText = previewEntries.length ? '没有更多图片了～' : '还没有图片';
+        const photoPlaceholderText = previewEntries.length ? window.t('photos.noMore') : window.t('photos.empty');
         albumGrid.innerHTML = `
             ${photoItems}
             <div class="sheet-list-placeholder sheet-list-placeholder-photos">${photoPlaceholderText}</div>
@@ -1727,7 +1727,7 @@ function commitMapSearch() {
     if (matched.length === 0) {
         // 真的没有：轻提示，不激活筛选
         if (typeof window.showAppFeedbackToast === 'function') {
-            window.showAppFeedbackToast('没有符合条件的店铺');
+            window.showAppFeedbackToast(window.t('home.empty.noMatch'));
         }
         return;
     }
@@ -2006,7 +2006,7 @@ window.renderMapCardFromDB = (store, opts = {}) => {
     if (nameEl) {
         nameEl.innerHTML = (typeof window.renderStoreNameWithStatus === 'function')
             ? window.renderStoreNameWithStatus(store)
-            : (store.name || '店铺');
+            : (store.name || window.t('common.store'));
     }
 
     const subNameEl = document.getElementById('mp-sub-name');
@@ -2029,14 +2029,14 @@ window.renderMapCardFromDB = (store, opts = {}) => {
     }
 
     const addressEl = document.getElementById('mp-address');
-    if (addressEl) addressEl.innerText = store.address || store.formattedAddress || '地址未收录';
+    if (addressEl) addressEl.innerText = store.address || store.formattedAddress || window.t('common.addressUnknown');
 
     const openTimeEl = document.getElementById('mp-open-time');
     if (openTimeEl) {
         const isClosed = typeof window.isStorePermanentlyClosed === 'function' && window.isStorePermanentlyClosed(store);
         const text = (typeof window.getStoreOpenTimeText === 'function')
             ? window.getStoreOpenTimeText(store)
-            : (isClosed ? '永久歇业' : (store.openNow ? '营业中' : '未知'));
+            : (isClosed ? window.t('status.closed') : (store.openNow ? window.t('status.open') : window.t('status.unknown')));
         openTimeEl.innerText = text;
         openTimeEl.classList.toggle('permanent-closed', !!isClosed);
     }
@@ -2050,7 +2050,7 @@ window.renderMapCardFromDB = (store, opts = {}) => {
     const latestMyRating = myRevs.length ? Number(myRevs[0]?.rating) : NaN;
     const hasMyRating = Number.isFinite(latestMyRating) && latestMyRating > 0;
     if (myScoreEl) {
-        myScoreEl.innerText = hasMyRating ? latestMyRating.toFixed(1) : '暂无评分';
+        myScoreEl.innerText = hasMyRating ? latestMyRating.toFixed(1) : window.t('detail.noRating');
         myScoreEl.classList.toggle('empty', !hasMyRating);
     }
     if (myScoreIcon) myScoreIcon.style.display = hasMyRating ? 'inline-block' : 'none';
@@ -2092,7 +2092,7 @@ window.renderMapCardFromDB = (store, opts = {}) => {
                 photoContainer.appendChild(img);
             });
         } else {
-            photoContainer.innerHTML = "<div style='padding:20px; color:#999; text-align:center; font-size:12px;'>暂无图片</div>";
+            photoContainer.innerHTML = `<div style='padding:20px; color:#999; text-align:center; font-size:12px;'>${window.t('detail.noPhotos')}</div>`;
         }
     }
 
@@ -2542,9 +2542,9 @@ window.performMapSearch = async () => {
     l.innerHTML = "";
     l.classList.add('active');
 
-    const hintHtml = `<div class="map-results-hint">只包含mogumode已标记店铺</div>`;
+    const hintHtml = `<div class="map-results-hint">${window.t('map.recordedOnly')}</div>`;
     if (!stores.length) {
-        l.innerHTML = `${hintHtml}<div style='padding:10px'>No results</div>`;
+        l.innerHTML = `${hintHtml}<div style='padding:10px'>${window.t('common.noResults')}</div>`;
         return;
     }
 
@@ -2557,10 +2557,10 @@ window.performMapSearch = async () => {
         d.className = `result-item ${activeStoreId && s.id === activeStoreId ? 'active' : ''}`;
         const nameHtml = (typeof window.renderStoreNameWithStatus === 'function')
             ? window.renderStoreNameWithStatus(s)
-            : (s.name || "未命名店铺");
+            : (s.name || window.t('common.unnamed'));
         d.innerHTML = `
             <div class="result-item-name"><b>${nameHtml}</b></div>
-            <small>${s.address || s.formattedAddress || "地址未收录"}</small>
+            <small>${s.address || s.formattedAddress || window.t('common.addressUnknown')}</small>
         `;
 
         // 点击搜索结果
@@ -2615,7 +2615,7 @@ function renderMapCardData(p) {
 
     // 标记为"未收录"
     const countSpan = document.querySelector('#map-detail-card .mp-sub-row span:nth-child(3)');
-    if (countSpan) countSpan.innerText = "(未收录)";
+    if (countSpan) countSpan.innerText = window.t('map.unrecorded');
 
     const card = document.getElementById('map-detail-card');
     if (card) {
@@ -2642,7 +2642,7 @@ window.showRouteOnMap = async () => {
     }
 
     if (!currentMapDest) {
-        alert("请先选择一个店铺");
+        alert(window.t('notice.selectStore'));
         return;
     }
     const name = String(document.getElementById('mp-name')?.innerText || '').trim();
@@ -2721,7 +2721,7 @@ window.toggleMapSocial = async (type) => {
         refreshMapSocialButtonsUI();
     } catch (err) {
         console.error("切换社交状态失败:", err);
-        alert("操作失败，请稍后重试");
+        alert(window.t('notice.actionFailed'));
     }
 };
 
@@ -2741,7 +2741,7 @@ window.copyMapStoreName = () => {
         (document.getElementById('mp-name') && document.getElementById('mp-name').innerText) ||
         "";
     if (!name) return;
-    navigator.clipboard.writeText(name).then(() => alert("店名已复制: " + name));
+    navigator.clipboard.writeText(name).then(() => alert(window.t('notice.storeNameCopied', { name })));
 };
 
 /**
@@ -2831,7 +2831,7 @@ window.switchSheetTab = (tabName) => {
     const contents = document.querySelectorAll('.sheet-tab-content');
 
     tabs.forEach(tab => {
-        if (tab.innerText.includes(tabName === 'reviews' ? '评论' : '相册')) {
+        if (tab.dataset.sheetTab === tabName) {
             tab.classList.add('active');
         } else {
             tab.classList.remove('active');
@@ -3022,6 +3022,12 @@ function bindHomePullToRefresh() {
         }
     }, true);
     const setHeight = (h) => { indicator.style.height = h + 'px'; };
+    const updatePullText = () => {
+        const key = refreshing ? 'home.refreshing' : (dy >= THRESHOLD ? 'home.releaseRefresh' : 'home.pullRefresh');
+        textEl.dataset.i18n = key;
+        textEl.innerText = window.t(key);
+    };
+    window.addEventListener('mogumode:langchange', updatePullText);
     const onDown = (e) => {
         if (refreshing) return;
         if (list.scrollTop > 0) return;
@@ -3041,7 +3047,7 @@ function bindHomePullToRefresh() {
         }
         dy = Math.min(MAX, deltaY * 0.5);
         setHeight(dy);
-        textEl.innerText = dy >= THRESHOLD ? '松开刷新位置' : '下拉刷新位置';
+        updatePullText();
         if (e.cancelable) e.preventDefault();
     };
     const onUp = () => {
@@ -3055,7 +3061,7 @@ function bindHomePullToRefresh() {
             refreshing = true;
             indicator.classList.add('is-refreshing');
             indicator.style.height = '';
-            textEl.innerText = '正在刷新...';
+            updatePullText();
             const startedAt = Date.now();
             const done = () => {
                 const elapsed = Date.now() - startedAt;
@@ -3064,7 +3070,7 @@ function bindHomePullToRefresh() {
                     refreshing = false;
                     indicator.classList.remove('is-refreshing');
                     indicator.style.height = '';
-                    textEl.innerText = '下拉刷新位置';
+                    updatePullText();
                 }, holdMs);
             };
             const tasks = [];
@@ -3084,6 +3090,7 @@ function bindHomePullToRefresh() {
             indicator.style.height = '';
         }
         dy = 0;
+        updatePullText();
     };
     list.addEventListener('dragstart', (e) => e.preventDefault());
     list.addEventListener('touchstart', onDown, { passive: true });
@@ -3181,7 +3188,7 @@ window.openStoreInGoogleMapsById = (storeId) => {
     if (!sid) return;
     const store = (window.localStores || []).find(s => s.id === sid);
     if (!store) {
-        alert("未找到店铺位置信息");
+        alert(window.t('notice.locationMissing'));
         return;
     }
     const dest = { lat: Number(store.lat), lng: Number(store.lng) };
@@ -3209,3 +3216,22 @@ window.setMapTarget = (lat, lng) => {
         console.log("导航目标已更新:", currentMapDest);
     }
 };
+
+window.addEventListener('mogumode:langchange', () => {
+    const card = document.getElementById('map-detail-card');
+    const store = (window.localStores || []).find(item => String(item.id) === card?.dataset.storeId);
+    if (!store || !card?.classList.contains('active')) return;
+    const info = document.getElementById('sheet-info-container');
+    if (info && window.generateInfoCardHtml) info.innerHTML = window.generateInfoCardHtml(store);
+    const name = document.getElementById('mp-name');
+    if (name && window.renderStoreNameWithStatus) name.innerHTML = window.renderStoreNameWithStatus(store);
+    const address = document.getElementById('mp-address');
+    if (address) address.innerText = store.address || store.formattedAddress || window.t('common.addressUnknown');
+    const score = document.getElementById('mp-my-score');
+    if (score && !Number.isFinite(Number.parseFloat(score.innerText))) score.innerText = window.t('detail.noRating');
+    refreshMapReviewSectionCounts(store);
+    refreshMapFriendSection(store);
+    renderMapReviewsAndAlbum(store);
+    if (card.dataset.reviewScope) renderMapReviewSubpage(store, card.dataset.reviewScope);
+    if (window.refreshOpenMapCardDistance) window.refreshOpenMapCardDistance();
+});

@@ -70,7 +70,7 @@
                                     <img src="images/weizhilan.svg" style="width: 14px;"> cocoon tower
                                 </div>
                                 <div class="loc-item" onclick="startFetchLocation()">
-                                    <img src="images/weizhih.svg" style="width: 14px;"> 读取当前位置
+                                    <img src="images/weizhih.svg" style="width: 14px;"> <span data-i18n="loc.readCurrent">读取当前位置</span>
                                 </div>
                             </div>
                         </div>
@@ -82,7 +82,7 @@
                 <div id="loc-loading-modal" class="modal-overlay">
                     <div class="loc-card-mini">
                         <div><img src="images/weizhih.svg" style="width: 48px;"></div>
-                        <div style="font-weight:800; margin-top:10px;">位置读取中...</div>
+                        <div style="font-weight:800; margin-top:10px;" data-i18n="loc.loading">位置读取中...</div>
                     </div>
                 </div>
                 <div id="loc-confirm-modal" class="modal-overlay" onclick="if(event.target===this) closeLocModals()">
@@ -97,14 +97,14 @@
                                     <span id="loc-custom-toggle-label" data-i18n="form.customLocation">自定义位置</span>
                                 </button>
                             </div>
-                            <div id="loc-confirm-current" class="loc-confirm-current" data-i18n="loc.reading">当前位置：读取中...</div>
+                            <div id="loc-confirm-current" class="loc-confirm-current">当前位置：读取中...</div>
                             <div id="loc-custom-search-panel" class="loc-custom-search-panel hidden">
                                 <div class="loc-custom-search-input-wrap">
                                     <input type="text" id="loc-custom-search-input" class="loc-custom-search-input"
                                         placeholder="搜索地址或店名" data-i18n-placeholder="loc.searchAddress">
                                     <button type="button" id="loc-custom-search-clear"
                                         class="loc-custom-search-clear hidden" aria-label="清空"
-                                        onclick="clearLocCustomSearch()"></button>
+                                        onclick="clearLocCustomSearch()" data-i18n-aria="common.clear"></button>
                                 </div>
                                 <div id="loc-custom-search-results" class="loc-custom-search-results"></div>
                             </div>
@@ -121,9 +121,9 @@
                 <div class="search-container">
                     <input type="text" class="search-bar" id="home-search" placeholder="输入店名或料理种类" data-i18n-placeholder="home.searchPlaceholder">
                     <button type="button" class="search-clear-btn hidden" id="home-search-clear"
-                        aria-label="清空搜索"></button>
+                        aria-label="清空搜索" data-i18n-aria="common.clearSearch"></button>
                     <button type="button" class="search-submit-btn" id="home-search-submit"
-                        aria-label="搜索" onclick="submitHomeSearch()">
+                        aria-label="搜索" onclick="submitHomeSearch()" data-i18n-aria="common.search">
                         <i data-lucide="search" width="20"></i>
                     </button>
                 </div>
@@ -162,62 +162,62 @@
 
                         <div class="filter-panel" id="filter-panel">
                             <div class="filter-group">
-                                <div class="filter-label">偏好</div>
+                                <div class="filter-label" data-i18n="filter.preference">偏好</div>
                                 <div class="filter-options">
-                                    <div class="pill init-pill selected" onclick="setFilter('pref', 'none', this)">无
+                                    <div class="pill init-pill selected" onclick="setFilter('pref', 'none', this)" data-i18n="filter.none">无
                                     </div>
                                     <div class="pill pref-good" onclick="setFilter('pref', 'good', this)">
-                                        <img src="images/like-g.svg" width="16px"></i> 朋友好评
+                                        <img src="images/like-g.svg" width="16px"></i> <span data-i18n="filter.friendGood">朋友好评</span>
                                     </div>
                                     <div class="pill pref-bad" onclick="setFilter('pref', 'bad', this)">
-                                        <img src="images/dislike-g.svg" width="16px"> 朋友差评
+                                        <img src="images/dislike-g.svg" width="16px"> <span data-i18n="filter.friendBad">朋友差评</span>
                                     </div>
                                     <div class="pill pref-want" onclick="setFilter('pref', 'want', this)">
-                                        <img src="images/bookmark-g.svg" width="11px"> 朋友想吃
+                                        <img src="images/bookmark-g.svg" width="11px"> <span data-i18n="filter.friendWant">朋友想吃</span>
                                     </div>
                                 </div>
                             </div>
                             <div class="filter-group">
-                                <div class="filter-label">营业状态</div>
+                                <div class="filter-label" data-i18n="detail.openStatus">营业状态</div>
                                 <div class="filter-options">
-                                    <div class="pill init-pill selected" onclick="setFilter('openStatus', 'any', this)">
+                                    <div class="pill init-pill selected" onclick="setFilter('openStatus', 'any', this)" data-i18n="filter.any">
                                         不限</div>
                                     <div class="pill" onclick="setFilter('openStatus', 'open', this)">
-                                        <i data-lucide="clock" width="12"></i> 营业中
+                                        <i data-lucide="clock" width="12"></i> <span data-i18n="status.open">营业中</span>
                                     </div>
                                     <div class="pill" onclick="setFilter('openStatus', 'soon', this)">
-                                        <i data-lucide="sun" width="12"></i> 即将营业
+                                        <i data-lucide="sun" width="12"></i> <span data-i18n="status.openSoon">即将营业</span>
                                     </div>
                                 </div>
                             </div>
                             <div class="filter-group">
-                                <div class="filter-label">价格</div>
+                                <div class="filter-label" data-i18n="home.sort.price">价格</div>
                                 <div class="filter-options">
-                                    <input type="number" class="price-input" id="price-min" placeholder="最低">
+                                    <input type="number" class="price-input" id="price-min" placeholder="最低" data-i18n-placeholder="filter.min">
                                     <span> - </span>
-                                    <input type="number" class="price-input" id="price-max" placeholder="最高">
-                                    <span style="font-size:12px;">日元</span>
+                                    <input type="number" class="price-input" id="price-max" placeholder="最高" data-i18n-placeholder="filter.max">
+                                    <span style="font-size:12px;" data-i18n="unit.jpy">日元</span>
                                 </div>
                             </div>
                             <div class="filter-group">
-                                <div class="filter-label">距离</div>
+                                <div class="filter-label" data-i18n="home.sort.distance">距离</div>
                                 <div class="filter-options" id="dist-options">
-                                    <div class="pill init-pill selected" onclick="setFilter('dist', 'infinite', this)">
+                                    <div class="pill init-pill selected" onclick="setFilter('dist', 'infinite', this)" data-i18n="filter.any">
                                         不限</div>
-                                    <div class="pill" onclick="setFilter('dist', '50', this)">50m内</div>
-                                    <div class="pill" onclick="setFilter('dist', '100', this)">100m内</div>
-                                    <div class="pill" onclick="setFilter('dist', '200', this)">200m内</div>
-                                    <div class="pill" onclick="setFilter('dist', '500', this)">500m内</div>
-                                    <div class="pill" id="btn-dist-custom" onclick="setFilter('dist', 'custom', this)">
+                                    <div class="pill" onclick="setFilter('dist', '50', this)" data-i18n="filter.withinMeters" data-i18n-params='{"n":50}'>50m内</div>
+                                    <div class="pill" onclick="setFilter('dist', '100', this)" data-i18n="filter.withinMeters" data-i18n-params='{"n":100}'>100m内</div>
+                                    <div class="pill" onclick="setFilter('dist', '200', this)" data-i18n="filter.withinMeters" data-i18n-params='{"n":200}'>200m内</div>
+                                    <div class="pill" onclick="setFilter('dist', '500', this)" data-i18n="filter.withinMeters" data-i18n-params='{"n":500}'>500m内</div>
+                                    <div class="pill" id="btn-dist-custom" onclick="setFilter('dist', 'custom', this)" data-i18n="form.custom">
                                         自定义</div>
                                     <div id="dist-custom-input-wrap">
-                                        <input type="number" class="price-input" id="dist-custom-val" placeholder="输入">
-                                        <span style="font-size:12px; color:#666">m以内</span>
+                                        <input type="number" class="price-input" id="dist-custom-val" placeholder="输入" data-i18n-placeholder="filter.input">
+                                        <span style="font-size:12px; color:#666" data-i18n="filter.metersUnit">m以内</span>
                                     </div>
                                 </div>
                             </div>
                             <div class="filter-group">
-                                <div class="filter-label">评分</div>
+                                <div class="filter-label" data-i18n="home.sort.rating">评分</div>
                                 <div class="slider-container">
                                     <div class="slider-row">
                                         <span id="rating-min-val" class="slider-side-val">0.0</span>
@@ -246,7 +246,7 @@
             </header>
 
             <div id="home-pull-indicator" class="home-pull-indicator">
-                <span class="home-pull-text">下拉刷新位置</span>
+                <span class="home-pull-text" data-i18n="home.pullRefresh">下拉刷新位置</span>
             </div>
             <div id="store-list" class="store-list">
                 <p style="text-align:center; color:#ccc; margin-top:40px;">Loading...</p>
@@ -265,7 +265,7 @@
             <div class="map-search-card">
                 <input id="q" class="map-search-input" placeholder="输入店名或料理种类" data-i18n-placeholder="home.searchPlaceholder">
                 <button id="map-search-action-btn" class="map-search-action-btn" type="button" aria-label="搜索"
-                    onclick="onMapSearchActionClick()">
+                    onclick="onMapSearchActionClick()" data-i18n-aria="common.search">
                     <i data-lucide="search" width="20"></i>
                 </button>
             </div>
@@ -306,7 +306,7 @@
             <div id="google-map" class="map-full"></div>
 
             <button id="map-recenter-btn" class="map-recenter-btn" type="button" aria-label="回到当前位置"
-                onclick="recenterMapToOrigin()">
+                onclick="recenterMapToOrigin()" data-i18n-aria="map.recenter">
                 <i data-lucide="locate-fixed" width="20"></i>
             </button>
 
@@ -343,8 +343,8 @@
                         <span id="mp-rating-count" class="sheet-rating-count">(0)</span>
                         <span class="sheet-dot">•</span>
                         <img src="images/walk.svg" width="10">
-                        <span id="mp-fake-time">5分钟</span>
-                        <button id="btn-check-route" class="mp-route-btn" onclick="showRouteOnMap()">在谷歌地图查看</button>
+                        <span id="mp-fake-time">—</span>
+                        <button id="btn-check-route" class="mp-route-btn" onclick="showRouteOnMap()" data-i18n="detail.openInGoogle">在谷歌地图查看</button>
                     </div>
                 </div>
 
@@ -359,7 +359,7 @@
                         </div>
                         <div class="sheet-my-rating">
                             <div class="my-rating-left">
-                                <span class="my-score" id="mp-my-score" data-i18n="detail.noRating">暂无评分</span>
+                                <span class="my-score" id="mp-my-score">暂无评分</span>
                                 <img src="images/pingfen.svg" width="14" id="mp-my-score-icon">
                             </div>
                             <div class="sheet-social-btns sheet-social-btns-inline">
@@ -419,15 +419,15 @@
                             <span id="mp-address" class="info-address">〒151-0053 Tokyo, Shibuya, Yoyogi, 2 Chome-4-9 Nmf
                                 Shinjuku Minamiguchi Building, 1階</span>
                         </div>
-                        <button class="btn-more-info">提供更多信息</button>
+                        <button class="btn-more-info" data-i18n="detail.provideInfo">提供更多信息</button>
                     </div> -->
 
                     <!-- 评论/相册标签 -->
                     <div class="sheet-tabs">
-                        <div class="sheet-tab active" onclick="switchSheetTab('reviews')">
+                        <div class="sheet-tab active" data-sheet-tab="reviews" onclick="switchSheetTab('reviews')">
                             <span data-i18n="detail.reviewsTab">评论</span>(<span id="mp-review-count">23</span>)
                         </div>
-                        <div class="sheet-tab" onclick="switchSheetTab('photos')">
+                        <div class="sheet-tab" data-sheet-tab="photos" onclick="switchSheetTab('photos')">
                             <span data-i18n="detail.albumTab">相册</span>(<span id="mp-album-count">190</span>)
                         </div>
                     </div>
@@ -507,7 +507,7 @@
                         <div id="add-search-map-wrap" class="add-search-map-wrap hidden">
                             <button type="button" id="add-search-in-area-btn" class="add-search-in-area-btn"
                                 onclick="searchAddStoresInMapArea()" data-i18n="add.searchInArea">在此区域搜索</button>
-                            <div id="add-search-map" class="add-search-map" aria-label="搜索地图预览"></div>
+                            <div id="add-search-map" class="add-search-map" aria-label="搜索地图预览" data-i18n-aria="map.previewLabel"></div>
                         </div>
                     </div>
                     <div class="add-step-pick-confirm-wrap">
@@ -519,11 +519,11 @@
                 <div id="add-step-form" class="add-step-panel hidden">
                     <div class="add-picked-topbar">
                         <button class="add-chip-back-btn add-chip-back-btn-separate" onclick="handleAddComposerBack()"
-                            aria-label="返回">
+                            aria-label="返回" data-i18n-aria="common.back">
                             <i data-lucide="chevron-left" width="18"></i>
                         </button>
                         <div class="add-picked-chip add-picked-chip-edit">
-                            <span id="add-form-store-name">店铺名</span>
+                            <span id="add-form-store-name">店铺名称</span>
                             <img id="add-form-mogu" src="images/mogu.svg" class="add-picked-mogu hidden" alt="mogu">
                             <button id="add-chip-edit-btn" class="add-chip-edit-btn"
                                 onclick="editAddStoreSelection()" data-i18n="add.editStore">修改</button>
@@ -553,7 +553,7 @@
                             <div class="custom-date-wrap add-date-inline">
                                 <input type="date" id="newMealDate" class="custom-date-native">
                                 <div class="custom-date-display">
-                                    <span class="custom-date-text is-empty" id="newMealDateText" data-i18n="add.pickDate">点击选择</span>
+                                    <span class="custom-date-text is-empty" id="newMealDateText">点击选择</span>
                                     <i data-lucide="calendar" width="16" class="custom-date-icon"></i>
                                 </div>
                             </div>
@@ -596,12 +596,12 @@
                 <div class="record-year-row">
                     <div class="record-year-nav">
                         <button type="button" class="record-year-arrow" id="record-year-prev"
-                            onclick="changeRecordCalendarYear(-1)" aria-label="上一年">
+                            onclick="changeRecordCalendarYear(-1)" aria-label="上一年" data-i18n-aria="record.previousYear">
                             <i data-lucide="chevron-left" width="16"></i>
                         </button>
                         <div class="record-year-display" id="record-year-display">2026</div>
                         <button type="button" class="record-year-arrow" id="record-year-next"
-                            onclick="changeRecordCalendarYear(1)" aria-label="下一年">
+                            onclick="changeRecordCalendarYear(1)" aria-label="下一年" data-i18n-aria="record.nextYear">
                             <i data-lucide="chevron-right" width="16"></i>
                         </button>
                     </div>
@@ -616,7 +616,7 @@
             <div id="record-day-view" class="record-day-view hidden">
                 <div class="record-day-header">
                     <button class="record-day-back" onclick="closeRecordDayView()">
-                        <img src="images/back.svg" width="10"> <span id="record-day-title">2026年2月11日</span>
+                        <img src="images/back.svg" width="10"> <span id="record-day-title"></span>
                     </button>
                 </div>
                 <div id="record-day-list" class="record-day-list"></div>
@@ -725,7 +725,7 @@
                         <div class="profile-username-row">
                             <h2 class="profile-username" id="profile-username">用户名用户名</h2>
                             <button id="profile-edit-name-btn" class="profile-edit-name-btn"
-                                onclick="editUsername()" aria-label="修改用户名">
+                                onclick="editUsername()" aria-label="修改用户名" data-i18n-aria="profile.editName">
                                 <i data-lucide="square-pen" width="14"></i>
                             </button>
                         </div>
@@ -859,13 +859,13 @@
                     <!-- 邮箱输入 -->
                     <div class="login-input-group">
                         <i data-lucide="mail" width="20" color="#b2bec3"></i>
-                        <input type="email" id="auth-email" placeholder="E-mail">
+                        <input type="email" id="auth-email" placeholder="E-mail" data-i18n-placeholder="auth.email">
                     </div>
 
                     <!-- 密码输入 -->
                     <div class="login-input-group">
                         <i data-lucide="lock" width="20" color="#b2bec3"></i>
-                        <input type="password" id="auth-pass" placeholder="Password">
+                        <input type="password" id="auth-pass" placeholder="Password" data-i18n-placeholder="auth.password">
                     </div>
 
                     <!-- 忘记密码 -->
@@ -901,13 +901,13 @@
                     <!-- 邮箱输入 -->
                     <div class="login-input-group">
                         <i data-lucide="mail" width="20" color="#b2bec3"></i>
-                        <input type="email" id="reg-email" placeholder="E-mail">
+                        <input type="email" id="reg-email" placeholder="E-mail" data-i18n-placeholder="auth.email">
                     </div>
 
                     <!-- 密码输入 -->
                     <div class="login-input-group">
                         <i data-lucide="lock" width="20" color="#b2bec3"></i>
-                        <input type="password" id="reg-pass" placeholder="Password">
+                        <input type="password" id="reg-pass" placeholder="Password" data-i18n-placeholder="auth.password">
                     </div>
 
                     <!-- 确认密码 -->
@@ -1079,8 +1079,8 @@
                     <span>(356)</span>
                     <span style="margin:0 4px">•</span>
                     <img src="images/walk.svg" style="width:10px;">
-                    <span id="fd-walk-time">5分钟</span>
-                    <button class="mp-route-btn" style="margin-left:auto;" onclick="doNavFromDetail()">在谷歌地图查看</button>
+                    <span id="fd-walk-time">—</span>
+                    <button class="mp-route-btn" style="margin-left:auto;" onclick="doNavFromDetail()" data-i18n="detail.openInGoogle">在谷歌地图查看</button>
                 </div>
 
                 <div class="fd-section-card">
@@ -1149,21 +1149,21 @@
 
                     <div class="fd-info-form">
                         <div class="fd-form-row">
-                            <label>分类 :</label>
+                            <label data-i18n="form.category">分类 :</label>
                             <select id="fd-new-cat" class="fd-input-sm">
-                                <option value="自定义">自定义</option>
-                                <option value="营业时间">营业时间</option>
-                                <option value="位置">位置</option>
+                                <option value="自定义" data-i18n="form.custom">自定义</option>
+                                <option value="营业时间" data-i18n="detail.openTime">营业时间</option>
+                                <option value="位置" data-i18n="detail.address">位置</option>
                             </select>
                             <input id="fd-new-cat-custom" class="fd-input-sm" placeholder="在这里输入自定义分类名"
-                                style="flex:1; display:none;">
+                                style="flex:1; display:none;" data-i18n-placeholder="form.categoryPlaceholder">
                         </div>
                         <div class="fd-form-row">
-                            <label>信息 :</label>
-                            <input id="fd-new-val" class="fd-input-flex" placeholder="输入信息">
+                            <label data-i18n="form.info">信息 :</label>
+                            <input id="fd-new-val" class="fd-input-flex" placeholder="输入信息" data-i18n-placeholder="form.contentPlaceholder">
                         </div>
                         <div style="text-align:right; margin-top:8px;">
-                            <button class="fd-add-btn" onclick="addAdditionalInfo()">添加</button>
+                            <button class="fd-add-btn" onclick="addAdditionalInfo()" data-i18n="common.add">添加</button>
                         </div>
                     </div>
 
@@ -1243,7 +1243,7 @@
             <div class="provide-info-card" onclick="event.stopPropagation()">
                 <div class="provide-info-head">
                     <span class="provide-info-title" data-i18n="detail.appendInfo">追加信息</span>
-                    <button class="provide-info-close" onclick="closeProvideInfoModal()" aria-label="关闭">
+                    <button class="provide-info-close" onclick="closeProvideInfoModal()" aria-label="关闭" data-i18n-aria="common.close">
                         <img src="images/close.svg" width="18" alt="">
                     </button>
                 </div>
@@ -1264,11 +1264,11 @@
                                 onclick="selectProvideCategory('料理种类')" data-i18n="form.cuisineType">料理种类</button>
                         </div>
                         <select id="provide-new-cat" class="provide-hidden-select" aria-hidden="true">
-                            <option value="自定义">自定义</option>
-                            <option value="营业时间">营业时间</option>
-                            <option value="位置">位置</option>
-                            <option value="电话">电话</option>
-                            <option value="料理种类">料理种类</option>
+                            <option value="自定义" data-i18n="form.custom">自定义</option>
+                            <option value="营业时间" data-i18n="detail.openTime">营业时间</option>
+                            <option value="位置" data-i18n="detail.address">位置</option>
+                            <option value="电话" data-i18n="detail.phone">电话</option>
+                            <option value="料理种类" data-i18n="form.cuisineType">料理种类</option>
                         </select>
                     </div>
 
@@ -1314,8 +1314,8 @@
     <!-- =========================================
          JAVASCRIPT FILES
          ========================================= -->
-    <script type="module" src="app.js?v=211-i18n-polish"></script>
-    <script src="map.js?v=211-i18n-polish"></script>
+    <script type="module" src="app.js?v=213-concurrent-publish"></script>
+    <script src="map.js?v=212-i18n-complete"></script>
     <script async defer
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAvqupW6XZ7A61lutSD8_GlV31Xdc5ZTLw&callback=initGoogleMap&libraries=geometry">
         </script>
@@ -1444,7 +1444,7 @@
         <div class="toast-card">
             <div style="font-size:16px; font-weight:bold; margin-bottom:4px;" data-i18n="delete.requested">已提交删除申请</div>
             <div
-                style="background:#2d3436; color:white; padding:4px 12px; border-radius:12px; font-size:12px; display:inline-block;">
+                style="background:#2d3436; color:white; padding:4px 12px; border-radius:12px; font-size:12px; display:inline-block;" data-i18n="common.done">
                 完成
             </div>
         </div>

@@ -65,8 +65,27 @@
 <body>
     <main class="offline-card">
         <img src="./images/applogo.jpg" alt="MoguMode">
-        <h1>当前离线</h1>
-        <p>App 外壳已经安装好了，但地图、登录和云端数据仍然需要网络。连上网络后再试一次。</p>
+        <h1 id="offline-title">当前离线</h1>
+        <p id="offline-description">App 外壳已经安装好了，但地图、登录和云端数据仍然需要网络。连上网络后再试一次。</p>
     </main>
+    <script>
+        (() => {
+            const messages = {
+                zh: ['当前离线', 'App 外壳已经安装好了，但地图、登录和云端数据仍然需要网络。连上网络后再试一次。'],
+                en: ['You’re offline', 'The app is installed, but maps, sign-in and cloud data need an internet connection. Connect and try again.'],
+                ja: ['オフラインです', 'アプリはインストール済みですが、地図・ログイン・クラウドデータにはネット接続が必要です。接続してから再試行してください。']
+            };
+            let lang;
+            try { lang = localStorage.getItem('mogumode_lang'); } catch (_) {}
+            if (!messages[lang]) {
+                const browserLang = (navigator.language || 'en').toLowerCase();
+                lang = browserLang.startsWith('zh') ? 'zh' : (browserLang.startsWith('ja') ? 'ja' : 'en');
+            }
+            document.documentElement.lang = lang === 'zh' ? 'zh-CN' : lang;
+            document.getElementById('offline-title').textContent = messages[lang][0];
+            document.getElementById('offline-description').textContent = messages[lang][1];
+            document.title = `MoguMode · ${messages[lang][0]}`;
+        })();
+    </script>
 </body>
 </html>
